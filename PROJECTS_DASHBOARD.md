@@ -8,12 +8,12 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 | Shadow ID | Domain Name | Core Purpose | Infrastructure Status | Active Pipeline / Runner |
 | :--- | :--- | :--- | :--- | :--- |
-| **Shadow 1** | **The Forge** | Software & Tool Builder | ✅ Complete (`41/41` Tests) | [`ForgeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/forge_runner.py) |
-| **Shadow 2** | **svris** | Verification, Custody & Receipts | ✅ Complete (`41/41` Tests) | [`SvrisDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/svris_runner.py) |
-| **Shadow 3** | **The Herald** | Media & Document Engine | ⏳ In Active Development | [`SovereignMediaEngine`](file:///c:/10%20SHADOWS/loop_engine/media/sovereign_media_engine.py) |
-| **Shadow 4** | **The Scout** | Recon & YouTube Deconstruction | ⏳ In Active Development | [`YouTubeDeconstructor`](file:///c:/10%20SHADOWS/loop_engine/media/youtube_deconstructor.py) |
+| **Shadow 1** | **The Forge** | Software & Tool Builder | ✅ Complete (`48/48` Tests) | [`ForgeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/forge_runner.py) |
+| **Shadow 2** | **svris** | Verification, Custody & Receipts | ✅ Complete (`48/48` Tests) | [`SvrisDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/svris_runner.py) |
+| **Shadow 3** | **The Herald** | Media & Document Engine | ✅ Complete (Slices 1–3) | [`HeraldMediaRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/media_runner.py) |
+| **Shadow 4** | **The Scout** | Recon & YouTube Deconstruction | ✅ Complete (Slices 1–3) | [`SovereignMediaEngine`](file:///c:/10%20SHADOWS/loop_engine/media/sovereign_media_engine.py) |
 | **Shadow 5** | **The Inquisitor** | Adversarial Plan Auditor | ✅ Complete (Skill Grounded) | [`adversarial-plan-auditor`](file:///c:/10%20SHADOWS/.agents/skills/adversarial-plan-auditor/SKILL.md) |
-| **Shadow 6** | **The Scribe** | Knowledge Graph & Memory | 📋 Planned | TBD |
+| **Shadow 6** | **The Scribe** | Knowledge Graph & Memory | 📋 Planned (Next Up) | TBD |
 | **Shadow 7** | **The Slicer** | DAG & Slice Decomposer | 📋 Planned | TBD |
 | **Shadow 8** | **The Warden** | Security, Sandboxing & Git Worktrees | ✅ Complete (`GitWorktreeHarness`) | [`GitWorktreeHarness`](file:///c:/10%20SHADOWS/loop_engine/harness/git_worktree.py) |
 | **Shadow 9** | **The Alchemist** | Self-Healing & System Repair | 📋 Planned | TBD |
@@ -23,17 +23,13 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 ## 2. Active Projects & Workstreams
 
-### 🔴 Project A: The Semantic YouTube Deconstructor & Narrative Engine (Shadow 3 & 4)
+### 🟢 Project A: The Semantic YouTube Deconstructor & Narrative Engine (Shadow 3 & 4)
 * **Goal:** Turn raw YouTube video URLs into industrial-grade, reverse-engineered story blueprints, pacing curves, and anomaly-audited chapter breakdowns.
-* **Current State:** Basic ingestion via `yt-dlp` and `youtube-transcript-api` is functional.
-* **Identified Technical Debt / Flaws:**
-  - ❌ Naive silence-gap detection ($>3.0s$) collapses dialogue into a single monolithic scene.
-  - ❌ Missing semantic sentence embedding / LLM topic boundary clustering.
-  - ❌ Lacks multi-tier fallback (captions $\rightarrow$ audio download $\rightarrow$ local Whisper).
-* **Target Deliverables:**
-  1. `loop_engine/media/semantic_chunker.py`: Semantic sliding-window topic shift detector.
-  2. `loop_engine/media/schema.py`: Rigid Pydantic contract with `known_blindspots` and verbatim evidence quotes.
-  3. `loop_engine/tests/test_semantic_media_deconstructor.py`: Test suite verifying multi-topic segmentation on real-world long-form video.
+* **Status:** ✅ Complete & Verified across 48 automated tests.
+* **Delivered Artifacts:**
+  1. [`SemanticChunker`](file:///c:/10%20SHADOWS/loop_engine/media/semantic_chunker.py): Thematic rolling-window topic shift detection (eliminates 1-scene collapse).
+  2. [`schema.py`](file:///c:/10%20SHADOWS/loop_engine/media/schema.py): Strict Pydantic contracts enforcing `verbatim_anchor_quote`, timestamp validation, and `known_blindspots`.
+  3. [`HeraldMediaRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/media_runner.py): Autonomous `BaseLoop` domain runner emitting SQLite WAL receipts.
 
 ---
 
@@ -51,15 +47,17 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 ### 🟢 Project C: Industrial Git Worktree Sandboxing (Shadow 8 - The Warden)
 * **Goal:** Replace brittle `.bak` and staging swaps with kernel-level ephemeral Git branches.
-* **Status:** ✅ Complete (`38/38` pytest passing).
+* **Status:** ✅ Complete (`48/48` pytest passing).
 * **Artifacts:**
   - Harness: [`loop_engine/harness/git_worktree.py`](file:///c:/10%20SHADOWS/loop_engine/harness/git_worktree.py)
   - Test Suite: [`loop_engine/tests/test_git_worktree_harness.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_git_worktree_harness.py)
 
 ---
 
-## 3. Immediate Action Backlog
+## 3. Next Up in Architecture Roadmap
 
-1. **Step 1:** Implement Semantic Sentence Windowing & Topic Shift Detection in `loop_engine/media/semantic_chunker.py` to fix the single-scene collapse.
-2. **Step 2:** Integrate Pydantic schema contracts enforcing grounded quotes and explicit anomaly reporting.
-3. **Step 3:** Run verification test suite across 3 distinct video genres (Spotlight, Tutorial, Essay).
+| Step | Priority Target | Scope & Objective |
+| :--- | :--- | :--- |
+| **Phase 1** | **Shadow 6: The Scribe (Knowledge & Memory)** | SQLite knowledge graph storing verified video blueprints, cross-referencing recurring story formulas, retention hooks, and audience patterns. |
+| **Phase 2** | **Shadow 7: The Slicer (Autonomous DAG Slicer)** | Algorithmic task decomposer taking any human goal and outputting an executable 3-slice DAG for subagents. |
+| **Phase 3** | **Shadow 10: The Game Master (CLI & HUD)** | Unified command-line interface / status projection dashboard for the entire 10 SHADOWS operating system. |

@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SVRIS Research Plan Schema",
+  "type": "object",
+  "required": ["topic_id", "objective", "target_source_types", "search_queries"],
+  "properties": {
+    "topic_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 5
+    },
+    "target_source_types": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": ["ACADEMIC", "JOURNALISM", "PRIMARY_DOC", "INDUSTRY_REPORT", "INTERVIEW", "WEB", "OTHER"]
+      },
+      "minItems": 1
+    },
+    "search_queries": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 2
+      },
+      "minItems": 1
+    },
+    "max_sources": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 10
+    }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,590 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:forge:contract:0.1.0",
+  "title": "Minimal Capability Forge Contract",
+  "$defs": {
+    "ContextItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content": {},
+        "source": {
+          "type": "string",
+          "enum": [
+            "USER",
+            "FILE",
+            "TOOL",
+            "SYSTEM",
+            "MEMORY",
+            "OTHER"
+          ]
+        },
+        "authority": {
+          "type": "string",
+          "enum": [
+            "AUTHORITATIVE",
+            "SUPPORTING",
+            "UNTRUSTED"
+          ]
+        }
+      },
+      "required": [
+        "label",
+        "content",
+        "source",
+        "authority"
+      ]
+    },
+    "IntentRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "context": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContextItem"
+          }
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requested_surface": {
+          "type": "string",
+          "enum": [
+            "AUTO",
+            "ANSWER",
+            "ARTIFACT",
+            "DECISION",
+            "PLAN",
+            "ANALYSIS",
+            "CODE",
+            "ACTION",
+            "SYSTEM"
+          ]
+        }
+      },
+      "required": [
+        "request_id",
+        "intent",
+        "context",
+        "constraints",
+        "requested_surface"
+      ]
+    },
+    "TaskSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "objective": {
+          "type": "string",
+          "minLength": 1
+        },
+        "deliverable": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "ANSWER",
+                "ARTIFACT",
+                "DECISION",
+                "PLAN",
+                "ANALYSIS",
+                "CODE",
+                "ACTION",
+                "SYSTEM"
+              ]
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "kind",
+            "description"
+          ]
+        },
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "knowns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "unknowns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "success_conditions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "requires_external_action": {
+          "type": "boolean"
+        },
+        "reversibility": {
+          "type": "string",
+          "enum": [
+            "REVERSIBLE",
+            "PARTIALLY_REVERSIBLE",
+            "IRREVERSIBLE"
+          ]
+        },
+        "risk": {
+          "type": "string",
+          "enum": [
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ]
+        }
+      },
+      "required": [
+        "task_id",
+        "objective",
+        "deliverable",
+        "constraints",
+        "knowns",
+        "unknowns",
+        "assumptions",
+        "success_conditions",
+        "requires_external_action",
+        "reversibility",
+        "risk"
+      ]
+    },
+    "RouteDecision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "route": {
+          "type": "string",
+          "enum": [
+            "DIRECT",
+            "BUILD",
+            "ACT"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "minimal_next_step": {
+          "type": "string"
+        },
+        "stop_condition": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "task_id",
+        "route",
+        "reason",
+        "minimal_next_step",
+        "stop_condition"
+      ]
+    },
+    "DirectResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "COMPLETE",
+            "NEEDS_INPUT",
+            "CONFLICT",
+            "FAILED"
+          ]
+        },
+        "result": {},
+        "unresolved": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "task_id",
+        "status",
+        "result",
+        "unresolved"
+      ]
+    },
+    "BuildSpec": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "build_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "artifact_type": {
+          "type": "string",
+          "enum": [
+            "PROMPT",
+            "WORKFLOW",
+            "SCRIPT",
+            "AGENT",
+            "DOCUMENT",
+            "SERVICE",
+            "SYSTEM",
+            "OTHER"
+          ]
+        },
+        "responsibility": {
+          "type": "string",
+          "minLength": 1
+        },
+        "vertical_slice": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "raw_input": {
+              "type": "string"
+            },
+            "processing": {
+              "type": "string"
+            },
+            "raw_output": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "raw_input",
+            "processing",
+            "raw_output"
+          ]
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "acceptance_tests": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string"
+          }
+        },
+        "external_side_effects": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "build_id",
+        "task_id",
+        "artifact_type",
+        "responsibility",
+        "vertical_slice",
+        "inputs",
+        "outputs",
+        "components",
+        "acceptance_tests",
+        "external_side_effects"
+      ]
+    },
+    "ActionProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "payload": {}
+          },
+          "required": [
+            "kind",
+            "target",
+            "payload"
+          ]
+        },
+        "capability_required": {
+          "type": "string"
+        },
+        "idempotency_key": {
+          "type": "string"
+        },
+        "reversible": {
+          "type": "boolean"
+        },
+        "rollback": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "transaction_id",
+        "attempt_id",
+        "task_id",
+        "operation",
+        "capability_required",
+        "idempotency_key",
+        "reversible",
+        "rollback"
+      ]
+    },
+    "AuthorizationDecision": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "transaction_id": {
+              "type": "string"
+            },
+            "attempt_id": {
+              "type": "string"
+            },
+            "decision": {
+              "const": "AUTHORIZED"
+            },
+            "authorization_id": {
+              "type": "string"
+            },
+            "operation_hash": {
+              "type": "string"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "transaction_id",
+            "attempt_id",
+            "decision",
+            "authorization_id",
+            "operation_hash",
+            "reason"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "transaction_id": {
+              "type": "string"
+            },
+            "attempt_id": {
+              "type": "string"
+            },
+            "decision": {
+              "enum": [
+                "DENIED",
+                "REVIEW"
+              ]
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "transaction_id",
+            "attempt_id",
+            "decision",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "ExecutionReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "execution_id": {
+          "type": "string"
+        },
+        "transaction_id": {
+          "type": "string"
+        },
+        "attempt_id": {
+          "type": "string"
+        },
+        "authorization_id": {
+          "type": "string"
+        },
+        "operation_hash": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "SUCCESS",
+            "PARTIAL",
+            "FAILED"
+          ]
+        },
+        "side_effect_committed": {
+          "type": "boolean"
+        },
+        "output": {},
+        "error": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "execution_id",
+        "transaction_id",
+        "attempt_id",
+        "authorization_id",
+        "operation_hash",
+        "outcome",
+        "side_effect_committed",
+        "output",
+        "error"
+      ]
+    },
+    "LearningRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "learning_id": {
+          "type": "string"
+        },
+        "task_id": {
+          "type": "string"
+        },
+        "execution_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "SUCCESS",
+            "PARTIAL",
+            "FAILURE"
+          ]
+        },
+        "observed_failure": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "repair": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "reproducible": {
+          "type": "boolean"
+        },
+        "generalizable": {
+          "type": "boolean"
+        },
+        "promotion": {
+          "type": "string",
+          "enum": [
+            "NONE",
+            "LOCAL_SCAR",
+            "REGRESSION_TEST",
+            "CANDIDATE_RULE"
+          ]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "learning_id",
+        "task_id",
+        "execution_id",
+        "outcome",
+        "observed_failure",
+        "repair",
+        "reproducible",
+        "generalizable",
+        "promotion",
+        "evidence"
+      ]
+    }
+  }
+}

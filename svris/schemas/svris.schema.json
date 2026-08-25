@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SVRIS Contract Specifications",
+  "type": "object",
+  "definitions": {
+    "SourceType": {
+      "type": "string",
+      "enum": ["ACADEMIC", "JOURNALISM", "PRIMARY_DOC", "INDUSTRY_REPORT", "INTERVIEW", "WEB", "OTHER"]
+    },
+    "TrustTier": {
+      "type": "string",
+      "enum": ["UNTRUSTED_RETRIEVAL", "VERIFIED_PRIMARY", "AUTHORITATIVE_SECONDARY"]
+    },
+    "VerificationState": {
+      "type": "string",
+      "enum": ["VERIFIED", "UNVERIFIED", "CONTRADICTED", "STALE", "SUPERSEDED"]
+    },
+    "RelationshipState": {
+      "type": "string",
+      "enum": ["SUPPORTS", "PARTIALLY_SUPPORTS", "CONTRADICTS", "CONTEXTUALIZES", "DOES_NOT_ESTABLISH"]
+    },
+    "PrimitiveType": {
+      "type": "string",
+      "enum": ["HOOK", "QUESTION", "SETUP", "TENSION", "CLAIM", "PROOF", "EXAMPLE", "MISCONCEPTION", "PAYOFF", "CTA", "VISUAL_CUE"]
+    },
+    "Platform": {
+      "type": "string",
+      "enum": ["ALL", "YOUTUBE", "INSTAGRAM", "FACEBOOK"]
+    },
+    "Format": {
+      "type": "string",
+      "enum": ["ALL", "LONG_FORM", "SHORT_FORM"]
+    },
+    "Orientation": {
+      "type": "string",
+      "enum": ["ALL", "HORIZONTAL", "VERTICAL"]
+    },
+    "SourceIngestSpec": {
+      "type": "object",
+      "required": ["source_id", "title", "retrieval_date", "source_type", "trust_tier", "raw_content_sha256", "created_at"],
+      "properties": {
+        "source_id": { "type": "string", "minLength": 1 },
+        "url": { "type": ["string", "null"] },
+        "title": { "type": "string", "minLength": 1 },
+        "publisher": { "type": ["string", "null"] },
+        "author": { "type": ["string", "null"] },
+        "publication_date": { "type": ["string", "null"] },
+        "retrieval_date": { "type": "string", "minLength": 1 },
+        "source_type": { "$ref": "#/definitions/SourceType" },
+        "trust_tier": { "$ref": "#/definitions/TrustTier" },
+        "raw_content_sha256": { "type": "string", "minLength": 64, "maxLength": 64 },
+        "created_at": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "CandidateClaimSpec": {
+      "type": "object",
+      "required": ["claim_id", "claim_text", "topic_id", "source_id", "relationship_state", "confidence", "rationale"],
+      "properties": {
+        "claim_id": { "type": "string", "minLength": 1 },
+        "claim_text": { "type": "string", "minLength": 1 },
+        "topic_id": { "type": "string", "minLength": 1 },
+        "source_id": { "type": "string", "minLength": 1 },
+        "relationship_state": { "$ref": "#/definitions/RelationshipState" },
+        "quote_text": { "type": ["string", "null"] },
+        "confidence": { "type": "number", "minimum": 0.0, "maximum": 1.0 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "valid_from": { "type": ["string", "null"] },
+        "valid_until": { "type": ["string", "null"] },
+        "review_after": { "type": ["string", "null"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "slice": "slice0",
+  "audited_at": "2026-08-15T23:08:08.010691+00:00",
+  "status": "VERIFIED_PASSED",
+  "file_hashes": {
+    "svris/__init__.py": "375afd3daaad964b9bee0be1107ad3c87d331ef46dde13b81939e4f2ec4585a1",
+    "svris/adapters/model.py": "85e76da139f935e8c695c19a4aa32688b0df14209d75dc500e82ac8ca2f2fbfd",
+    "svris/adapters/__init__.py": "8bc93f157a12cd60083008644edf3a75d4f7ce090980873d12643dc0f846315a",
+    "svris/core/contradiction.py": "153e47fb052043e8a8c6ddd3fb978524184fc2c8ae369f667e30915318c9ae0f",
+    "svris/core/custody.py": "4209e0642350f7ad128f2f5a4b1e0a52341b07b4a64f6ec4017488ac4da3503a",
+    "svris/core/db.py": "c0f0f21944da6daf5ec1d0a0ec48846fa68e5a0d14fe7716d09e4a4300937e84",
+    "svris/core/editorial.py": "9a52b95853cc85f0b95fe09a8cf81bb2ca59829800a630387dafbcd7d0162975",
+    "svris/core/extractor.py": "d2b920770b0e747084ae5c8e08b2ab1a57cda8f9df8c0b3796d68281572cfdd7",
+    "svris/core/freshness.py": "b0e2edc7be049ee559925ac3f2c7edeabe0535b77a17840977804bd6df379765",
+    "svris/core/policy.py": "543a6f9ac2689fb4db69f6aeccddaeb5a8e58c831141f68912d861c1cc6d6af9",
+    "svris/core/primitives.py": "97ec671daa384376eb4caff41d459d178878a70e4b28f4e644279f02718fd843",
+    "svris/core/refresh.py": "3f9bc4c7285e6b4ccd1ae79fe24837b652d47a7a34ad89604733c5401d005b74",
+    "svris/core/schema.sql": "48a4d40142e58dfacf09bd5eebcca76e9be299fa30a17430d420ec6328486c7c",
+    "svris/core/source_normalizer.py": "6871347028acf114f8b94e321be7eb9fda9455d4b9d8331883616051c6e32f84",
+    "svris/core/verifier.py": "7c5ac9fae35e3edd101558dc6bde16ac94f08e0cf0c61c900f5c54cb3b30019f",
+    "svris/core/views.py": "0a41ed560778792b5cf2b7ab78fe9fb7ca834b71cebbad9fd74399581ae30b30",
+    "svris/core/__init__.py": "f030b9b22b4c7fd9210163bfe323f7557a0a2aba9f28aacd5ae68955a0a451d7",
+    "svris/schemas/svris.schema.json": "3c81866c439fd97c3df91956fee920f339730e2cc66e3355e0b7a1f429dc6869",
+    "svris/tests/test_slice0_p0_hardening.py": "307550000326f3e87535585aada1aaad7405fe841800ad07a23bc57c1ea6a01d",
+    "svris/tests/test_slice1_substrate.py": "c987ec0f141b9ee24f6e136da6e6e522e1643001a834d4d19bbd477fa11235b0",
+    "svris/tests/test_slice2_extraction_contradiction.py": "430d92b34057c01895306de2b4704b04849a076cdf3530fb8199b5501dd7255e",
+    "svris/tests/test_slice3_editorial_projections.py": "2bccfffefa37b13d003a2c9d35c9f5feff07be4dd08c7d5eb8b397cbd710979a",
+    "svris/tests/test_slice4_freshness_hardening.py": "03537607811960d7ed8618898a7705a11fbdf177c3f4326b56dcb5ade3084669",
+    "svris/tests/__init__.py": "835a19d12e102ccb0973fab6a1077c0f5c73d2b5ccb1bfcf4702b15068f898f1",
+    "svris/tools/aci.py": "97dcd42e7b94ac2516aca4ce4f9fc2198ee5428d6d11e7a684fd831196515353",
+    "svris/tools/audit_slice.py": "99e43d36f6998c28b27da44fd851b48a43e715bc60a772af9b9e080c825ab142"
+  }
+}

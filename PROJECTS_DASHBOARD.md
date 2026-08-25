@@ -8,15 +8,15 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 | Shadow ID | Domain Name | Core Purpose | Infrastructure Status | Active Pipeline / Runner |
 | :--- | :--- | :--- | :--- | :--- |
-| **Shadow 1** | **The Forge** | Software & Tool Builder | ✅ Complete (`51/51` Tests) | [`ForgeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/forge_runner.py) |
-| **Shadow 2** | **svris** | Verification, Custody & Receipts | ✅ Complete (`51/51` Tests) | [`SvrisDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/svris_runner.py) |
-| **Shadow 3** | **The Herald** | Media & Document Engine | ✅ Complete (`51/51` Tests) | [`HeraldMediaRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/media_runner.py) |
-| **Shadow 4** | **The Scout** | Recon & YouTube Deconstruction | ✅ Complete (`51/51` Tests) | [`SovereignMediaEngine`](file:///c:/10%20SHADOWS/loop_engine/media/sovereign_media_engine.py) |
+| **Shadow 1** | **The Forge** | Software & Tool Builder | ✅ Complete (`55/55` Tests) | [`ForgeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/forge_runner.py) |
+| **Shadow 2** | **svris** | Verification, Custody & Receipts | ✅ Complete (`55/55` Tests) | [`SvrisDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/svris_runner.py) |
+| **Shadow 3** | **The Herald** | Media & Document Engine | ✅ Complete (`55/55` Tests) | [`HeraldMediaRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/media_runner.py) |
+| **Shadow 4** | **The Scout** | Recon & YouTube Deconstruction | ✅ Complete (`55/55` Tests) | [`SovereignMediaEngine`](file:///c:/10%20SHADOWS/loop_engine/media/sovereign_media_engine.py) |
 | **Shadow 5** | **The Inquisitor** | Adversarial Plan Auditor | ✅ Complete (Skill Grounded) | [`adversarial-plan-auditor`](file:///c:/10%20SHADOWS/.agents/skills/adversarial-plan-auditor/SKILL.md) |
-| **Shadow 6** | **The Scribe** | Relational Memory & Knowledge Graph | ✅ Complete (`51/51` Tests) | [`ScribeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/scribe_runner.py) |
-| **Shadow 7** | **The Slicer** | DAG & Slice Decomposer | 📋 Planned (Next Up) | TBD |
+| **Shadow 6** | **The Scribe** | Relational Memory & Knowledge Graph | ✅ Complete (`55/55` Tests) | [`ScribeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/scribe_runner.py) |
+| **Shadow 7** | **The Slicer** | DAG & Slice Decomposer | ✅ Complete (`55/55` Tests) | [`SlicerDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/slicer_runner.py) |
 | **Shadow 8** | **The Warden** | Security, Sandboxing & Git Worktrees | ✅ Complete (`GitWorktreeHarness`) | [`GitWorktreeHarness`](file:///c:/10%20SHADOWS/loop_engine/harness/git_worktree.py) |
-| **Shadow 9** | **The Alchemist** | Self-Healing & System Repair | 📋 Planned | TBD |
+| **Shadow 9** | **The Alchemist** | Self-Healing & System Repair | 📋 Planned (Next Up) | TBD |
 | **Shadow 10**| **The Game Master**| Sovereign State Projection & HUD | 📋 Planned | Master System Board |
 
 ---
@@ -29,12 +29,18 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 ---
 
-### 🟢 Project D: The Scribe Relational Knowledge Graph & Pattern Miner (Shadow 6)
+### 🟢 Project D: The Scribe Relational Knowledge Graph (Shadow 6)
+* **Status:** ✅ Complete & Verified.
+* **Delivered:** [`ScribeMemoryStore`](file:///c:/10%20SHADOWS/loop_engine/scribe/memory_store.py), [`ScribePatternMiner`](file:///c:/10%20SHADOWS/loop_engine/scribe/pattern_miner.py), [`ScribeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/scribe_runner.py).
+
+---
+
+### 🟢 Project E: The Slicer Autonomous Goal-to-DAG Decomposer (Shadow 7)
 * **Status:** ✅ Complete & Verified.
 * **Delivered:**
-  1. [`ScribeMemoryStore`](file:///c:/10%20SHADOWS/loop_engine/scribe/memory_store.py): SQLite WAL relational database storing video headers, individual scenes with verbatim quotes, and epistemic blindspots.
-  2. [`ScribePatternMiner`](file:///c:/10%20SHADOWS/loop_engine/scribe/pattern_miner.py): Cross-video pattern synthesis ranking hook velocities and blindspot distributions across channels.
-  3. [`ScribeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/scribe_runner.py): Autonomous `BaseLoop` domain runner emitting SQLite WAL memory receipts.
+  1. [`SliceDAG`](file:///c:/10%20SHADOWS/loop_engine/slicer/schema.py): Topological DAG execution validator detecting cycles and scheduling dependencies.
+  2. [`AutonomousSlicerEngine`](file:///c:/10%20SHADOWS/loop_engine/slicer/slicer_engine.py): Compiles high-level human objectives into executable 3-slice engineering graphs.
+  3. [`SlicerDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/slicer_runner.py): Autonomous `BaseLoop` runner emitting SQLite WAL receipts.
 
 ---
 
@@ -42,5 +48,5 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 | Step | Priority Target | Scope & Objective |
 | :--- | :--- | :--- |
-| **Phase 2** | **Shadow 7: The Slicer (Autonomous DAG Slicer)** | Algorithmic task decomposer taking any human goal and outputting an executable 3-slice DAG for subagents. |
-| **Phase 3** | **Shadow 10: The Game Master (CLI & HUD)** | Unified command-line interface / status projection dashboard for the entire 10 SHADOWS operating system. |
+| **Phase 3** | **Shadow 9: The Alchemist (Self-Healing & Repair)** | Autonomous diagnostic engine that ingests crash traces and generates minimal repair diffs under 3 strikes. |
+| **Phase 4** | **Shadow 10: The Game Master (CLI & HUD)** | Unified command-line interface / status projection dashboard for the entire 10 SHADOWS operating system. |

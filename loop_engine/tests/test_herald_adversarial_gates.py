@@ -10,7 +10,6 @@ from loop_engine.herald.cinematography import CinematographyValidator
 
 def test_adversarial_pacing_ceiling_rejection():
     """Validates that a scene with too many words for its duration is rejected."""
-    # Split into 2 short sentences to satisfy breath unit while exceeding word ceiling for 10s
     row = AVTableRow(
         row_index=1,
         scene_name="Scene 1: Rapid Dialogue",
@@ -23,9 +22,10 @@ def test_adversarial_pacing_ceiling_rejection():
         video_direction="Wide Shot (24mm, f/4) tracking past workstations.",
     )
     # Target is 80 WPM: for 10s allowed is 13 words (+15% = 15 words). 21 words must fail.
-    ok, err = DeterministicScriptValidator.validate_row_pacing(row, target_wpm=80.0)
+    ok, violation = DeterministicScriptValidator.validate_row_pacing(row, target_wpm=80.0)
     assert ok is False
-    assert "exceeds binding target pacing ceiling" in err
+    assert violation is not None
+    assert "exceeds binding target pacing ceiling" in violation.description
 
 
 def test_adversarial_banned_em_dash_rejection():
@@ -79,9 +79,9 @@ def test_adversarial_timecode_overlap_rejection():
     # Introduce deliberate overlap
     script.av_table[1].start_seconds = 2.0  # Collides with Scene 1 which ends at 15.0s
     
-    ok, violations = DeterministicScriptValidator.validate_blueprint(script)
-    assert ok is False
-    assert any("Timecode overlap detected" in v for v in violations)
+    feedback = DeterministicScriptValidator.audit_blueprint_structured(script)
+    assert feedback.passed is False
+    assert any(v.violation_code == "TIMECODE_OVERLAP" for v in feedback.violations)
 
 
 def test_adversarial_missing_cta_rejection():
@@ -102,6 +102,6 @@ def test_adversarial_missing_cta_rejection():
     script.av_table[2].scene_name = "Scene 3: Random Conclusion"
     script.av_table[2].spoken_audio = "And that was everything about our daily routine. The end."
     
-    ok, violations = DeterministicScriptValidator.validate_blueprint(script)
-    assert ok is False
-    assert any("Final scene must provide a clear Call to Action" in v for v in violations)
+    feedback = DeterministicScriptValidator.audit_blueprint_structured(script)
+    assert feedback.passed is False
+    assert any(v.violation_code == "MISSING_CTA" for v in feedback.violations)

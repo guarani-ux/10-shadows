@@ -12,67 +12,134 @@ from loop_engine.herald.schema import (
 from loop_engine.herald.cutdowns import ModularCutDownExtractor
 from loop_engine.herald.linguistics import AntiAILinguisticGuard
 from loop_engine.herald.cinematography import CinematographyValidator
+from loop_engine.herald.feedback import ValidationFeedback, ScriptViolation
 
 
 class IntelligentAVScriptGenerator:
     """
-    Shadow 3 (The Herald) Core AV Script Synthesis Engine.
+    Shadow 3 (The Herald) Adaptive Constraint-Governed Synthesis Engine.
     
-    Transforms CanonicalMediaBriefs into production-ready,
-    3-Section Master AV Scripts mathematically synchronized to binding target WPM.
+    Operates Budget-First:
+    1. Pre-calculates exact allowable word budgets per scene window.
+    2. Dynamically scales sentence density to match target WPM cadence.
+    3. Incorporates structured ValidationFeedback on retries to compress overlong sections or expand sparse dialogue.
     """
 
     @classmethod
-    def synthesize_from_brief(cls, brief: CanonicalMediaBrief) -> MasterAVScriptBlueprint:
+    def calculate_scene_budgets(cls, target_runtime: int, target_wpm: float) -> List[Dict[str, Any]]:
         """
-        Synthesizes MasterAVScriptBlueprint strictly governed by CanonicalMediaBrief.
+        Calculates deterministic proportional scene duration and allowable word budgets.
+        """
+        t_hook = max(round(target_runtime * 0.20, 1), 5.0)
+        t_body = max(round(target_runtime * 0.45, 1), 10.0)
+        t_cta = max(round(target_runtime - (t_hook + t_body), 1), 5.0)
+
+        # Word budget: duration * (target_wpm / 60)
+        w_hook = max(int(t_hook * (target_wpm / 60.0)), 6)
+        w_body = max(int(t_body * (target_wpm / 60.0)), 12)
+        w_cta = max(int(t_cta * (target_wpm / 60.0)), 8)
+
+        return [
+            {"index": 1, "name": "Scene 1: The Hook", "start": 0.0, "end": t_hook, "budget": w_hook},
+            {"index": 2, "name": "Scene 2: The Core Reality", "start": t_hook, "end": t_hook + t_body, "budget": w_body},
+            {"index": 3, "name": "Scene 3: Purpose & Call to Action", "start": t_hook + t_body, "end": float(target_runtime), "budget": w_cta},
+        ]
+
+    @classmethod
+    def fit_dialogue_to_budget(cls, text_sentences: List[str], target_words: int) -> str:
+        """
+        Synthesizes a cohesive dialogue block whose total words match target_words within conversational bounds.
+        """
+        constructed: List[str] = []
+        current_word_count = 0
+
+        for sentence in text_sentences:
+            clean = sentence.replace("—", ", ").replace("–", ", ").strip()
+            s_words = clean.split()
+            if current_word_count + len(s_words) <= target_words + 2:
+                constructed.append(clean)
+                current_word_count += len(s_words)
+            else:
+                remaining = target_words - current_word_count
+                if remaining >= 4:
+                    truncated = " ".join(s_words[:remaining]).rstrip(",;: -")
+                    if not truncated.endswith((".", "!", "?")):
+                        truncated += "."
+                    constructed.append(truncated)
+                    current_word_count += len(truncated.split())
+                break
+
+        if not constructed:
+            constructed = [text_sentences[0]]
+
+        return " ".join(constructed)
+
+    @classmethod
+    def synthesize_from_brief(
+        cls,
+        brief: CanonicalMediaBrief,
+        feedback: Optional[ValidationFeedback] = None,
+    ) -> MasterAVScriptBlueprint:
+        """
+        Synthesizes or adapts MasterAVScriptBlueprint strictly governed by CanonicalMediaBrief and prior feedback.
         """
         script_id = f"av_{brief.project_id}"
         target_runtime = brief.production_constraints.target_duration_seconds
         target_wpm = brief.production_constraints.target_pacing_wpm
 
-        # Calculate exact 3-scene time allocations proportionally (20% hook, 45% body, 35% resolution/CTA)
-        t_hook = round(target_runtime * 0.20, 1)
-        t_body = round(target_runtime * 0.45, 1)
-        t_cta = round(target_runtime - (t_hook + t_body), 1)
+        scene_budgets = cls.calculate_scene_budgets(target_runtime, target_wpm)
 
-        # Evidence references
-        ev_id = brief.verified_evidence[0].evidence_id if brief.verified_evidence else None
-        unk_id = brief.explicit_unknowns[0].unknown_id if brief.explicit_unknowns else None
+        # Apply feedback word adjustments if available from prior failed attempt
+        if feedback and feedback.suggested_word_budget_adjustments:
+            for sb in scene_budgets:
+                idx = sb["index"]
+                if idx in feedback.suggested_word_budget_adjustments:
+                    sb["budget"] = feedback.suggested_word_budget_adjustments[idx]
 
         # Camera package lookup
         cam_wide = brief.production_constraints.camera_package[0] if brief.production_constraints.camera_package else "Sony FX3 (24mm f/4)"
         cam_close = brief.production_constraints.camera_package[1] if len(brief.production_constraints.camera_package) > 1 else "Sony A7IV (85mm f/1.8)"
         lighting = brief.production_constraints.lighting_style
 
-        # Scene 1: Hook (15s @ 145 WPM -> ~36 words)
-        s1_audio = (
-            f"Most people think {brief.project_title.lower()} is quiet, but our daily work connects directly with people across the community. "
-            f"Every single morning brings new challenges and opportunities to make an impact."
-        )
+        # Scene 1 Candidate Sentences (Clean of AI buzzwords)
+        s1_candidates = [
+            f"Most people think {brief.project_title.lower()} is routine and predictable.",
+            f"In reality, our daily operations connect directly with vital challenges and community needs.",
+            f"Every single morning brings an active opportunity to deliver high impact solutions.",
+            f"We ensure our infrastructure remains dependable from the very start of every shift.",
+        ]
+        s1_audio = cls.fit_dialogue_to_budget(s1_candidates, scene_budgets[0]["budget"])
         s1_video = f"Wide Shot ({cam_wide.split()[1] if len(cam_wide.split())>1 else '24mm'}, f/4) tracking past active workstations. {lighting}. Dynamic gimbal movement."
 
-        # Scene 2: Core Reality (33.8s @ 145 WPM -> ~80 words)
-        ev_note = f" In fact, {brief.verified_evidence[0].source_description}" if brief.verified_evidence else " Our team manages complex community technology every shift."
-        s2_audio = (
-            f"Behind the front desk, our team manages high-demand technology, guides community workshops, and helps patrons discover digital learning tools. "
-            f"We troubleshoot computer access, coordinate reading programs, and keep shared maker spaces fully operational.{ev_note} "
-            f"We ensure every patron finds the exact support they need."
-        )
+        # Scene 2 Candidate Sentences (Ground with evidence, zero banned buzzwords)
+        ev_text = f"In fact, {brief.verified_evidence[0].source_description}" if brief.verified_evidence else "Our team manages mission-critical community technology on every shift."
+        s2_candidates = [
+            f"Behind the scenes, our staff manages high-demand technology, guides workshops, and keeps spaces accessible.",
+            ev_text,
+            f"We continuously troubleshoot technical issues, coordinate collaborative programs, and ensure zero operational disruption.",
+            f"Our dedicated team handles each challenge with rigor, precision, and personal care.",
+            f"We maintain smooth service delivery so our stakeholders achieve their objectives without friction.",
+        ]
+        s2_audio = cls.fit_dialogue_to_budget(s2_candidates, scene_budgets[1]["budget"])
         s2_video = f"Cut to MCU ({cam_close.split()[1] if len(cam_close.split())>1 else '85mm'}, f/2.0) on technician focused at workstation. B-Roll Insert Cut showing hands assisting patron."
 
-        # Scene 3: CTA (26.2s @ 145 WPM -> ~60 words)
-        s3_audio = (
-            f"If you want a rewarding career that makes an immediate positive difference in your city, join our team. "
-            f"We are actively seeking passionate people who care about community empowerment and open access. "
-            f"Please {brief.intended_audience_action.lower().rstrip('.')} today and submit your application online."
-        )
+        # Scene 3 Candidate Sentences (CTA)
+        s3_candidates = [
+            f"If you want to be part of work that makes an immediate positive difference, we invite you to connect with us.",
+            f"We are actively seeking dedicated individuals who value community empowerment and excellence.",
+            f"Please {brief.intended_audience_action.lower().rstrip('.')} today and take the next step.",
+            f"Visit our official portal now to get started.",
+        ]
+        s3_audio = cls.fit_dialogue_to_budget(s3_candidates, scene_budgets[2]["budget"])
         s3_video = f"Medium Shot (50mm, f/2.8) of team members collaborating in open space. Lower third graphic displaying: '{brief.intended_audience_action}'."
 
+        ev_id = brief.verified_evidence[0].evidence_id if brief.verified_evidence else None
+        unk_id = brief.explicit_unknowns[0].unknown_id if brief.explicit_unknowns else None
+
         scenes_raw = [
-            ("Scene 1: The Hook", 0.0, t_hook, s1_audio, s1_video, [ev_id] if ev_id else [], []),
-            ("Scene 2: The Core Reality", t_hook, t_hook + t_body, s2_audio, s2_video, [ev_id] if ev_id else [], [unk_id] if unk_id else []),
-            ("Scene 3: Purpose & Call to Action", t_hook + t_body, float(target_runtime), s3_audio, s3_video, [], []),
+            (scene_budgets[0]["name"], scene_budgets[0]["start"], scene_budgets[0]["end"], s1_audio, s1_video, [ev_id] if ev_id else [], []),
+            (scene_budgets[1]["name"], scene_budgets[1]["start"], scene_budgets[1]["end"], s2_audio, s2_video, [ev_id] if ev_id else [], [unk_id] if unk_id else []),
+            (scene_budgets[2]["name"], scene_budgets[2]["start"], scene_budgets[2]["end"], s3_audio, s3_video, [], []),
         ]
 
         av_rows: List[AVTableRow] = []
@@ -80,9 +147,7 @@ class IntelligentAVScriptGenerator:
 
         for idx, (s_name, s_start, s_end, s_audio, s_video, ev_ids, unk_ids) in enumerate(scenes_raw, 1):
             dur = max(s_end - s_start, 0.001)
-            # Clean AI markers
-            clean_audio = s_audio.replace("—", ", ").replace("–", ", ")
-            words = clean_audio.split()
+            words = s_audio.split()
             w_count = len(words)
             total_words += w_count
             wpm = round(w_count / (dur / 60.0), 1)
@@ -94,7 +159,7 @@ class IntelligentAVScriptGenerator:
                     time_window=f"{int(s_start // 60)}:{int(s_start % 60):02d} - {int(s_end // 60)}:{int(s_end % 60):02d}",
                     start_seconds=s_start,
                     end_seconds=s_end,
-                    spoken_audio=clean_audio,
+                    spoken_audio=s_audio,
                     spoken_words_count=w_count,
                     pacing_wpm=wpm,
                     video_direction=s_video,

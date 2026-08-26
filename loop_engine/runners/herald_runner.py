@@ -9,16 +9,16 @@ from loop_engine.herald.generator import IntelligentAVScriptGenerator
 from loop_engine.herald.validators import DeterministicScriptValidator
 from loop_engine.herald.renderer import MasterAVMarkdownRenderer
 from loop_engine.herald.schema import MasterAVScriptBlueprint
+from loop_engine.herald.feedback import ValidationFeedback
 from loop_engine.receipts import ReceiptStore
 
 
 class HeraldAVScriptDomainRunner(BaseLoop):
     """
-    Shadow 3 (The Herald) Domain Runner.
+    Shadow 3 (The Herald) Adaptive Constraint-Governed Runner.
     
-    Autonomous loop for transforming CanonicalMediaBriefs into production-ready,
-    3-section, 3-column AV script blueprints rigorously verified against
-    DeterministicScriptValidator physics, anti-AI guards, and cinematography rules.
+    Transforms CanonicalMediaBriefs into production-ready AV scripts
+    via budget-first synthesis, machine-actionable feedback, and strict promotion gates.
     """
 
     def __init__(
@@ -28,16 +28,15 @@ class HeraldAVScriptDomainRunner(BaseLoop):
     ):
         super().__init__(name="TheHeraldAVScriptDomainRunner", max_strikes=max_strikes)
         self.receipt_store = receipt_store or ReceiptStore()
+        self.last_feedback: Optional[ValidationFeedback] = None
 
     def normalize(self, raw_input: Any) -> Dict[str, Any]:
         """Normalizes raw creative brief or dictionary into CanonicalMediaBrief model."""
         if isinstance(raw_input, CanonicalMediaBrief):
             brief_obj = raw_input
         elif isinstance(raw_input, dict):
-            # Parse strictly into CanonicalMediaBrief
             brief_obj = CanonicalMediaBrief.model_validate(raw_input)
         else:
-            # Construct minimal canonical brief from string input
             brief_obj = CanonicalMediaBrief(
                 project_id=f"herald_{uuid.uuid4().hex[:8]}",
                 project_title=str(raw_input),
@@ -60,10 +59,13 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         feedback: Optional[str] = None,
     ) -> Path:
         """
-        Synthesizes Master AV Script Blueprint and renders markdown into staging.
+        Synthesizes Master AV Script Blueprint using structured feedback from prior attempts.
         """
         brief = CanonicalMediaBrief.model_validate(task_spec["brief_dict"])
-        blueprint = IntelligentAVScriptGenerator.synthesize_from_brief(brief)
+        
+        # Parse prior structured feedback if available
+        parsed_feedback = self.last_feedback
+        blueprint = IntelligentAVScriptGenerator.synthesize_from_brief(brief, feedback=parsed_feedback)
         md_text = MasterAVMarkdownRenderer.render(blueprint)
 
         payload = {
@@ -82,6 +84,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
     ) -> Tuple[bool, str]:
         """
         Executes full-suite deterministic verification on staged blueprint.
+        Records structured machine-actionable feedback on failure.
         """
         try:
             content = candidate_path.read_text(encoding="utf-8")
@@ -89,10 +92,13 @@ class HeraldAVScriptDomainRunner(BaseLoop):
             bp_data = data.get("blueprint", {})
             blueprint = MasterAVScriptBlueprint.model_validate(bp_data)
 
-            # Call comprehensive deterministic validator suite
-            valid, violations = DeterministicScriptValidator.validate_blueprint(blueprint)
-            if not valid:
-                return False, f"Deterministic Script Validation Rejected: {'; '.join(violations)}"
+            # Audit blueprint with structured feedback engine
+            feedback = DeterministicScriptValidator.audit_blueprint_structured(blueprint)
+            self.last_feedback = feedback
+
+            if not feedback.passed:
+                err_messages = [f"[{v.violation_code}] {v.description} -> Strategy: {v.repair_strategy}" for v in feedback.violations]
+                return False, f"Deterministic Script Audit Rejected:\n" + "\n".join(err_messages)
 
             # Verify markdown table rendering
             md_text = data.get("rendered_markdown", "")
@@ -124,11 +130,15 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         receipt_id = self.receipt_store.record_receipt(
             task_id=task_spec["task_id"],
             run_id=f"run_{task_spec['task_id']}",
-            spec_hash="herald_av_verified",
+            spec_hash="herald_av_adaptive_verified",
             status="COMMITTED",
             strikes_used=1,
             target_file=str(dest_md.as_posix()),
-            extra_data={"title": task_spec["brief_dict"].get("project_title", "Untitled")},
+            extra_data={
+                "title": task_spec["brief_dict"].get("project_title", "Untitled"),
+                "duration_seconds": task_spec["brief_dict"]["production_constraints"]["target_duration_seconds"],
+                "target_wpm": task_spec["brief_dict"]["production_constraints"]["target_pacing_wpm"],
+            },
         )
 
         return {

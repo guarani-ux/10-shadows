@@ -26,10 +26,12 @@ Status is strictly defined by physical runtime evidence:
 
 ---
 
-## 2. Integrated Cross-Shadow Vertical Slice (Verified)
+## 2. Integrated Cross-Shadow Vertical Slice & Bounded Router (Verified)
 
-* **Integrated Closed Loop (`Herald + Warden + Alchemist + Game Master`):**
+* **Integrated Closed Loop (`Herald + Slicer + Warden + Alchemist + Game Master`):**
+  - **Shared Durable RunContext:** [`context.py`](file:///c:/10%20SHADOWS/loop_engine/context.py) provides cryptographic traceability (`run_id`, `objective_hash`, `source_commit`, `shadow_id`, `attempt`).
+  - **Bounded Shadow Router:** [`router.py`](file:///c:/10%20SHADOWS/loop_engine/router.py) determines explicit dependency DAG routing decisions, artifact handoffs, verification gates, and structured `HumanEscalationRecord` handling.
   - **Herald AV Synthesis:** Consumes `CanonicalMediaBrief`, enforces binding target WPM budgets, preserves verified evidence/unknowns, rejects AI markers, and emits 9:16 vertical cutdown scripts.
-  - **Alchemist Active Self-Healing:** Ingests crash tracebacks, parses `CrashDiagnostic`, generates minimal `SurgicalPatch` preserving indentation, executes isolated pytest verification, commits on success, and executes automatic rollback on test failure.
+  - **Alchemist Active Self-Healing:** Ingests crash tracebacks, parses `CrashDiagnostic`, generates minimal `SurgicalPatch` preserving indentation, executes isolated pytest verification inside Warden worktrees, commits on success, and executes automatic rollback on test failure.
   - **Truthful Game Master HUD:** Inspects Git branch, commit SHA, working-tree cleanliness, discovered test suites, and SQLite WAL receipt distributions dynamically without hardcoded constants.
-  - **Master Test Proof:** `87/87` physical automated tests passing across the entire repository.
+  - **Master Test Proof:** `89/89` physical automated tests passing across the entire repository.

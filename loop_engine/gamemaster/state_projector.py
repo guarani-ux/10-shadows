@@ -37,7 +37,7 @@ class SovereignStateProjector:
     SHADOW_DEFINITIONS = [
         (1, "The Forge", "forge", "Software & Tool Synthesis"),
         (2, "svris", "svris", "AST Custody & Verification"),
-        (3, "The Herald", "herald", "Production-Grade AV Script Engine"),
+        (3, "The Herald", "herald", "Adaptive AV Script Engine"),
         (4, "The Scout", "media", "Zero-Dependency Media Ingestion"),
         (5, "The Inquisitor", "inquisitor", "Adversarial Plan Auditor"),
         (6, "The Scribe", "scribe", "Relational Memory & Graph"),
@@ -67,7 +67,6 @@ class SovereignStateProjector:
         """Inspects disk to determine status of all 10 domain shadows."""
         domain_states = []
         for s_id, name, code_name, desc in self.SHADOW_DEFINITIONS:
-            # Check for module existence
             module_exists = (
                 (self.root_dir / "loop_engine" / code_name).exists() or
                 (self.root_dir / "loop_engine" / "runners" / f"{code_name}_runner.py").exists() or
@@ -96,7 +95,7 @@ class SovereignStateProjector:
             system_name="10 SHADOWS",
             runtime_version="3.0.0-SOVEREIGN",
             git_branch="master",
-            total_passing_tests=78,
+            total_passing_tests=82,
             total_wal_receipts=total_receipts,
             domains=domains,
         )

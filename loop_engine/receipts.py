@@ -29,23 +29,34 @@ def compute_file_sha256(file_path: Path) -> str:
     return h.hexdigest()
 
 
-def atomic_two_phase_commit(candidate_path: Path, target_path: Path) -> str:
+def atomic_two_phase_commit(candidate_path: Path, target_path: Path) -> Dict[str, Any]:
     """
     Executes atomic two-phase commit:
     1. Validates candidate exists and computes SHA-256 hash.
     2. Writes to target atomically using os.replace.
+    3. Removes candidate file from staging.
     """
     if not candidate_path.exists():
         raise AtomicCommitError(f"Candidate path does not exist: {candidate_path}")
     
     target_path.parent.mkdir(parents=True, exist_ok=True)
     candidate_hash = compute_file_sha256(candidate_path)
+    file_bytes = candidate_path.stat().st_size
     
     temp_target = target_path.parent / f".tmp_{target_path.name}_{int(datetime.now().timestamp()*1000)}"
     shutil.copy2(candidate_path, temp_target)
     os.replace(temp_target, target_path)
+    try:
+        candidate_path.unlink()
+    except Exception:
+        pass
     
-    return candidate_hash
+    return {
+        "status": "COMMITTED",
+        "target_file": str(target_path),
+        "sha256": candidate_hash,
+        "bytes_written": file_bytes,
+    }
 
 
 class ExecutionReceipt(BaseModel):
@@ -221,16 +232,46 @@ class ReceiptStore:
             )
             return cursor.lastrowid
 
-    def get_receipt(self, receipt_id: int) -> Optional[ExecutionReceipt]:
-        """Retrieves a single receipt by database ID."""
+    def get_receipt(self, receipt_id: int) -> Optional[Dict[str, Any]]:
+        """Retrieves a single receipt by database ID as a dictionary."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT receipt_json FROM receipts WHERE id = ?", (receipt_id,)).fetchone()
+            row = conn.execute("SELECT * FROM receipts WHERE id = ?", (receipt_id,)).fetchone()
             if row:
-                return ExecutionReceipt.model_validate_json(row["receipt_json"])
+                d = dict(row)
+                if "receipt_json" in d and d["receipt_json"]:
+                    try:
+                        d.update(json.loads(d["receipt_json"]))
+                    except Exception:
+                        pass
+                return d
             return None
 
-    def query_receipts(self, limit: int = 50) -> List[ExecutionReceipt]:
+    def query_receipts(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Queries the most recent receipts in descending order."""
         with self._get_connection() as conn:
-            rows = conn.execute("SELECT receipt_json FROM receipts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
-            return [ExecutionReceipt.model_validate_json(r["receipt_json"]) for r in rows]
+            rows = conn.execute("SELECT * FROM receipts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                if "receipt_json" in d and d["receipt_json"]:
+                    try:
+                        d.update(json.loads(d["receipt_json"]))
+                    except Exception:
+                        pass
+                results.append(d)
+            return results
+
+    def query_by_task(self, task_id: str) -> List[Dict[str, Any]]:
+        """Queries receipts for a specific task ID."""
+        with self._get_connection() as conn:
+            rows = conn.execute("SELECT * FROM receipts WHERE task_id = ? ORDER BY id DESC", (task_id,)).fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                if "receipt_json" in d and d["receipt_json"]:
+                    try:
+                        d.update(json.loads(d["receipt_json"]))
+                    except Exception:
+                        pass
+                results.append(d)
+            return results

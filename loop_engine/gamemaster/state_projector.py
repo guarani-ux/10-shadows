@@ -37,7 +37,7 @@ class SovereignStateProjector:
     SHADOW_DEFINITIONS = [
         (1, "The Forge", "forge", "Software & Tool Synthesis"),
         (2, "svris", "svris", "AST Custody & Verification"),
-        (3, "The Herald", "herald", "Intelligent AV Script Engine"),
+        (3, "The Herald", "herald", "Production-Grade AV Script Engine"),
         (4, "The Scout", "media", "Zero-Dependency Media Ingestion"),
         (5, "The Inquisitor", "inquisitor", "Adversarial Plan Auditor"),
         (6, "The Scribe", "scribe", "Relational Memory & Graph"),
@@ -96,7 +96,7 @@ class SovereignStateProjector:
             system_name="10 SHADOWS",
             runtime_version="3.0.0-SOVEREIGN",
             git_branch="master",
-            total_passing_tests=73,
+            total_passing_tests=78,
             total_wal_receipts=total_receipts,
             domains=domains,
         )

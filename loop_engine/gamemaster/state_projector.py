@@ -99,9 +99,9 @@ class SovereignStateProjector:
         }
 
     def get_receipts_telemetry(self) -> Dict[str, Any]:
-        """Queries SQLite WAL database for receipt totals, status distribution, and per-task rows."""
+        """Queries SQLite WAL database for receipt totals, status distribution, and per-shadow distribution."""
         if not self.receipts_db.exists():
-            return {"total": 0, "by_status": {}, "rows": []}
+            return {"total": 0, "by_status": {}, "by_shadow": {}}
         try:
             conn = sqlite3.connect(str(self.receipts_db))
             total_row = conn.execute("SELECT COUNT(*) FROM receipts").fetchone()
@@ -110,12 +110,17 @@ class SovereignStateProjector:
             status_rows = conn.execute("SELECT status, COUNT(*) FROM receipts GROUP BY status").fetchall()
             by_status = {status: count for status, count in status_rows}
 
-            # Fetch task_ids and receipt details
-            all_rows = conn.execute("SELECT task_id, status FROM receipts").fetchall()
+            shadow_rows = conn.execute("SELECT shadow_id, domain_code, COUNT(*) FROM receipts GROUP BY shadow_id, domain_code").fetchall()
+            by_shadow: Dict[int, int] = {}
+            by_code: Dict[str, int] = {}
+            for s_id, d_code, count in shadow_rows:
+                by_shadow[s_id] = count
+                by_code[d_code] = count
+
             conn.close()
-            return {"total": total, "by_status": by_status, "rows": all_rows}
+            return {"total": total, "by_status": by_status, "by_shadow": by_shadow, "by_code": by_code}
         except Exception:
-            return {"total": 0, "by_status": {}, "rows": []}
+            return {"total": 0, "by_status": {}, "by_shadow": {}, "by_code": {}}
 
     def get_test_files_count(self) -> int:
         """Counts discovered test files on disk in loop_engine/tests."""
@@ -129,27 +134,22 @@ class SovereignStateProjector:
         domain_states = []
         tests_dir = self.root_dir / "loop_engine" / "tests"
         all_test_files = list(tests_dir.glob("test_*.py")) if tests_dir.exists() else []
-        receipt_rows = (receipts_data or {}).get("rows", [])
+        r_info = receipts_data or {}
+        by_shadow = r_info.get("by_shadow", {})
+        by_code = r_info.get("by_code", {})
 
         for s_id, name, code_name, expected_paths in self.SHADOW_DEFINITIONS:
-            # Check physical path existence strictly relative to root_dir
             has_module = any((self.root_dir / p).exists() for p in expected_paths)
-            
-            # Check for executable runner or integration
             runner_file = self.root_dir / "loop_engine" / "runners" / f"{code_name}_runner.py"
             has_runner = runner_file.exists() or (s_id in [5, 8, 10] and has_module)
             
-            # Count domain-specific test files
             domain_tests = [
                 f for f in all_test_files
                 if code_name in f.name.lower() or name.lower().replace("the ", "") in f.name.lower()
             ]
 
-            # Count domain-specific receipts dynamically by matching task_id patterns
-            domain_receipt_count = sum(
-                1 for task_id, status in receipt_rows
-                if code_name in task_id.lower() or (s_id == 3 and "tight" in task_id.lower()) or (s_id == 9 and "heal" in task_id.lower())
-            )
+            # Read true physical receipts count for this domain
+            receipts_count = by_shadow.get(s_id, 0) or by_code.get(code_name, 0)
 
             if has_module and has_runner:
                 status = "ONLINE"
@@ -167,7 +167,7 @@ class SovereignStateProjector:
                     has_module=has_module,
                     has_runner=has_runner,
                     test_files_count=len(domain_tests),
-                    receipts_count=domain_receipt_count,
+                    receipts_count=receipts_count,
                 )
             )
 

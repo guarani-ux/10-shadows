@@ -18,7 +18,7 @@ class AtomicCommitError(Exception):
 
 
 def compute_file_sha256(file_path: Path) -> str:
-    """Computes SHA-256 digest of a physical file."""
+    """Computes cryptographic SHA-256 digest of a physical file."""
     if not file_path.exists():
         return ""
     hasher = hashlib.sha256()
@@ -48,11 +48,9 @@ def atomic_two_phase_commit(candidate_file: Path, destination_file: Path) -> Dic
         had_backup = True
 
     try:
-        # Physical atomic replacement
         os.replace(candidate_file, destination_file)
         artifact_hash = compute_file_sha256(destination_file)
 
-        # Successful commit -> remove temporary backup
         if had_backup and backup_file.exists():
             backup_file.unlink()
 
@@ -64,7 +62,6 @@ def atomic_two_phase_commit(candidate_file: Path, destination_file: Path) -> Dic
         }
 
     except Exception as e:
-        # Rollback
         if had_backup and backup_file.exists():
             os.replace(backup_file, destination_file)
         raise AtomicCommitError(f"Atomic commit failed: {str(e)}")
@@ -72,7 +69,7 @@ def atomic_two_phase_commit(candidate_file: Path, destination_file: Path) -> Dic
 
 class ReceiptStore:
     """
-    SQLite WAL-Mode Receipt Store for machine-signed audit records.
+    SQLite WAL-Mode Receipt Store with explicit cryptographic traceability.
     """
 
     def __init__(self, db_path: Optional[Path] = None):
@@ -94,16 +91,28 @@ class ReceiptStore:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id TEXT NOT NULL,
                     run_id TEXT NOT NULL,
+                    parent_run_id TEXT,
+                    shadow_id INTEGER DEFAULT 0,
+                    domain_code TEXT DEFAULT 'unmapped',
+                    stage TEXT DEFAULT 'FINAL',
+                    attempt INTEGER DEFAULT 1,
+                    candidate_hash TEXT,
+                    source_commit TEXT,
                     spec_hash TEXT NOT NULL,
                     status TEXT NOT NULL,
                     strikes_used INTEGER NOT NULL,
                     target_file TEXT,
                     artifact_sha256 TEXT,
+                    failure_code TEXT,
+                    repair_strategy TEXT,
+                    promotion_decision TEXT DEFAULT 'PROMOTED',
                     receipt_json TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_task ON receipts(task_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_run ON receipts(run_id);")
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_shadow ON receipts(shadow_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_hash ON receipts(spec_hash);")
 
     def record_receipt(
@@ -113,8 +122,18 @@ class ReceiptStore:
         spec_hash: str,
         status: str,
         strikes_used: int,
+        shadow_id: int = 0,
+        domain_code: str = "unmapped",
+        stage: str = "FINAL",
+        attempt: int = 1,
+        candidate_hash: Optional[str] = None,
+        source_commit: Optional[str] = None,
+        parent_run_id: Optional[str] = None,
         target_file: Optional[str] = None,
         artifact_sha256: Optional[str] = None,
+        failure_code: Optional[str] = None,
+        repair_strategy: Optional[str] = None,
+        promotion_decision: str = "PROMOTED",
         extra_data: Optional[Dict[str, Any]] = None,
     ) -> int:
         payload = extra_data or {}
@@ -122,18 +141,30 @@ class ReceiptStore:
             cursor = conn.execute(
                 """
                 INSERT INTO receipts (
-                    task_id, run_id, spec_hash, status, strikes_used,
-                    target_file, artifact_sha256, receipt_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                    task_id, run_id, parent_run_id, shadow_id, domain_code,
+                    stage, attempt, candidate_hash, source_commit, spec_hash,
+                    status, strikes_used, target_file, artifact_sha256,
+                    failure_code, repair_strategy, promotion_decision, receipt_json
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     task_id,
                     run_id,
+                    parent_run_id,
+                    shadow_id,
+                    domain_code,
+                    stage,
+                    attempt,
+                    candidate_hash,
+                    source_commit,
                     spec_hash,
                     status,
                     strikes_used,
                     target_file,
                     artifact_sha256,
+                    failure_code,
+                    repair_strategy,
+                    promotion_decision,
                     json.dumps(payload, default=str),
                 ),
             )
@@ -149,4 +180,9 @@ class ReceiptStore:
     def query_by_task(self, task_id: str) -> List[Dict[str, Any]]:
         with self._get_connection() as conn:
             rows = conn.execute("SELECT * FROM receipts WHERE task_id = ? ORDER BY id DESC;", (task_id,)).fetchall()
+            return [dict(r) for r in rows]
+
+    def query_by_domain(self, domain_code: str) -> List[Dict[str, Any]]:
+        with self._get_connection() as conn:
+            rows = conn.execute("SELECT * FROM receipts WHERE domain_code = ? ORDER BY id DESC;", (domain_code,)).fetchall()
             return [dict(r) for r in rows]

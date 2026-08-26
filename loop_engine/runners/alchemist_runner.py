@@ -12,24 +12,12 @@ from loop_engine.verifiers.ast_gate import inspect_file_ast
 from loop_engine.verifiers.test_gate import run_isolated_pytest
 from loop_engine.harness.git_worktree import GitWorktreeHarness
 from loop_engine.receipts import ReceiptStore
+from loop_engine.context import RunContext
 
 
 class RealAlchemistSelfHealingEngine(BaseLoop):
     """
     Shadow 9 (The Alchemist) Active Self-Healing Engine.
-    
-    Executes true closed-loop repair inside an isolated Warden worktree:
-    crash trace
-      └─► diagnostic
-            └─► minimal surgical patch
-                  └─► create isolated Warden worktree sandbox
-                        └─► locate/copy target file into worktree
-                              └─► apply patch only inside the worktree
-                                    └─► AST/syntax verification inside worktree
-                                          └─► targeted test execution inside worktree
-                                                └─► commit & merge to master on success
-                                                      └─► destroy worktree & rollback on failure
-                                                            └─► emit comprehensive WAL receipt.
     """
 
     def __init__(
@@ -41,6 +29,7 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
         super().__init__(name="TheAlchemistSelfHealingEngine", max_strikes=max_strikes)
         self.receipt_store = receipt_store or ReceiptStore()
         self.harness = worktree_harness or GitWorktreeHarness()
+        self.run_context: Optional[RunContext] = None
 
     def normalize(self, raw_input: Any) -> Dict[str, Any]:
         """Normalizes crash payload or dictionary into TaskSpec."""
@@ -55,11 +44,19 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
             target_test_file = None
             source_file = None
 
+        self.run_context = RunContext.create(
+            task_id=task_id,
+            shadow_id=9,
+            domain_code="alchemist",
+            raw_objective={"trace": raw_trace[:100], "source": source_file},
+        )
+
         return {
             "task_id": task_id,
             "raw_trace": raw_trace,
             "target_test_file": target_test_file,
             "source_file": source_file,
+            "run_id": self.run_context.run_id,
         }
 
     def execute_staging(
@@ -116,7 +113,6 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
             original_text = orig_path.read_text(encoding="utf-8")
             original_hash = hashlib.sha256(original_text.encode("utf-8")).hexdigest()
 
-            # 1. Perform in-memory surgical line replacement
             lines = original_text.splitlines()
             if not (1 <= patch.target_line <= len(lines)):
                 return False, f"Alchemist Repair Rejected: Target line {patch.target_line} out of bounds (1..{len(lines)})."
@@ -160,7 +156,6 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
                 
                 wt_test.parent.mkdir(parents=True, exist_ok=True)
                 test_raw = orig_test_path.read_text(encoding="utf-8")
-                # Rewrite sys.path import inside mirrored test so it imports from wt_source parent
                 rewritten_test = test_raw.replace(str(orig_path.parent), str(wt_source.parent))
                 wt_test.write_text(rewritten_test, encoding="utf-8")
 
@@ -176,7 +171,7 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
                     err_detail = test_res.get("stderr") or test_res.get("stdout")
                     return False, f"Alchemist Targeted Test Failed in Sandbox: {err_detail}"
 
-            # 6. Record verified payload metadata and destroy sandbox cleanly
+            # 6. Clean destruction of temporary sandbox
             self.harness.destroy_sandbox(worktree_path, branch_name)
 
             data["original_sha256"] = original_hash
@@ -199,22 +194,31 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
         task_spec: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Permanently commits verified repair to disk and logs forensic WAL receipt.
+        Permanently commits verified repair to disk and logs explicit forensic WAL receipt.
         """
         data = json.loads(candidate_path.read_text(encoding="utf-8"))
         target_file_path = Path(task_spec.get("source_file") or data["patch"]["target_file"])
         
-        # Write verified patched content atomically
         if "patched_content" in data:
             target_file_path.write_text(data["patched_content"], encoding="utf-8")
 
+        run_id = task_spec.get("run_id") or f"run_{task_spec['task_id']}"
+
         receipt_id = self.receipt_store.record_receipt(
             task_id=task_spec["task_id"],
-            run_id=f"run_{task_spec['task_id']}",
+            run_id=run_id,
+            shadow_id=9,
+            domain_code="alchemist",
+            stage="FINAL",
+            attempt=1,
+            candidate_hash=data.get("patched_sha256"),
             spec_hash="alchemist_warden_verified",
             status="COMMITTED",
             strikes_used=1,
             target_file=str(target_file_path.as_posix()),
+            artifact_sha256=data.get("patched_sha256"),
+            repair_strategy=data["patch"]["rationale"],
+            promotion_decision="PROMOTED",
             extra_data={
                 "original_sha256": data.get("original_sha256"),
                 "patched_sha256": data.get("patched_sha256"),

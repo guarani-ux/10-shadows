@@ -1,5 +1,6 @@
 import json
 import uuid
+import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -11,14 +12,12 @@ from loop_engine.herald.renderer import MasterAVMarkdownRenderer
 from loop_engine.herald.schema import MasterAVScriptBlueprint
 from loop_engine.herald.feedback import ValidationFeedback
 from loop_engine.receipts import ReceiptStore
+from loop_engine.context import RunContext
 
 
 class HeraldAVScriptDomainRunner(BaseLoop):
     """
     Shadow 3 (The Herald) Adaptive Constraint-Governed Runner.
-    
-    Transforms CanonicalMediaBriefs into production-ready AV scripts
-    via budget-first synthesis, machine-actionable feedback, and strict promotion gates.
     """
 
     def __init__(
@@ -29,6 +28,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         super().__init__(name="TheHeraldAVScriptDomainRunner", max_strikes=max_strikes)
         self.receipt_store = receipt_store or ReceiptStore()
         self.last_feedback: Optional[ValidationFeedback] = None
+        self.run_context: Optional[RunContext] = None
 
     def normalize(self, raw_input: Any) -> Dict[str, Any]:
         """Normalizes raw creative brief or dictionary into CanonicalMediaBrief model."""
@@ -47,9 +47,17 @@ class HeraldAVScriptDomainRunner(BaseLoop):
                 narrative_arc_type="Context -> Evidence -> Impact",
             )
 
+        self.run_context = RunContext.create(
+            task_id=brief_obj.project_id,
+            shadow_id=3,
+            domain_code="herald",
+            raw_objective=brief_obj.model_dump(),
+        )
+
         return {
             "task_id": brief_obj.project_id,
             "brief_dict": brief_obj.model_dump(),
+            "run_id": self.run_context.run_id,
         }
 
     def execute_staging(
@@ -63,7 +71,6 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         """
         brief = CanonicalMediaBrief.model_validate(task_spec["brief_dict"])
         
-        # Parse prior structured feedback if available
         parsed_feedback = self.last_feedback
         blueprint = IntelligentAVScriptGenerator.synthesize_from_brief(brief, feedback=parsed_feedback)
         md_text = MasterAVMarkdownRenderer.render(blueprint)
@@ -73,8 +80,14 @@ class HeraldAVScriptDomainRunner(BaseLoop):
             "rendered_markdown": md_text,
         }
 
+        # Calculate cryptographic SHA-256 hash of candidate
+        cand_json_str = json.dumps(payload, indent=2)
+        candidate_hash = hashlib.sha256(cand_json_str.encode("utf-8")).hexdigest()
+        if self.run_context:
+            self.run_context.candidate_hash = candidate_hash
+
         candidate_file = staging_dir / f"av_script_{task_spec['task_id']}.json"
-        candidate_file.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        candidate_file.write_text(cand_json_str, encoding="utf-8")
         return candidate_file
 
     def verify(
@@ -84,7 +97,6 @@ class HeraldAVScriptDomainRunner(BaseLoop):
     ) -> Tuple[bool, str]:
         """
         Executes full-suite deterministic verification on staged blueprint.
-        Records structured machine-actionable feedback on failure.
         """
         try:
             content = candidate_path.read_text(encoding="utf-8")
@@ -92,7 +104,6 @@ class HeraldAVScriptDomainRunner(BaseLoop):
             bp_data = data.get("blueprint", {})
             blueprint = MasterAVScriptBlueprint.model_validate(bp_data)
 
-            # Audit blueprint with structured feedback engine
             feedback = DeterministicScriptValidator.audit_blueprint_structured(blueprint)
             self.last_feedback = feedback
 
@@ -100,7 +111,6 @@ class HeraldAVScriptDomainRunner(BaseLoop):
                 err_messages = [f"[{v.violation_code}] {v.description} -> Strategy: {v.repair_strategy}" for v in feedback.violations]
                 return False, f"Deterministic Script Audit Rejected:\n" + "\n".join(err_messages)
 
-            # Verify markdown table rendering
             md_text = data.get("rendered_markdown", "")
             if "| Section / Timecode |" not in md_text:
                 return False, "Verification Rejected: Master 3-Column Markdown table header missing."
@@ -115,7 +125,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         task_spec: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
-        Commits verified AV script to production storage and emits SQLite WAL receipt.
+        Commits verified AV script to production storage and emits explicit WAL receipt.
         """
         dest_dir = PROJECT_ROOT / "scratch" / "av_scripts"
         dest_dir.mkdir(parents=True, exist_ok=True)
@@ -127,13 +137,23 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         dest_json.write_text(json.dumps(data["blueprint"], indent=2), encoding="utf-8")
         dest_md.write_text(data["rendered_markdown"], encoding="utf-8")
 
+        cand_sha = hashlib.sha256(dest_md.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
+        run_id = task_spec.get("run_id") or f"run_{task_spec['task_id']}"
+
         receipt_id = self.receipt_store.record_receipt(
             task_id=task_spec["task_id"],
-            run_id=f"run_{task_spec['task_id']}",
+            run_id=run_id,
+            shadow_id=3,
+            domain_code="herald",
+            stage="FINAL",
+            attempt=1,
+            candidate_hash=cand_sha,
             spec_hash="herald_av_adaptive_verified",
             status="COMMITTED",
             strikes_used=1,
             target_file=str(dest_md.as_posix()),
+            artifact_sha256=cand_sha,
+            promotion_decision="PROMOTED",
             extra_data={
                 "title": task_spec["brief_dict"].get("project_title", "Untitled"),
                 "duration_seconds": task_spec["brief_dict"]["production_constraints"]["target_duration_seconds"],
@@ -146,4 +166,5 @@ class HeraldAVScriptDomainRunner(BaseLoop):
             "destination_json": str(dest_json.as_posix()),
             "destination_markdown": str(dest_md.as_posix()),
             "receipt_id": receipt_id,
+            "candidate_hash": cand_sha,
         }

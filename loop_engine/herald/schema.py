@@ -67,7 +67,7 @@ class TechnicalScope(BaseModel):
     """Section 2: Production Constraints & Technical Scope."""
     target_runtime_seconds: int = Field(ge=10, le=3600)
     target_runtime_formatted: str
-    target_pacing_wpm: float = Field(ge=80.0, le=250.0)
+    target_pacing_wpm: float = Field(ge=10.0, le=300.0)
     total_spoken_words: int
     modular_cutdowns: List[ModularCutDown] = Field(default_factory=list)
 

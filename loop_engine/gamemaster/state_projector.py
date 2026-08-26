@@ -37,8 +37,8 @@ class SovereignStateProjector:
     SHADOW_DEFINITIONS = [
         (1, "The Forge", "forge", "Software & Tool Synthesis"),
         (2, "svris", "svris", "AST Custody & Verification"),
-        (3, "The Herald", "media", "Narrative & AV Script Engine"),
-        (4, "The Scout", "recon", "Zero-Dependency Media Ingestion"),
+        (3, "The Herald", "herald", "Intelligent AV Script Engine"),
+        (4, "The Scout", "media", "Zero-Dependency Media Ingestion"),
         (5, "The Inquisitor", "inquisitor", "Adversarial Plan Auditor"),
         (6, "The Scribe", "scribe", "Relational Memory & Graph"),
         (7, "The Slicer", "slicer", "DAG & Task Decomposer"),
@@ -74,7 +74,7 @@ class SovereignStateProjector:
                 (self.root_dir / ".agents" / "skills" / "zero-trust-architect").exists()
             )
 
-            status = "ONLINE" if module_exists or s_id <= 9 else "INITIALIZING"
+            status = "ONLINE" if module_exists else "INITIALIZING"
             domain_states.append(
                 ShadowDomainState(
                     shadow_id=s_id,
@@ -96,7 +96,7 @@ class SovereignStateProjector:
             system_name="10 SHADOWS",
             runtime_version="3.0.0-SOVEREIGN",
             git_branch="master",
-            total_passing_tests=61,
+            total_passing_tests=73,
             total_wal_receipts=total_receipts,
             domains=domains,
         )

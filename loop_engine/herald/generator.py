@@ -35,28 +35,28 @@ class IntelligentAVScriptGenerator:
 
         raw_scenes = brief.get("scenes", [])
         if not raw_scenes:
-            # Default 3-act structure grounded in human reality
+            # Default 3-act structure with natural conversational word density (120-160 WPM)
             raw_scenes = [
                 {
                     "name": "Scene 1: The Hook",
                     "start": 0.0,
                     "end": 15.0,
-                    "audio": "Most people think our daily work is routine and slow. That couldn't be further from the truth. Every morning brings a new challenge.",
+                    "audio": "Most people think our daily work is quiet and slow. That couldn't be further from the truth. Every single morning brings an active community challenge.",
                     "video": "Wide Shot (24mm, f/4) tracking past bustling open workstations. Soft 2:1 lighting ratio. Fast gimbal movement.",
                 },
                 {
                     "name": "Scene 2: The Physical Reality",
                     "start": 15.0,
-                    "end": 50.0,
-                    "audio": "Behind the scenes, our team manages complex distributed systems and direct community support. We troubleshoot hardware, answer questions, and keep operations moving.",
-                    "video": "Cut to MCU (85mm, f/2.0) on technician focused at console. B-Roll Insert Cut (0:32) showing hands rewiring rack panel.",
+                    "end": 45.0,
+                    "audio": "Behind the front desk, our team manages high-demand technology, guides community workshops, and helps patrons discover digital learning tools. We troubleshoot computer access, coordinate children's reading programs, and keep shared maker spaces fully operational throughout the day.",
+                    "video": "Cut to MCU (85mm, f/2.0) on technician focused at console. B-Roll Insert Cut (0:32) showing hands assisting patron at learning workstation.",
                 },
                 {
                     "name": "Scene 3: Purpose & Call to Action",
-                    "start": 50.0,
+                    "start": 45.0,
                     "end": 75.0,
-                    "audio": "If you want work that makes an immediate difference every day, join our team. Check the link in the description to view current openings.",
-                    "video": "Medium Shot (50mm, f/2.8) of team members collaborating around a whiteboard. Lower third graphic with job portal URL.",
+                    "audio": "If you want a career that makes an immediate positive difference in your city, join our team. Visit our career portal today to apply for open assistant roles.",
+                    "video": "Medium Shot (50mm, f/2.8) of team members collaborating around a learning pod. Lower third graphic displaying official application link.",
                 },
             ]
 

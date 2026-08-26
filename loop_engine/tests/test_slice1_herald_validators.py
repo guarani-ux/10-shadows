@@ -2,11 +2,12 @@ import pytest
 from pydantic import ValidationError
 from loop_engine.herald.linguistics import AntiAILinguisticGuard
 from loop_engine.herald.cinematography import CinematographyValidator
+from loop_engine.herald.input_contract import ProductionConstraints
 from loop_engine.herald.schema import (
     MasterAVScriptBlueprint,
     StrategicIntent,
     TechnicalScope,
-    ModularCutDown,
+    ValidatedCutDownScript,
     AVTableRow,
 )
 
@@ -67,6 +68,7 @@ def test_master_av_script_blueprint_validation():
             project_title="Day in the Life of a Library Facilitator",
             organizational_goal="Attract 25 qualified candidates for customer service positions.",
             target_audience_persona="University students and graduates looking for active community careers.",
+            intended_audience_action="Visit the career portal and apply for open assistant roles.",
             core_brand_alignment="Public service accessibility and welcoming community spaces.",
             narrative_arc_type="Workplace Spotlight & Lifestyle Balance",
         ),
@@ -75,12 +77,22 @@ def test_master_av_script_blueprint_validation():
             target_runtime_formatted="1m 30s",
             target_pacing_wpm=150.0,
             total_spoken_words=225,
+            actual_overall_wpm=150.0,
+            production_constraints=ProductionConstraints(target_duration_seconds=90),
             modular_cutdowns=[
-                ModularCutDown(
+                ValidatedCutDownScript(
+                    cutdown_id="short_01",
                     short_title="Myth Busters: Library Work",
                     target_platform="YouTube Shorts",
-                    time_window="0:00 - 0:25",
+                    derived_from_row_indices=[1],
+                    target_duration_seconds=20,
+                    actual_duration_seconds=20.0,
                     standalone_hook="3 things you didn't know library assistants do before noon.",
+                    spoken_audio="Most people think library work is quiet. We manage 3D printers and community workshops. Apply online today.",
+                    spoken_words_count=18,
+                    pacing_wpm=54.0,
+                    vertical_video_direction="9:16 Vertical Framing. Wide Shot of makerspace lab.",
+                    platform_cta="Click the link in bio to apply.",
                     strategic_purpose="Drive top-of-funnel recruiting awareness on mobile feeds.",
                 )
             ],

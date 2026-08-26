@@ -20,8 +20,8 @@ class UnknownItem(BaseModel):
 
 class ProductionConstraints(BaseModel):
     """Physical production and equipment constraints."""
-    target_duration_seconds: int = Field(ge=10, le=3600)
-    target_pacing_wpm: float = Field(ge=80.0, le=220.0, default=150.0)
+    target_duration_seconds: int = Field(default=75, ge=10, le=3600)
+    target_pacing_wpm: float = Field(default=150.0, ge=80.0, le=220.0)
     primary_platform: Literal["YouTube", "LinkedIn", "Broadcast", "Internal / All-Hands"] = "YouTube"
     camera_package: List[str] = Field(default_factory=lambda: ["Sony FX3 (24mm, 35mm)", "Sony A7IV (85mm f/1.8)"])
     lighting_style: str = "2:1 Corporate Natural Key with 5600K Rim"

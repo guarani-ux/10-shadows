@@ -1,48 +1,59 @@
 from typing import Any, Dict, List
-from loop_engine.herald.schema import AVTableRow, ModularCutDown
+from loop_engine.herald.schema import AVTableRow, ValidatedCutDownScript
 
 
 class ModularCutDownExtractor:
     """
     Shadow 3 (The Herald) Modular Cut-Down Extraction Engine.
     
-    Analyzes master AV script rows to automatically extract 15-30s
-    standalone vertical shorts with self-contained hooks.
+    Synthesizes complete, standalone 15-30s vertical scripts
+    from validated master AV rows with platform-specific vertical video direction.
     """
 
     @staticmethod
-    def extract_shorts(rows: List[AVTableRow], primary_topic: str) -> List[ModularCutDown]:
-        """Extracts high-impact scene windows suitable for standalone shorts."""
-        shorts = []
+    def extract_shorts(
+        rows: List[AVTableRow],
+        project_title: str,
+        intended_action: str,
+        target_wpm: float = 150.0,
+    ) -> List[ValidatedCutDownScript]:
+        """Synthesizes complete, standalone 15-30s vertical scripts from master rows."""
+        shorts: List[ValidatedCutDownScript] = []
+
         for r in rows:
             duration = r.end_seconds - r.start_seconds
-            # If scene duration is between 10s and 35s, it forms a candidate short
             if 10.0 <= duration <= 35.0:
                 words = r.spoken_audio.split()
-                hook_sentence = words[:12]
-                hook_text = " ".join(hook_sentence) + "..."
+                hook_sentence = " ".join(words[:8]) + "..."
+                
+                # Compose complete standalone audio with concise punchy CTA
+                short_audio = f"{r.spoken_audio} If you are interested, {intended_action.lower().rstrip('.')} today."
+                short_words = short_audio.split()
+                short_duration = duration + 5.0
+                short_wpm = round(len(short_words) / (short_duration / 60.0), 1)
+
+                vertical_video = (
+                    f"9:16 Vertical Framing (Center-Cut Safe Zone). "
+                    f"Punch in 125% on subject. {r.video_direction} "
+                    f"Bottom third kinetic captions with high-contrast backing."
+                )
 
                 shorts.append(
-                    ModularCutDown(
-                        short_title=f"{r.scene_name.split(':')[0]}: {primary_topic[:25]}",
+                    ValidatedCutDownScript(
+                        cutdown_id=f"short_{r.row_index}",
+                        short_title=f"{r.scene_name.split(':')[0]}: {project_title[:20]}",
                         target_platform="YouTube Shorts",
-                        time_window=r.time_window,
-                        standalone_hook=hook_text,
-                        strategic_purpose=f"High-retention vertical teaser highlighting {r.scene_name}.",
+                        derived_from_row_indices=[r.row_index],
+                        target_duration_seconds=int(short_duration),
+                        actual_duration_seconds=short_duration,
+                        standalone_hook=hook_sentence,
+                        spoken_audio=short_audio,
+                        spoken_words_count=len(short_words),
+                        pacing_wpm=short_wpm,
+                        vertical_video_direction=vertical_video,
+                        platform_cta=f"Click the linked profile sticker to {intended_action.lower()}.",
+                        strategic_purpose=f"High-retention mobile vertical discovery for {r.scene_name}.",
                     )
                 )
-
-        # Fallback if no individual scene matched
-        if not shorts and rows:
-            r = rows[0]
-            shorts.append(
-                ModularCutDown(
-                    short_title=f"Hook Teaser: {primary_topic[:25]}",
-                    target_platform="YouTube Shorts",
-                    time_window=r.time_window,
-                    standalone_hook=" ".join(r.spoken_audio.split()[:10]) + "...",
-                    strategic_purpose="Introductory hook reel for top-of-funnel discovery.",
-                )
-            )
 
         return shorts[:3]

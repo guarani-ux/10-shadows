@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
+from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
 from loop_engine.governor import Governor
 from loop_engine.receipts import ReceiptStore
 
@@ -10,29 +11,20 @@ def test_herald_av_script_domain_runner_e2e(tmp_path):
     store = ReceiptStore(db_path=db_file)
     runner = HeraldAVScriptDomainRunner(receipt_store=store)
 
-    brief = {
-        "project_title": "City Solar Microgrid Initiative",
-        "organizational_goal": "Educate municipal residents on distributed solar storage benefits.",
-        "target_audience_persona": "Homeowners and local community council representatives.",
-        "core_brand_alignment": "Clean energy independence and transparent public infrastructure.",
-        "narrative_arc_type": "Grid Vulnerability -> Distributed Storage -> Long-term Savings",
-        "scenes": [
-            {
-                "name": "Scene 1: Summer Blackouts",
-                "start": 0.0,
-                "end": 15.0,
-                "audio": "When summer heatwaves push the regional power grid to its limits, neighborhood blackouts disrupt thousands of homes.",
-                "video": "Wide Shot (24mm, f/4) of residential neighborhood during sunset. Handheld documentary sway.",
-            },
-            {
-                "name": "Scene 2: Local Resilience",
-                "start": 15.0,
-                "end": 45.0,
-                "audio": "Our municipal solar microgrid stores clean power during peak daylight hours, keeping essential community facilities online without interruption.",
-                "video": "Cut to MCU (85mm, f/2.0) on energy technician monitoring battery status inverter. Clean 2:1 lighting ratio.",
-            }
-        ]
-    }
+    brief = CanonicalMediaBrief(
+        project_id="solar_microgrid_01",
+        project_title="City Solar Microgrid Initiative",
+        organizational_goal="Educate municipal residents on distributed solar storage benefits.",
+        target_audience="Homeowners and local community council representatives.",
+        intended_audience_action="Visit our city solar rebate portal and register your household online.",
+        core_message="Clean energy independence and transparent public infrastructure.",
+        narrative_arc_type="Grid Vulnerability -> Distributed Storage -> Long-term Savings",
+        production_constraints=ProductionConstraints(
+            target_duration_seconds=75,
+            target_pacing_wpm=145.0,
+            camera_package=["Sony FX3 (24mm f/4)", "Sony A7IV (85mm f/1.8)"],
+        ),
+    )
 
     gov = Governor(max_strikes=3)
     result = gov.run_loop(runner, brief)

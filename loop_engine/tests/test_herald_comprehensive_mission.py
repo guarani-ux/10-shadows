@@ -39,7 +39,7 @@ def test_calgary_public_library_fixture():
             target_duration_seconds=75,
             target_pacing_wpm=145.0,
             primary_platform="YouTube",
-            camera_package=["Sony FX3 (24mm f/2.8)", "Sony A7IV (85mm f/1.8)"],
+            camera_package=["Sony FX3 (24mm f/4)", "Sony A7IV (85mm f/1.8)"],
             lighting_style="2:1 Corporate Natural Key with 5600K Rim",
         ),
     )
@@ -49,13 +49,7 @@ def test_calgary_public_library_fixture():
     assert len(brief.explicit_unknowns) == 1
 
     # Synthesize script from canonical brief
-    script = IntelligentAVScriptGenerator.synthesize_script({
-        "project_title": brief.project_title,
-        "organizational_goal": brief.organizational_goal,
-        "target_audience_persona": brief.target_audience,
-        "core_brand_alignment": brief.core_message,
-        "narrative_arc_type": brief.narrative_arc_type,
-    })
+    script = IntelligentAVScriptGenerator.synthesize_from_brief(brief)
 
     # Validate deterministic physics
     valid, violations = DeterministicScriptValidator.validate_blueprint(script)
@@ -66,3 +60,4 @@ def test_calgary_public_library_fixture():
     assert "Production AV Script" in md_output
     assert "Section 1: Strategic Intent" in md_output
     assert "Section 3: Master 3-Column AV Production Script Table" in md_output
+    assert "Section 4: Grounded Evidence & Explicit Unknowns" in md_output

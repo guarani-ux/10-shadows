@@ -53,7 +53,7 @@ class SlicerDomainRunner(BaseLoop):
     ) -> Dict[str, Any]:
         """Normalizes input with optional parent context inheritance."""
         source_artifact_id = "root_input"
-        source_artifact_hash = "root_hash"
+        source_artifact_hash = "0" * 64
 
         if isinstance(raw_input, MasterAVScriptArtifact):
             goal_id = f"slicer_{raw_input.script_id}"
@@ -68,7 +68,7 @@ class SlicerDomainRunner(BaseLoop):
             pkg_name = raw_input.get("base_package_name", "custom_module")
             raw_tasks = raw_input.get("raw_tasks")
             source_artifact_id = raw_input.get("source_artifact_id", "root")
-            source_artifact_hash = raw_input.get("source_artifact_hash", "root_hash")
+            source_artifact_hash = raw_input.get("source_artifact_hash", "0" * 64)
         else:
             goal_id = f"goal_{uuid.uuid4().hex[:8]}"
             goal_desc = str(raw_input)
@@ -143,7 +143,7 @@ class SlicerDomainRunner(BaseLoop):
         artifact = ProductionPlanDAGArtifact(
             plan_id=f"plan_{task_spec['task_id']}",
             source_artifact_id=task_spec.get("source_artifact_id", "root"),
-            source_artifact_hash=task_spec.get("source_artifact_hash", "root_hash"),
+            source_artifact_hash=task_spec.get("source_artifact_hash", "0" * 64),
             goal_id=dag.goal_id,
             goal_description=dag.goal_description,
             ordered_tasks=ordered_slices,

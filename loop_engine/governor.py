@@ -286,5 +286,9 @@ class Governor(StepGovernor):
         required_modules: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         res = self.run_step(loop=loop, raw_input=raw_input, required_modules=required_modules)
-        # Convert StepExecutionResult into backward-compatible dictionary
-        return res.model_dump(mode="json")
+        d = res.model_dump(mode="json")
+        if res.status == "SUCCESS":
+            d["strikes_used"] = res.attempts_used
+        elif res.status == "ABORTED":
+            d["strikes_exhausted"] = res.strikes_used
+        return d

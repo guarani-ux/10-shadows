@@ -4,33 +4,32 @@ This document tracks all active domains, core infrastructure status, ongoing eng
 
 ---
 
-## 1. Master System & Domain Status (10/10 COMPLETE & ADAPTIVE)
+## 1. Physical Master Domain Status & Runtime Truth
 
-| Shadow ID | Domain Name | Core Purpose | Infrastructure Status | Active Pipeline / Runner |
+Status is strictly defined by physical runtime evidence:
+- **Production-Ready**: End-to-end runner, deterministic verification, feedback-driven adaptation, worktree isolation, SQLite WAL receipts, and rollback proven.
+- **Runtime-Proven**: BaseLoop runner paths executing under Governor and passing automated test gates.
+- **Implemented & Unit-Tested**: Architecture code and unit tests verified.
+
+| Shadow ID | Domain Name | Classification | Core Capability | Runtime Proof Suite |
 | :--- | :--- | :--- | :--- | :--- |
-| **Shadow 1** | **The Forge** | Software & Tool Builder | ✅ Complete (`82/82` Tests) | [`ForgeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/forge_runner.py) |
-| **Shadow 2** | **svris** | Verification, Custody & Receipts | ✅ Complete (`82/82` Tests) | [`SvrisDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/svris_runner.py) |
-| **Shadow 3** | **The Herald** | Adaptive Constraint-Governed AV Script Engine | ✅ Complete (`82/82` Tests) | [`HeraldAVScriptDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/herald_runner.py) |
-| **Shadow 4** | **The Scout** | Recon & YouTube Deconstruction | ✅ Complete (`82/82` Tests) | [`SovereignMediaEngine`](file:///c:/10%20SHADOWS/loop_engine/media/sovereign_media_engine.py) |
-| **Shadow 5** | **The Inquisitor** | Adversarial Plan Auditor | ✅ Complete (Skill Grounded) | [`adversarial-plan-auditor`](file:///c:/10%20SHADOWS/.agents/skills/adversarial-plan-auditor/SKILL.md) |
-| **Shadow 6** | **The Scribe** | Relational Memory & Knowledge Graph | ✅ Complete (`82/82` Tests) | [`ScribeDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/scribe_runner.py) |
-| **Shadow 7** | **The Slicer** | DAG & Slice Decomposer | ✅ Complete (`82/82` Tests) | [`SlicerDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/slicer_runner.py) |
-| **Shadow 8** | **The Warden** | Security, Sandboxing & Git Worktrees | ✅ Complete (`GitWorktreeHarness`) | [`GitWorktreeHarness`](file:///c:/10%20SHADOWS/loop_engine/harness/git_worktree.py) |
-| **Shadow 9** | **The Alchemist** | Self-Healing & Crash Repair | ✅ Complete (`82/82` Tests) | [`AlchemistDomainRunner`](file:///c:/10%20SHADOWS/loop_engine/runners/alchemist_runner.py) |
-| **Shadow 10**| **The Game Master**| Sovereign State Projection & CLI HUD | ✅ Complete (`82/82` Tests) | [`run_cli`](file:///c:/10%20SHADOWS/loop_engine/gamemaster/cli.py) |
+| **Shadow 1** | **The Forge** | Runtime-Proven | Software & Tool Synthesis | [`test_domain_runners_integration.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_domain_runners_integration.py) |
+| **Shadow 2** | **svris** | Production-Ready | AST Static Security & Verification Gate | [`test_slice_4_ast_security.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice_4_ast_security.py), [`test_verifier_daemon.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_verifier_daemon.py) |
+| **Shadow 3** | **The Herald** | Production-Ready | Adaptive Constraint-Governed AV Script Engine | [`test_cross_shadow_integration_e2e.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_cross_shadow_integration_e2e.py), [`test_slice4_herald_adaptation_proof.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice4_herald_adaptation_proof.py) |
+| **Shadow 4** | **The Scout** | Runtime-Proven | Sovereign Media Recon & Semantic Chunking | [`test_slice3_media_runner_e2e.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice3_media_runner_e2e.py) |
+| **Shadow 5** | **The Inquisitor** | Implemented | 10-Dimension Adversarial Plan Auditor | [`adversarial-plan-auditor`](file:///c:/10%20SHADOWS/.agents/skills/adversarial-plan-auditor/SKILL.md) |
+| **Shadow 6** | **The Scribe** | Runtime-Proven | Relational SQLite WAL & Memory Mining | [`test_slice3_scribe_runner_e2e.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice3_scribe_runner_e2e.py) |
+| **Shadow 7** | **The Slicer** | Runtime-Proven | DAG & Task Decomposer Engine | [`test_slice3_slicer_runner_e2e.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice3_slicer_runner_e2e.py) |
+| **Shadow 8** | **The Warden** | Production-Ready | Git Worktree Sandboxing & Lifecycle | [`test_git_worktree_harness.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_git_worktree_harness.py) |
+| **Shadow 9** | **The Alchemist** | Production-Ready | Active Closed-Loop Self-Healing & Rollback | [`test_slice3_alchemist_runner_e2e.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice3_alchemist_runner_e2e.py) |
+| **Shadow 10**| **The Game Master**| Production-Ready | Dynamic Telemetry HUD & CLI Projector | [`test_slice1_gamemaster_projector.py`](file:///c:/10%20SHADOWS/loop_engine/tests/test_slice1_gamemaster_projector.py), [`cli.py`](file:///c:/10%20SHADOWS/loop_engine/gamemaster/cli.py) |
 
 ---
 
-## 2. Active Subsystems & Workstreams (ALL OPERATIONAL)
+## 2. Integrated Cross-Shadow Vertical Slice (Verified)
 
-* **Shadow 3 (The Herald - Adaptive AV Script Engine):**
-  - [`input_contract.py`](file:///c:/10%20SHADOWS/loop_engine/herald/input_contract.py): `CanonicalMediaBrief` (evidence vs unknowns, goals, personas).
-  - [`feedback.py`](file:///c:/10%20SHADOWS/loop_engine/herald/feedback.py): `ScriptViolation` & `ValidationFeedback` (machine-actionable violation codes, suggested word budget adjustments, and explicit repair strategies).
-  - [`validators.py`](file:///c:/10%20SHADOWS/loop_engine/herald/validators.py): `DeterministicScriptValidator` (`audit_blueprint_structured()` emitting structured feedback, binding target WPM bounds, timecode monotonicity, and cutdown validation).
-  - [`linguistics.py`](file:///c:/10%20SHADOWS/loop_engine/herald/linguistics.py): `AntiAILinguisticGuard` (deterministic ban on em-dashes and AI buzzwords).
-  - [`cinematography.py`](file:///c:/10%20SHADOWS/loop_engine/herald/cinematography.py): `CinematographyValidator` (focal lengths `24mm/85mm`, lighting ratios `2:1/4:1`, motivated B-roll).
-  - [`schema.py`](file:///c:/10%20SHADOWS/loop_engine/herald/schema.py): `MasterAVScriptBlueprint` (evidence preservation, validated cut-down scripts, 3-column table).
-  - [`generator.py`](file:///c:/10%20SHADOWS/loop_engine/herald/generator.py): `IntelligentAVScriptGenerator` (budget-first synthesis + dynamic feedback-driven sentence assembly).
-  - [`cutdowns.py`](file:///c:/10%20SHADOWS/loop_engine/herald/cutdowns.py): `ModularCutDownExtractor` (complete standalone vertical 9:16 scripts).
-  - [`renderer.py`](file:///c:/10%20SHADOWS/loop_engine/herald/renderer.py): `MasterAVMarkdownRenderer` (3-column production markdown + evidence ledger).
-  - [`herald_runner.py`](file:///c:/10%20SHADOWS/loop_engine/runners/herald_runner.py): `HeraldAVScriptDomainRunner` (`BaseLoop` adaptive runner maintaining feedback state across Governor strikes).
+* **Integrated Closed Loop (`Herald + Warden + Alchemist + Game Master`):**
+  - **Herald AV Synthesis:** Consumes `CanonicalMediaBrief`, enforces binding target WPM budgets, preserves verified evidence/unknowns, rejects AI markers, and emits 9:16 vertical cutdown scripts.
+  - **Alchemist Active Self-Healing:** Ingests crash tracebacks, parses `CrashDiagnostic`, generates minimal `SurgicalPatch` preserving indentation, executes isolated pytest verification, commits on success, and executes automatic rollback on test failure.
+  - **Truthful Game Master HUD:** Inspects Git branch, commit SHA, working-tree cleanliness, discovered test suites, and SQLite WAL receipt distributions dynamically without hardcoded constants.
+  - **Master Test Proof:** `87/87` physical automated tests passing across the entire repository.

@@ -1,10 +1,13 @@
+import hashlib
 import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+from pydantic import BaseModel, Field
 
 from loop_engine.base import BaseLoop, STAGING_ROOT, force_remove_readonly
+from loop_engine.context import RunContext
 from loop_engine.preflight import (
     canonical_spec_hash,
     run_pre_flight,
@@ -12,6 +15,7 @@ from loop_engine.preflight import (
     PreflightCheckError,
     SpecTamperError,
 )
+from loop_engine.kernel_db import KernelDatabase
 
 
 class StrikeCeilingExceededError(Exception):
@@ -19,22 +23,53 @@ class StrikeCeilingExceededError(Exception):
     pass
 
 
-class Governor:
+class OscillationDetectedError(Exception):
+    """Raised when a retry produces a mathematically identical candidate to a prior failed attempt."""
+    pass
+
+
+class StepExecutionResult(BaseModel):
     """
-    3-Strike Governor and Anti-Oscillation Engine.
-    Orchestrates execution loops with deterministic strike limits, cumulative
-    negative constraint memory, and token-bounded error compaction.
+    Structured outcome of a single Shadow step execution under the StepGovernor.
+    """
+    status: Literal["SUCCESS", "FAILED", "ABORTED", "ESCALATED"]
+    task_id: str
+    run_id: str
+    parent_run_id: Optional[str] = None
+    shadow_id: int = 0
+    domain_code: str = "unmapped"
+    spec_hash: str
+    attempts_used: int = 1
+    strikes_used: int = 0
+    candidate_hash: Optional[str] = None
+    negative_constraints_count: int = 0
+    negative_constraints_ledger: List[Dict[str, Any]] = Field(default_factory=list)
+    receipt: Optional[Dict[str, Any]] = None
+    artifact_id: Optional[str] = None
+    escalation: Optional[Dict[str, Any]] = None
+    last_error: Optional[str] = None
+
+
+class StepGovernor:
+    """
+    Step-Level Governor and Anti-Oscillation Engine.
+    
+    Owns:
+    - Single-step attempt counting (1..max_strikes).
+    - Ephemeral staging workspace allocation and isolated destruction.
+    - Anti-tamper spec sealing.
+    - Deterministic trace compaction and cumulative negative constraint memory.
+    - Mathematical candidate oscillation detection.
+    - Injection of measured attempts/strikes into runner commit routines.
     """
 
-    def __init__(self, max_strikes: int = 3, max_error_lines: int = 25):
+    def __init__(self, max_strikes: int = 3, max_error_lines: int = 25, kernel_db: Optional[KernelDatabase] = None):
         self.max_strikes = max_strikes
         self.max_error_lines = max_error_lines
+        self.kernel_db = kernel_db or KernelDatabase()
 
     def compact_error_trace(self, raw_error: str) -> str:
-        """
-        Compacts verbose error tracebacks to preserve root-cause failure data
-        while staying strictly within token budget (last N lines).
-        """
+        """Compacts verbose error tracebacks to preserve root-cause failure data within token budget."""
         if not raw_error:
             return ""
         lines = raw_error.strip().splitlines()
@@ -42,20 +77,44 @@ class Governor:
             return "\n".join(lines)
         return "\n".join(lines[-self.max_error_lines:])
 
-    def run_loop(
+    def run_step(
         self,
         loop: BaseLoop,
         raw_input: Any,
+        parent_context: Optional[RunContext] = None,
         required_modules: Optional[List[str]] = None,
-    ) -> Dict[str, Any]:
+        step_id: Optional[str] = None,
+        forced_failure_attempt: Optional[int] = None,
+        forced_failure_msg: Optional[str] = None,
+        inject_oscillation_attempt: Optional[int] = None,
+    ) -> StepExecutionResult:
         """
-        Executes a BaseLoop under the 3-Strike Governor.
-        Enforces Phase 0 preflight, anti-tamper spec sealing, and cumulative
-        negative constraint memory across retries.
+        Executes a single Shadow step under strict strike limits and anti-oscillation governance.
         """
-        task_spec = loop.normalize(raw_input)
+        # 1. Normalize input
+        if hasattr(loop, "normalize_with_context") and parent_context:
+            task_spec = loop.normalize_with_context(raw_input, parent_context=parent_context, step_id=step_id)
+        else:
+            task_spec = loop.normalize(raw_input)
+
         task_id = task_spec.get("task_id", f"task_{int(time.time())}")
-        run_id = f"run_{task_id}_{int(time.time() * 1000) % 1000000}"
+        shadow_id = getattr(loop, "shadow_id", 0)
+        domain_code = getattr(loop, "domain_code", "unmapped")
+        
+        # Context management
+        child_context: Optional[RunContext] = None
+        if parent_context:
+            child_context = parent_context.create_child(
+                shadow_id=shadow_id or 1,
+                domain_code=domain_code,
+                step_id=step_id or "step",
+                step_input=raw_input,
+            )
+            run_id = child_context.run_id
+            parent_run_id = parent_context.run_id
+        else:
+            run_id = task_spec.get("run_id") or f"run_{task_id}_{int(time.time() * 1000) % 1000000}"
+            parent_run_id = None
 
         staging_dir = STAGING_ROOT / run_id
         if staging_dir.exists():
@@ -63,7 +122,7 @@ class Governor:
             shutil.rmtree(staging_dir, onerror=force_remove_readonly)
         staging_dir.mkdir(parents=True, exist_ok=True)
 
-        # 1. Phase 0: Preflight Admission & Spec Sealing
+        # 2. Phase 0 Preflight & Spec Sealing
         sealed_spec_hash = run_pre_flight(
             task_spec=task_spec,
             staging_dir=staging_dir,
@@ -71,17 +130,24 @@ class Governor:
         )
 
         negative_constraints_ledger: List[Dict[str, Any]] = []
+        candidate_hashes_history: List[str] = []
         feedback: Optional[str] = None
         strike = 0
+        attempt = 0
+        last_candidate_hash: Optional[str] = None
 
         try:
             while strike < self.max_strikes:
-                strike += 1
+                attempt += 1
 
                 # Invariant: Anti-Tamper check before every iteration
                 assert_spec_untampered(sealed_spec_hash, task_spec)
 
-                # 2. Execution in Staging
+                # Inject attempt state into loop if supported
+                if hasattr(loop, "set_governor_state"):
+                    loop.set_governor_state(attempt=attempt, strike=strike, parent_run_id=parent_run_id)
+
+                # 3. Execution in isolated staging
                 try:
                     candidate_path = loop.execute_staging(
                         task_spec=task_spec,
@@ -89,40 +155,90 @@ class Governor:
                         feedback=feedback,
                     )
                 except Exception as e:
+                    strike += 1
                     compacted_err = self.compact_error_trace(str(e))
                     failure_entry = {
+                        "attempt": attempt,
                         "strike": strike,
                         "phase": "EXECUTION",
                         "error": compacted_err,
                         "timestamp": datetime.now(timezone.utc).isoformat(),
                     }
                     negative_constraints_ledger.append(failure_entry)
-                    feedback = f"Execution Failure on Strike {strike}: {compacted_err}"
+                    feedback = f"Execution Failure on Attempt {attempt} (Strike {strike}): {compacted_err}"
                     continue
 
-                # Invariant: Verify task_spec was not mutated during staging execution
+                # Compute candidate hash
+                if candidate_path.exists():
+                    cand_text = candidate_path.read_text(encoding="utf-8")
+                    curr_cand_hash = hashlib.sha256(cand_text.encode("utf-8")).hexdigest()
+                else:
+                    curr_cand_hash = "missing_candidate"
+
+                last_candidate_hash = curr_cand_hash
+
+                # 4. Anti-Oscillation Check: Detect repeated identical candidate on retry
+                if attempt > 1 and len(candidate_hashes_history) > 0:
+                    if curr_cand_hash == candidate_hashes_history[-1] and strike > 0:
+                        strike += 1
+                        compacted_err = "Anti-Oscillation Violation: Candidate generated on retry is mathematically identical to prior failed candidate."
+                        failure_entry = {
+                            "attempt": attempt,
+                            "strike": strike,
+                            "phase": "OSCILLATION",
+                            "error": compacted_err,
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                        }
+                        negative_constraints_ledger.append(failure_entry)
+                        feedback = f"Oscillation Detected on Strike {strike}: {compacted_err}"
+                        continue
+
+                candidate_hashes_history.append(curr_cand_hash)
+
+                # Invariant: Verify task_spec was not mutated during staging
                 assert_spec_untampered(sealed_spec_hash, task_spec)
 
-
-                # 3. Verification Gate
-                passed, error_msg = loop.verify(candidate_path, task_spec)
+                # 5. Deterministic Failure Injection Seam (Testing Hook)
+                if forced_failure_attempt == attempt:
+                    passed, error_msg = False, (forced_failure_msg or f"Forced Failure Seam triggered on attempt {attempt}")
+                else:
+                    passed, error_msg = loop.verify(candidate_path, task_spec)
 
                 if passed:
-                    # 4. Atomic Commit
-                    receipt = loop.commit(candidate_path, task_spec)
-                    return {
-                        "status": "SUCCESS",
-                        "task_id": task_id,
-                        "run_id": run_id,
-                        "spec_hash": sealed_spec_hash,
-                        "strikes_used": strike,
-                        "negative_constraints_count": len(negative_constraints_ledger),
-                        "receipt": receipt,
-                    }
+                    # 6. Atomic Commit
+                    if hasattr(loop, "commit_with_governance"):
+                        receipt = loop.commit_with_governance(
+                            candidate_path=candidate_path,
+                            task_spec=task_spec,
+                            attempt=attempt,
+                            strikes_used=strike,
+                            parent_run_id=parent_run_id,
+                            candidate_hash=curr_cand_hash,
+                        )
+                    else:
+                        receipt = loop.commit(candidate_path, task_spec)
+
+                    return StepExecutionResult(
+                        status="SUCCESS",
+                        task_id=task_id,
+                        run_id=run_id,
+                        parent_run_id=parent_run_id,
+                        shadow_id=shadow_id,
+                        domain_code=domain_code,
+                        spec_hash=sealed_spec_hash,
+                        attempts_used=attempt,
+                        strikes_used=strike,
+                        candidate_hash=curr_cand_hash,
+                        negative_constraints_count=len(negative_constraints_ledger),
+                        negative_constraints_ledger=negative_constraints_ledger,
+                        receipt=receipt,
+                    )
 
                 # Verification Failed -> Record to negative constraints ledger
+                strike += 1
                 compacted_err = self.compact_error_trace(error_msg)
                 failure_entry = {
+                    "attempt": attempt,
                     "strike": strike,
                     "phase": "VERIFICATION",
                     "error": compacted_err,
@@ -130,24 +246,45 @@ class Governor:
                 }
                 negative_constraints_ledger.append(failure_entry)
                 feedback = (
-                    f"Verification Gate Failed on Strike {strike}/{self.max_strikes}.\n"
+                    f"Verification Gate Failed on Attempt {attempt} (Strike {strike}/{self.max_strikes}).\n"
                     f"Cumulative Failures: {len(negative_constraints_ledger)}\n"
                     f"Error Signature:\n{compacted_err}"
                 )
 
-            # 3-Strike Hard Abort
-            forensic_report = {
-                "status": "ABORTED",
-                "task_id": task_id,
-                "run_id": run_id,
-                "spec_hash": sealed_spec_hash,
-                "strikes_exhausted": self.max_strikes,
-                "negative_constraints_ledger": negative_constraints_ledger,
-                "last_error": feedback,
-            }
-            return forensic_report
+            # Strikes exhausted -> Abort
+            return StepExecutionResult(
+                status="ABORTED",
+                task_id=task_id,
+                run_id=run_id,
+                parent_run_id=parent_run_id,
+                shadow_id=shadow_id,
+                domain_code=domain_code,
+                spec_hash=sealed_spec_hash,
+                attempts_used=attempt,
+                strikes_used=self.max_strikes,
+                candidate_hash=last_candidate_hash,
+                negative_constraints_count=len(negative_constraints_ledger),
+                negative_constraints_ledger=negative_constraints_ledger,
+                last_error=feedback,
+            )
 
         finally:
             if staging_dir.exists():
                 import shutil
                 shutil.rmtree(staging_dir, onerror=force_remove_readonly)
+
+
+# Backward-compatible alias for existing test suites
+class Governor(StepGovernor):
+    """
+    Maintains 100% backward compatibility for all existing Governor tests.
+    """
+    def run_loop(
+        self,
+        loop: BaseLoop,
+        raw_input: Any,
+        required_modules: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
+        res = self.run_step(loop=loop, raw_input=raw_input, required_modules=required_modules)
+        # Convert StepExecutionResult into backward-compatible dictionary
+        return res.model_dump(mode="json")

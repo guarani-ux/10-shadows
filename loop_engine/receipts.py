@@ -6,65 +6,71 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from pydantic import BaseModel, Field
 
-# Invariant: Explicit workspace anchoring
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+from loop_engine.base import PROJECT_ROOT, force_remove_readonly
+
 RECEIPTS_DB_PATH = PROJECT_ROOT / "scratch" / "receipts.db"
 
 
 class AtomicCommitError(Exception):
-    """Raised when an atomic file swap or 2PC commit fails."""
+    """Raised when atomic 2-phase commit fails to promote staging candidate."""
     pass
 
 
 def compute_file_sha256(file_path: Path) -> str:
-    """Computes cryptographic SHA-256 digest of a physical file."""
+    """Computes deterministic SHA-256 hash of a file on disk."""
     if not file_path.exists():
-        return ""
-    hasher = hashlib.sha256()
+        raise FileNotFoundError(f"File not found: {file_path}")
+    h = hashlib.sha256()
     with open(file_path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
+        while chunk := f.read(65536):
+            h.update(chunk)
+    return h.hexdigest()
 
 
-def atomic_two_phase_commit(candidate_file: Path, destination_file: Path) -> Dict[str, Any]:
+def atomic_two_phase_commit(candidate_path: Path, target_path: Path) -> str:
     """
-    Executes a 2-Phase Atomic Commit:
-    1. Phase 1 (Preparation): If destination exists, creates `.bak` copy on same volume.
-    2. Phase 2 (Commit): Executes atomic `os.replace(candidate, destination)`.
-    3. Rollback: If replace fails, restores `.bak` to destination and raises AtomicCommitError.
-    4. Cleanup: Removes `.bak` after successful commit.
+    Executes atomic two-phase commit:
+    1. Validates candidate exists and computes SHA-256 hash.
+    2. Writes to target atomically using os.replace.
     """
-    if not candidate_file.exists():
-        raise AtomicCommitError(f"Candidate file '{candidate_file}' does not exist.")
+    if not candidate_path.exists():
+        raise AtomicCommitError(f"Candidate path does not exist: {candidate_path}")
+    
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_hash = compute_file_sha256(candidate_path)
+    
+    temp_target = target_path.parent / f".tmp_{target_path.name}_{int(datetime.now().timestamp()*1000)}"
+    shutil.copy2(candidate_path, temp_target)
+    os.replace(temp_target, target_path)
+    
+    return candidate_hash
 
-    destination_file.parent.mkdir(parents=True, exist_ok=True)
-    backup_file = destination_file.with_suffix(destination_file.suffix + ".bak")
 
-    had_backup = False
-    if destination_file.exists():
-        shutil.copy2(destination_file, backup_file)
-        had_backup = True
-
-    try:
-        os.replace(candidate_file, destination_file)
-        artifact_hash = compute_file_sha256(destination_file)
-
-        if had_backup and backup_file.exists():
-            backup_file.unlink()
-
-        return {
-            "status": "COMMITTED",
-            "destination": str(destination_file.as_posix()),
-            "sha256": artifact_hash,
-            "bytes_written": destination_file.stat().st_size,
-        }
-
-    except Exception as e:
-        if had_backup and backup_file.exists():
-            os.replace(backup_file, destination_file)
-        raise AtomicCommitError(f"Atomic commit failed: {str(e)}")
+class ExecutionReceipt(BaseModel):
+    """
+    Immutable, cryptographically verifiable record of a successful loop commit.
+    """
+    task_id: str
+    run_id: str
+    parent_run_id: Optional[str] = None
+    shadow_id: int = 0
+    domain_code: str = "unmapped"
+    stage: str = "FINAL"
+    attempt: int = 1
+    candidate_hash: Optional[str] = None
+    source_commit: Optional[str] = None
+    spec_hash: str
+    status: str
+    strikes_used: int
+    target_file: Optional[str] = None
+    artifact_sha256: Optional[str] = None
+    failure_code: Optional[str] = None
+    repair_strategy: Optional[str] = None
+    promotion_decision: str = "PROMOTED"
+    extra_data: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
 class ReceiptStore:
@@ -110,6 +116,30 @@ class ReceiptStore:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+
+            # Schema migration checks for existing SQLite files
+            columns = [row["name"] for row in conn.execute("PRAGMA table_info(receipts);").fetchall()]
+            if "shadow_id" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN shadow_id INTEGER DEFAULT 0;")
+            if "parent_run_id" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN parent_run_id TEXT;")
+            if "domain_code" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN domain_code TEXT DEFAULT 'unmapped';")
+            if "stage" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN stage TEXT DEFAULT 'FINAL';")
+            if "attempt" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN attempt INTEGER DEFAULT 1;")
+            if "candidate_hash" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN candidate_hash TEXT;")
+            if "source_commit" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN source_commit TEXT;")
+            if "failure_code" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN failure_code TEXT;")
+            if "repair_strategy" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN repair_strategy TEXT;")
+            if "promotion_decision" not in columns:
+                conn.execute("ALTER TABLE receipts ADD COLUMN promotion_decision TEXT DEFAULT 'PROMOTED';")
+
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_task ON receipts(task_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_run ON receipts(run_id);")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_shadow ON receipts(shadow_id);")
@@ -128,15 +158,36 @@ class ReceiptStore:
         attempt: int = 1,
         candidate_hash: Optional[str] = None,
         source_commit: Optional[str] = None,
-        parent_run_id: Optional[str] = None,
         target_file: Optional[str] = None,
         artifact_sha256: Optional[str] = None,
         failure_code: Optional[str] = None,
         repair_strategy: Optional[str] = None,
         promotion_decision: str = "PROMOTED",
         extra_data: Optional[Dict[str, Any]] = None,
+        parent_run_id: Optional[str] = None,
     ) -> int:
-        payload = extra_data or {}
+        """Atomically inserts an execution receipt and returns its ID."""
+        receipt = ExecutionReceipt(
+            task_id=task_id,
+            run_id=run_id,
+            parent_run_id=parent_run_id,
+            shadow_id=shadow_id,
+            domain_code=domain_code,
+            stage=stage,
+            attempt=attempt,
+            candidate_hash=candidate_hash,
+            source_commit=source_commit,
+            spec_hash=spec_hash,
+            status=status,
+            strikes_used=strikes_used,
+            target_file=target_file,
+            artifact_sha256=artifact_sha256,
+            failure_code=failure_code,
+            repair_strategy=repair_strategy,
+            promotion_decision=promotion_decision,
+            extra_data=extra_data or {},
+        )
+
         with self._get_connection() as conn:
             cursor = conn.execute(
                 """
@@ -145,44 +196,41 @@ class ReceiptStore:
                     stage, attempt, candidate_hash, source_commit, spec_hash,
                     status, strikes_used, target_file, artifact_sha256,
                     failure_code, repair_strategy, promotion_decision, receipt_json
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    task_id,
-                    run_id,
-                    parent_run_id,
-                    shadow_id,
-                    domain_code,
-                    stage,
-                    attempt,
-                    candidate_hash,
-                    source_commit,
-                    spec_hash,
-                    status,
-                    strikes_used,
-                    target_file,
-                    artifact_sha256,
-                    failure_code,
-                    repair_strategy,
-                    promotion_decision,
-                    json.dumps(payload, default=str),
+                    receipt.task_id,
+                    receipt.run_id,
+                    receipt.parent_run_id,
+                    receipt.shadow_id,
+                    receipt.domain_code,
+                    receipt.stage,
+                    receipt.attempt,
+                    receipt.candidate_hash,
+                    receipt.source_commit,
+                    receipt.spec_hash,
+                    receipt.status,
+                    receipt.strikes_used,
+                    receipt.target_file,
+                    receipt.artifact_sha256,
+                    receipt.failure_code,
+                    receipt.repair_strategy,
+                    receipt.promotion_decision,
+                    receipt.model_dump_json(),
                 ),
             )
             return cursor.lastrowid
 
-    def get_receipt(self, receipt_id: int) -> Optional[Dict[str, Any]]:
+    def get_receipt(self, receipt_id: int) -> Optional[ExecutionReceipt]:
+        """Retrieves a single receipt by database ID."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM receipts WHERE id = ?;", (receipt_id,)).fetchone()
+            row = conn.execute("SELECT receipt_json FROM receipts WHERE id = ?", (receipt_id,)).fetchone()
             if row:
-                return dict(row)
+                return ExecutionReceipt.model_validate_json(row["receipt_json"])
             return None
 
-    def query_by_task(self, task_id: str) -> List[Dict[str, Any]]:
+    def query_receipts(self, limit: int = 50) -> List[ExecutionReceipt]:
+        """Queries the most recent receipts in descending order."""
         with self._get_connection() as conn:
-            rows = conn.execute("SELECT * FROM receipts WHERE task_id = ? ORDER BY id DESC;", (task_id,)).fetchall()
-            return [dict(r) for r in rows]
-
-    def query_by_domain(self, domain_code: str) -> List[Dict[str, Any]]:
-        with self._get_connection() as conn:
-            rows = conn.execute("SELECT * FROM receipts WHERE domain_code = ? ORDER BY id DESC;", (domain_code,)).fetchall()
-            return [dict(r) for r in rows]
+            rows = conn.execute("SELECT receipt_json FROM receipts ORDER BY id DESC LIMIT ?", (limit,)).fetchall()
+            return [ExecutionReceipt.model_validate_json(r["receipt_json"]) for r in rows]

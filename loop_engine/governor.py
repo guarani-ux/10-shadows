@@ -246,7 +246,7 @@ class StepGovernor:
                 }
                 negative_constraints_ledger.append(failure_entry)
                 feedback = (
-                    f"Verification Gate Failed on Attempt {attempt} (Strike {strike}/{self.max_strikes}).\n"
+                    f"Verification Gate Failed on Strike {strike}/{self.max_strikes} (Attempt {attempt}).\n"
                     f"Cumulative Failures: {len(negative_constraints_ledger)}\n"
                     f"Error Signature:\n{compacted_err}"
                 )

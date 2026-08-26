@@ -5,31 +5,35 @@ class TerminalHUDView:
     """
     Shadow 10 (The Game Master) Terminal HUD Renderer.
     
-    Renders high-density, ASCII-safe sovereign operating system projection.
-    Uses pure ASCII characters to prevent Windows cp1252 terminal crashes.
+    Renders high-density, ASCII-safe sovereign operating system projection
+    strictly sourced from physical telemetry.
     """
 
     @staticmethod
     def render(hud: SystemTelemetryHUD) -> str:
         lines = []
+        clean_indicator = "CLEAN" if hud.working_tree_clean else "MODIFIED"
+        receipts_items = sorted(hud.receipts_by_status.items())
+        receipts_summary = ", ".join(f"{k}:{v}" for k, v in receipts_items) if receipts_items else "0 logs"
+
         lines.append("+------------------------------------------------------------------------------+")
         lines.append(f"| [10 SHADOWS] :: ZERO-TRUST RUNTIME OS [{hud.runtime_version}]".ljust(79) + "|")
         lines.append("+------------------------------------------------------------------------------+")
-        lines.append(f"| Master Branch: {hud.git_branch.ljust(10)} | Passing Tests: {str(hud.total_passing_tests).ljust(4)} | WAL Receipts: {str(hud.total_wal_receipts).ljust(4)} |".ljust(79) + "|")
+        lines.append(f"| Branch: {hud.git_branch} ({hud.git_commit}) [{clean_indicator}] | Test Files: {hud.discovered_test_files} | WAL Receipts: {hud.total_wal_receipts} ({receipts_summary})".ljust(79) + "|")
         lines.append("+------------------------------------------------------------------------------+")
         lines.append("| SHADOW DOMAINS : REAL-TIME MATRIX                                            |")
         lines.append("+----+------------------+-----------------+----------+--------------+----------+")
-        lines.append("| ID | DOMAIN NAME      | CODENAME        | STATUS   | TESTS PASSED | RECEIPTS |")
+        lines.append("| ID | DOMAIN NAME      | CODENAME        | STATUS   | TEST SUITES  | RUNNER   |")
         lines.append("+----+------------------+-----------------+----------+--------------+----------+")
 
         for d in hud.domains:
             s_id = str(d.shadow_id).rjust(2)
             name = d.name.ljust(16)
             cname = d.code_name.ljust(15)
-            status = f"ONLINE".ljust(8) if d.status == "ONLINE" else f"{d.status}".ljust(8)
-            tcount = f"{d.test_count} tests".ljust(12)
-            rcount = f"{d.receipts_count} logs".ljust(8)
-            lines.append(f"| {s_id} | {name} | {cname} | {status} | {tcount} | {rcount} |")
+            status = d.status.ljust(8)
+            tsuites = f"{d.test_files_count} files".ljust(12)
+            runner_status = ("ACTIVE" if d.has_runner else "NONE").ljust(8)
+            lines.append(f"| {s_id} | {name} | {cname} | {status} | {tsuites} | {runner_status} |")
 
         lines.append("+----+------------------+-----------------+----------+--------------+----------+")
         return "\n".join(lines)

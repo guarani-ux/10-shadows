@@ -12,4 +12,4 @@ def test_terminal_hud_view_render(tmp_path):
     assert "ZERO-TRUST RUNTIME OS" in rendered
     assert "The Forge" in rendered
     assert "The Game Master" in rendered
-    assert "╔" in rendered and "╚" in rendered
+    assert "+" in rendered and "|" in rendered

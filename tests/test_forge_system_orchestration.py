@@ -78,7 +78,7 @@ def test_adjacent_rfc_contradiction_analysis(system_forge):
         operator=OperatorType.EXTRACT,
         semantic_responsibility="Extract RFC claims",
         inputs=["source_text"],
-        outputs=["extracted_evidence"],
+        outputs=["extracted_evidence", "claims"],
         postconditions=["Claims extracted"],
         bound_capability_id="svris_structured_extractor",
     )
@@ -286,11 +286,12 @@ def test_decomposition_coverage_deficit_blocks_compilation(system_forge):
 
     # Operation only outputs telemetry, misses plot artifact
     op = RequiredOperation(
-        operation_id="op_partial",
+        operation_id="op_r1",
         operator=OperatorType.EXTRACT,
         semantic_responsibility="Extract telemetry data only",
         inputs=["raw_input"],
         outputs=["telemetry_json"],
+        postconditions=["Satisfied r1"],
         bound_capability_id="svris_structured_extractor",
     )
 

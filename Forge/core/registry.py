@@ -167,14 +167,14 @@ class CapabilityRegistry:
                 }
                 for s in sentences
             ]
-            return {"extracted_evidence": extracted}
+            return {"extracted_evidence": extracted, "claims": extracted}
 
         self.register_capability(
             CapabilityManifest(
                 capability_id="svris_structured_extractor",
                 operations_supported=[OperatorType.EXTRACT],
                 input_contracts={"source_text": "str"},
-                output_contracts={"extracted_evidence": "List[Dict[str, Any]]"},
+                output_contracts={"extracted_evidence": "List[Dict[str, Any]]", "claims": "List[Dict[str, Any]]"},
                 authority_requirements=[],
                 evidence_requirements=[],
                 execution_adapter=_physical_extractor_adapter,

@@ -27,7 +27,8 @@ if [ -n "$CONFLICT_FILES" ]; then
     exit 1
 fi
 
-# 2. Run pytest suite from repository root
+# 2. Run pytest suite from repository root in sterile git environment
+unset GIT_DIR GIT_WORK_TREE GIT_INDEX_FILE GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES GIT_PREFIX
 python -m pytest -q
 TEST_EXIT_CODE=$?
 

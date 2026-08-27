@@ -3,7 +3,8 @@ forge/core/substrate.py
 Domain-Agnostic Substrate for 10 SHADOWS Forge.
 
 Defines the mathematical primitives, atomic operator ontology, 7-stage capability
-lifecycles, evidence classifications, objective adequacy states, and closure schemas.
+lifecycles, obligation authorities, capability kinds, evidence classifications,
+objective adequacy states, resolution structures, and closure schemas.
 """
 
 from dataclasses import dataclass, field
@@ -48,6 +49,23 @@ class CapabilityLifecycleState(str, Enum):
     PROVISIONALLY_AVAILABLE = "PROVISIONALLY_AVAILABLE"      # Staged for multi-task evaluation
     REUSE_VERIFIED = "REUSE_VERIFIED"                        # Successfully transferred to foreign task
     PROMOTED = "PROMOTED"                                    # Fully promoted persistent system capability
+
+
+class CapabilityKind(str, Enum):
+    """Classification of capability implementation authority."""
+    REAL_PHYSICAL_ADAPTER = "REAL_PHYSICAL_ADAPTER"          # Bound to real physical subsystem / disk / kernel / DB
+    VERIFIED_EXTERNAL_ADAPTER = "VERIFIED_EXTERNAL_ADAPTER"  # Bound to verified external tool / process
+    NON_AUTHORITATIVE_TEST_DOUBLE = "NON_AUTHORITATIVE_TEST_DOUBLE"  # Test stub / mock (FORBIDDEN for production closure)
+    UNAVAILABLE = "UNAVAILABLE"                              # Deficit marker
+
+
+class ObligationAuthority(str, Enum):
+    """Authority taxonomy for SatisfactionObligations."""
+    SOURCE_GROUNDED = "SOURCE_GROUNDED"                      # Derived directly from raw human source intent
+    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"                    # Derived from architectural TCB invariants
+    VERIFIED_DOMAIN_DERIVED = "VERIFIED_DOMAIN_DERIVED"      # Derived from a verified registered domain model
+    MODEL_HYPOTHESIS = "MODEL_HYPOTHESIS"                    # Proposed by LLM (ZERO closure authority by itself)
+    HUMAN_APPROVED = "HUMAN_APPROVED"                        # Explicitly gated and authorized by human
 
 
 class ObjectiveAdequacyState(str, Enum):
@@ -129,6 +147,77 @@ class EvidenceRequirement:
 
 
 @dataclass
+class VerificationContract:
+    contract_id: str
+    observable_success_condition: str
+    verification_method: str
+    evidence_required: List[str]
+    validator_fn: Optional[Callable[[Any], bool]] = None
+
+
+@dataclass
+class SatisfactionObligation:
+    """
+    Represents: WHAT MUST BECOME OBSERVABLY TRUE?
+    Defines the physical effect, input/output contracts, and evidence boundaries.
+    """
+    obligation_id: str
+    source_requirement_ids: List[str]
+    authority: ObligationAuthority
+    required_effect_type: str
+    required_input_contract: Dict[str, Any]
+    required_output_contract: Dict[str, Any]
+    required_evidence: List[EvidenceRequirement] = field(default_factory=list)
+    required_authority: List[str] = field(default_factory=list)
+    required_verification: List[VerificationContract] = field(default_factory=list)
+    is_blocking: bool = True
+    provenance: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def has_closure_authority(self) -> bool:
+        return self.authority in (
+            ObligationAuthority.SOURCE_GROUNDED,
+            ObligationAuthority.SYSTEM_INVARIANT,
+            ObligationAuthority.VERIFIED_DOMAIN_DERIVED,
+            ObligationAuthority.HUMAN_APPROVED,
+        )
+
+
+@dataclass
+class CapabilityManifest:
+    """
+    Truthful capability manifest representing physically verified adapters.
+    """
+    capability_id: str
+    operations_supported: List[OperatorType]
+    input_contracts: Dict[str, Any]
+    output_contracts: Dict[str, Any]
+    authority_requirements: List[str]
+    evidence_requirements: List[str]
+    execution_adapter: Callable[..., Any]
+    verifier: Optional[Callable[..., bool]] = None
+    kind: CapabilityKind = CapabilityKind.REAL_PHYSICAL_ADAPTER
+    lifecycle_state: CapabilityLifecycleState = CapabilityLifecycleState.CANDIDATE
+    limitations: List[str] = field(default_factory=list)
+    provenance: Dict[str, Any] = field(default_factory=dict)
+    version: str = "1.0.0"
+    times_reused: int = 0
+
+    @property
+    def is_authorized_for_execution(self) -> bool:
+        # Only REAL or VERIFIED external adapters at authorized lifecycle states may execute in production
+        return (
+            self.kind in (CapabilityKind.REAL_PHYSICAL_ADAPTER, CapabilityKind.VERIFIED_EXTERNAL_ADAPTER)
+            and self.lifecycle_state in (
+                CapabilityLifecycleState.VERIFIED_FOR_TASK,
+                CapabilityLifecycleState.PROVISIONALLY_AVAILABLE,
+                CapabilityLifecycleState.REUSE_VERIFIED,
+                CapabilityLifecycleState.PROMOTED,
+            )
+        )
+
+
+@dataclass
 class RequiredOperation:
     operation_id: str
     operator: OperatorType
@@ -141,41 +230,36 @@ class RequiredOperation:
     evidence_requirements: List[EvidenceRequirement] = field(default_factory=list)
     uncertainty: float = 0.0
     failure_modes: List[str] = field(default_factory=list)
+    bound_capability_id: Optional[str] = None
 
 
 @dataclass
-class CapabilityManifest:
+class CapabilityBinding:
+    obligation_id: str
     capability_id: str
-    operations_supported: List[OperatorType]
-    input_contracts: Dict[str, Any]
-    output_contracts: Dict[str, Any]
-    authority_requirements: List[str]
-    evidence_requirements: List[str]
-    execution_adapter: Callable[..., Any]
-    verifier: Optional[Callable[..., bool]] = None
-    lifecycle_state: CapabilityLifecycleState = CapabilityLifecycleState.CANDIDATE
-    limitations: List[str] = field(default_factory=list)
-    provenance: Dict[str, Any] = field(default_factory=dict)
-    version: str = "1.0.0"
-    times_reused: int = 0
-
-    @property
-    def is_authorized_for_execution(self) -> bool:
-        return self.lifecycle_state in (
-            CapabilityLifecycleState.VERIFIED_FOR_TASK,
-            CapabilityLifecycleState.PROVISIONALLY_AVAILABLE,
-            CapabilityLifecycleState.REUSE_VERIFIED,
-            CapabilityLifecycleState.PROMOTED,
-        )
+    manifest: CapabilityManifest
+    input_mapping: Dict[str, str] = field(default_factory=dict)
+    output_mapping: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
-class VerificationContract:
-    contract_id: str
-    observable_success_condition: str
-    verification_method: str
-    evidence_required: List[str]
-    validator_fn: Optional[Callable[[Any], bool]] = None
+class ResolutionDeficit:
+    deficit_type: str  # CAPABILITY_DEFICIT | EVIDENCE_DEFICIT | AUTHORITY_DEFICIT | VERIFIER_DEFICIT | SEMANTIC_BINDING_DEFICIT | DOMAIN_MODEL_DEFICIT | REPRESENTATION_DEFICIT
+    obligation_id: str
+    reason: str
+    missing_element: str
+    acquisition_route: str = "PROVISION"  # PROVISION | ACQUIRE | ESCALATE | REFUSE
+
+
+@dataclass
+class ResolutionProof:
+    is_resolved: bool
+    satisfaction_obligations: List[SatisfactionObligation]
+    capability_bindings: Dict[str, CapabilityBinding]
+    induced_operations: List[RequiredOperation]
+    resolution_deficits: List[ResolutionDeficit]
+    deficit_type: Optional[str] = None
+    cost_score: float = 0.0
 
 
 @dataclass

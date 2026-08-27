@@ -4,6 +4,7 @@ Dynamic Bounded Capability Provisioner for 10 SHADOWS Forge.
 
 Synthesizes, tests, isolates, and verifies new capabilities through the 7-stage lifecycle.
 Enforces that unverified code possesses ZERO execution authority.
+No independent test fixture -> NO VERIFIED_FOR_TASK transition.
 """
 
 import ast
@@ -13,6 +14,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
     CapabilityDeficit,
+    CapabilityKind,
     CapabilityLifecycleState,
     CapabilityManifest,
     OperatorType,
@@ -36,9 +38,11 @@ class CapabilityProvisioner:
         test_fixture: Optional[Callable[[], bool]] = None,
         input_contracts: Optional[Dict[str, Any]] = None,
         output_contracts: Optional[Dict[str, Any]] = None,
+        provenance: Optional[Dict[str, Any]] = None,
     ) -> Tuple[bool, Optional[CapabilityManifest], Optional[str]]:
         """
         Executes the 7-stage lifecycle progression for a synthesized candidate.
+        Requires an independent acceptance test fixture to earn VERIFIED_FOR_TASK.
         """
         cap_id = f"cap_prov_{deficit.missing_capability}_{uuid.uuid4().hex[:6]}"
         manifest = CapabilityManifest(
@@ -49,8 +53,10 @@ class CapabilityProvisioner:
             authority_requirements=[],
             evidence_requirements=[],
             execution_adapter=execution_callable,
+            kind=CapabilityKind.REAL_PHYSICAL_ADAPTER,
             lifecycle_state=CapabilityLifecycleState.CANDIDATE,
             limitations=[f"Provisioned to resolve deficit: {deficit.missing_capability}"],
+            provenance=provenance or {"deficit": deficit.missing_capability},
             version="0.1.0",
         )
 
@@ -63,17 +69,17 @@ class CapabilityProvisioner:
         except Exception as e:
             return False, None, f"AST verification failed: {str(e)}"
 
-        # Stage 2: Isolated Sandbox Test
-        if test_fixture:
-            try:
-                test_passed = test_fixture()
-                if not test_passed:
-                    return False, None, "Isolated sandbox test failed assertion."
-                manifest.lifecycle_state = CapabilityLifecycleState.ISOLATED_TESTED
-            except Exception as te:
-                return False, None, f"Isolated test raised exception: {str(te)}"
-        else:
+        # Stage 2: Mandatory Independent Sandbox Acceptance Test Fixture
+        if not test_fixture:
+            return False, None, "PROVISIONING_FAILED: No independent test fixture provided; cannot advance to ISOLATED_TESTED."
+
+        try:
+            test_passed = test_fixture()
+            if not test_passed:
+                return False, None, "Isolated sandbox test failed assertion."
             manifest.lifecycle_state = CapabilityLifecycleState.ISOLATED_TESTED
+        except Exception as te:
+            return False, None, f"Isolated test raised exception: {str(te)}"
 
         # Stage 3: Authorize for Task Execution
         manifest.lifecycle_state = CapabilityLifecycleState.VERIFIED_FOR_TASK

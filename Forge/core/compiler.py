@@ -5,6 +5,7 @@ Typed Execution Graph Compiler and Deterministic DAG Runner.
 Enforces the Two-Key Gatekeeper Law:
 ExecutionGraph compilation requires BOTH ObjectiveAdequacyContract == ADEQUATE_FOR_EXECUTION
 AND DecompositionProof.closure_status == SATISFIED AND ClosureReport.is_closed == True.
+Binds exact capability identities from ResolutionProof.
 """
 
 import hashlib
@@ -14,12 +15,14 @@ from typing import Any, Dict, List, Optional
 
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
+    CapabilityBinding,
     ClosureReport,
     DecompositionProof,
     ExecutionGraph,
     ObjectiveAdequacyContract,
     ObjectiveAdequacyState,
     RequiredOperation,
+    ResolutionProof,
     VerificationContract,
 )
 
@@ -41,7 +44,7 @@ class ClosureDeficitError(Exception):
 
 class ExecutionGraphCompiler:
     """
-    Compiles verified objectives, operations, and capabilities into a runnable ExecutionGraph.
+    Compiles verified objectives, operations, and exact capability bindings into a runnable ExecutionGraph.
     """
 
     def __init__(self, registry: CapabilityRegistry):
@@ -54,6 +57,7 @@ class ExecutionGraphCompiler:
         closure_report: Optional[ClosureReport],
         operations: List[RequiredOperation],
         verification_contracts: List[VerificationContract],
+        resolution_proof: Optional[ResolutionProof] = None,
         human_gates: Optional[List[str]] = None,
     ) -> ExecutionGraph:
         # Two-Key Gate 1: Upstream Objective Adequacy Check
@@ -79,14 +83,27 @@ class ExecutionGraphCompiler:
                 f"Missing capabilities: {[d.missing_capability for d in closure_report.capability_deficits]}"
             )
 
-        # Bind operations to authorized capabilities
+        # Bind operations to authorized capabilities (from resolution proof or bound_capability_id)
         bindings: Dict[str, str] = {}
         ev_deps: Dict[str, List[str]] = {}
+
         for op in operations:
-            matching_caps = self.registry.find_capabilities_for_operator(op.operator)
-            if not matching_caps:
-                raise ClosureDeficitError(f"No authorized capability bound for operator {op.operator}")
-            bindings[op.operation_id] = matching_caps[0].capability_id
+            if op.bound_capability_id:
+                cap = self.registry.get_capability(op.bound_capability_id)
+                if not cap or not cap.is_authorized_for_execution:
+                    raise ClosureDeficitError(f"Bound capability '{op.bound_capability_id}' is unauthorized")
+                bindings[op.operation_id] = cap.capability_id
+            elif resolution_proof and op.operation_id in [f"op_{b.obligation_id}" for b in resolution_proof.capability_bindings.values()]:
+                for b in resolution_proof.capability_bindings.values():
+                    if f"op_{b.obligation_id}" == op.operation_id:
+                        bindings[op.operation_id] = b.capability_id
+                        break
+            else:
+                matching_caps = self.registry.find_capabilities_for_operator(op.operator)
+                if not matching_caps:
+                    raise ClosureDeficitError(f"No authorized capability bound for operator {op.operator}")
+                bindings[op.operation_id] = matching_caps[0].capability_id
+
             ev_deps[op.operation_id] = [e.evidence_id for e in op.evidence_requirements]
 
         graph_id = f"graph_{uuid.uuid4().hex[:8]}"
@@ -126,7 +143,7 @@ class ExecutionGraphCompiler:
                     "error": f"Capability '{cap_id}' is not authorized for execution.",
                 }
 
-            # Safely invoke capability execution adapter
+            # Safely invoke capability execution adapter with exact signature inspection
             try:
                 sig = inspect.signature(cap.execution_adapter)
                 call_args = {}
@@ -138,7 +155,7 @@ class ExecutionGraphCompiler:
                         call_args[param_name] = state_store[param_name]
                     elif param.default != inspect.Parameter.empty:
                         call_args[param_name] = param.default
-                
+
                 op_output = cap.execution_adapter(**call_args)
             except Exception:
                 try:
@@ -158,7 +175,7 @@ class ExecutionGraphCompiler:
                 for out_key in op.outputs:
                     state_store[out_key] = op_output
 
-            # Run verifier if capability has one
+            # Run physical verifier if capability has one
             if cap.verifier and not cap.verifier(op_output):
                 return {
                     "success": False,

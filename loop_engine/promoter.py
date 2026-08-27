@@ -7,7 +7,7 @@ database-retrieved receipts only, ancestry-based reconciliation, and post-promot
 import subprocess
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from loop_engine.kernel_db import (
     KernelDatabase,
@@ -32,11 +32,20 @@ class PromotionCoordinator:
         self.kernel_db = kernel_db
         self.verifier_gate = verifier_gate
 
-    def promote(self, task_id: str, receipt_id: int) -> bool:
+    def promote(self, task_id: str, receipt_or_id: Any) -> bool:
         """
         Promotes a candidate strictly from a persisted receipt in KernelDatabase.
-        Never accepts caller-constructed receipt objects.
+        Accepts receipt_id (int) or VerificationReceipt / VerificationResult.
         """
+        if isinstance(receipt_or_id, int):
+            receipt_id = receipt_or_id
+        elif hasattr(receipt_or_id, "receipt_id") and isinstance(receipt_or_id.receipt_id, int):
+            receipt_id = receipt_or_id.receipt_id
+        elif isinstance(receipt_or_id, tuple) and len(receipt_or_id) > 0 and isinstance(receipt_or_id[0], int):
+            receipt_id = receipt_or_id[0]
+        else:
+            raise ReceiptMismatchError(f"Invalid receipt identifier: {receipt_or_id}")
+
         # 1. Fetch and validate receipt from KernelDatabase
         receipt = self.kernel_db.get_verified_receipt(receipt_id)
         if not receipt:

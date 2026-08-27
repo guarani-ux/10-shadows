@@ -333,6 +333,17 @@ class KernelDatabase:
                     f"CAS transition failed for task '{task_id}': expected state '{from_state.value}', but found '{cur_state}'"
                 )
 
+    def update_state(self, task_id: str, to_state: State) -> None:
+        """Convenience method for updating proposal state via transition_proposal_state."""
+        cur_state = self.get_proposal_state(task_id)
+        if cur_state is None:
+            raise IllegalStateTransitionError(f"Proposal '{task_id}' does not exist.")
+        self.transition_proposal_state(task_id, cur_state, to_state)
+
+    def record_receipt(self, receipt: VerificationReceipt) -> int:
+        """Alias for record_verified_receipt."""
+        return self.record_verified_receipt(receipt)
+
     def record_verified_receipt(self, receipt: VerificationReceipt) -> int:
         """
         Persists a verifier receipt directly into KernelDatabase and returns receipt_id.
@@ -366,7 +377,12 @@ class KernelDatabase:
             )
             return cursor.lastrowid
 
-    def get_verified_receipt(self, receipt_id: int) -> Optional[VerificationReceipt]:
+    def get_verified_receipt(self, receipt_id: Any) -> Optional[VerificationReceipt]:
+        if hasattr(receipt_id, "receipt_id") and isinstance(receipt_id.receipt_id, int):
+            receipt_id = receipt_id.receipt_id
+        elif isinstance(receipt_id, tuple) and len(receipt_id) > 0 and isinstance(receipt_id[0], int):
+            receipt_id = receipt_id[0]
+
         with self.get_connection() as conn:
             row = conn.execute("SELECT * FROM verified_receipts WHERE receipt_id = ?", (receipt_id,)).fetchone()
             if not row:

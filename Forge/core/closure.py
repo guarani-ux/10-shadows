@@ -11,11 +11,13 @@ from typing import Any, Dict, List, Optional, Set
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
     CapabilityDeficit,
+    CapabilityKind,
     ClosureReport,
     EvidenceClass,
     EvidenceDeficit,
     EvidenceRequirement,
     RequiredOperation,
+    SatisfactionObligation,
 )
 
 
@@ -36,6 +38,7 @@ class ClosureGate:
         self,
         operations: List[RequiredOperation],
         verified_evidence_pool: Dict[str, Any],
+        obligations: Optional[List[SatisfactionObligation]] = None,
     ) -> ClosureReport:
         satisfied_ops: List[str] = []
         satisfied_ev: List[str] = []
@@ -44,17 +47,30 @@ class ClosureGate:
 
         # 1. Evaluate Capability Closure
         for op in operations:
-            matching_caps = self.registry.find_capabilities_for_operator(op.operator)
-            if matching_caps:
-                satisfied_ops.append(op.operation_id)
+            if op.bound_capability_id:
+                cap = self.registry.get_capability(op.bound_capability_id)
+                if cap and cap.is_authorized_for_execution:
+                    satisfied_ops.append(op.operation_id)
+                else:
+                    cap_deficits.append(CapabilityDeficit(
+                        required_operation_id=op.operation_id,
+                        missing_capability=op.bound_capability_id,
+                        consequence=f"Bound capability '{op.bound_capability_id}' is unauthorized or missing",
+                        provisionable=True,
+                        acquisition_route="PROVISION",
+                    ))
             else:
-                cap_deficits.append(CapabilityDeficit(
-                    required_operation_id=op.operation_id,
-                    missing_capability=f"capability_for_{op.operator.value}",
-                    consequence=f"Cannot execute {op.semantic_responsibility}",
-                    provisionable=True,
-                    acquisition_route="PROVISION",
-                ))
+                matching_caps = self.registry.find_capabilities_for_operator(op.operator)
+                if matching_caps:
+                    satisfied_ops.append(op.operation_id)
+                else:
+                    cap_deficits.append(CapabilityDeficit(
+                        required_operation_id=op.operation_id,
+                        missing_capability=f"capability_for_{op.operator.value}",
+                        consequence=f"Cannot execute {op.semantic_responsibility}",
+                        provisionable=True,
+                        acquisition_route="PROVISION",
+                    ))
 
         # 2. Evaluate Evidence Closure
         for op in operations:

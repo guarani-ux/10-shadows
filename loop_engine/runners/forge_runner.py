@@ -1,3 +1,12 @@
+"""
+loop_engine/runners/forge_runner.py
+Shadow 1: The Forge Domain Runner.
+Bridges ForgeEngine with the hardened Loop Engine runtime:
+- Executes code generation and resolution through ForgeEngine.
+- Applies AST static security and isolated pytest gates in ephemeral Git Worktrees.
+- Atomically merges verified code into master with cryptographic commit receipt.
+"""
+
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -14,15 +23,10 @@ except ImportError:
     from forge.forge import ForgeEngine
 
 
-
 class ForgeDomainRunner(BaseLoop):
     """
     Shadow 1: The Forge Domain Runner.
-    Bridges ForgeEngine with the hardened Loop Engine runtime:
-    - Normalizes human intent into TaskSpec.
-    - Executes code generation in an ephemeral Git Worktree sandbox.
-    - Applies AST static security and isolated pytest gates.
-    - Atomically merges verified code into master with cryptographic commit receipt.
+    Bridges ForgeEngine with the hardened Loop Engine runtime.
     """
 
     def __init__(
@@ -40,7 +44,7 @@ class ForgeDomainRunner(BaseLoop):
 
     def normalize(self, raw_input: Any) -> Dict[str, Any]:
         """
-        Normalizes raw request into TaskSpec using ForgeEngine's normalizer.
+        Normalizes raw request into TaskSpec using ForgeEngine's grounded resolution.
         """
         if isinstance(raw_input, str):
             request = {
@@ -57,6 +61,12 @@ class ForgeDomainRunner(BaseLoop):
         target_filename = request.get("target_filename", f"{task_id}.py")
         code_content = request.get("code") or request.get("intent", "")
         test_file = request.get("test_file")
+
+        # Run through ForgeEngine grounded resolution if raw intent without code
+        if not request.get("code") and request.get("intent"):
+            forge_res = self.forge.run(request)
+            if forge_res.get("status") == "SUCCESS":
+                code_content = str(forge_res.get("result", {}).get("final_state", {}).get("repaired_code", code_content))
 
         return {
             "task_id": task_id,

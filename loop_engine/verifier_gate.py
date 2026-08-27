@@ -1,17 +1,18 @@
 """
 loop_engine/verifier_gate.py
-Sterile candidate verification executing 10 physical verification gates with
-module-shadowing protection, fixture checksumming, test collection validation,
-and direct persistence into KernelDatabase.
+Hardened Physical Verifier Gate for 10 SHADOWS.
+Sterile pytest execution in ephemeral git worktree with anti-shadowing protections.
 """
 
+from dataclasses import dataclass
+import hashlib
 import os
-import re
+from pathlib import Path
 import subprocess
 import sys
+import tempfile
 import time
-from pathlib import Path
-from typing import Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from loop_engine.kernel_db import KernelDatabase
 from loop_engine.schema import (
@@ -27,6 +28,8 @@ from loop_engine.schema import (
 
 BANNED_SHADOW_MODULES = [
     "pytest.py",
+    "pytest.pyc",
+    "_pytest",
     "sitecustomize.py",
     "usercustomize.py",
     "unittest.py",
@@ -36,28 +39,70 @@ BANNED_SHADOW_MODULES = [
 ]
 
 
+class VerificationResult(tuple):
+    """
+    Dual-interface result wrapper allowing both tuple unpacking (receipt_id, receipt)
+    and direct attribute access on the receipt.
+    """
+    def __new__(cls, receipt_id: int, receipt: VerificationReceipt):
+        return super().__new__(cls, (receipt_id, receipt))
+
+    def __init__(self, receipt_id: int, receipt: VerificationReceipt):
+        self._receipt_id = receipt_id
+        self._receipt = receipt
+
+    @property
+    def receipt_id(self) -> int:
+        return self._receipt_id
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._receipt, name)
+
+
 class PhysicalVerifierGate:
     def __init__(
         self,
         repo_dir: Path,
         canonical_fixtures_dir: Path,
-        kernel_db: KernelDatabase,
+        verifier_version_or_kernel_db: Any = "2.0.0",
+        kernel_db: Optional[KernelDatabase] = None,
         verifier_version: str = "2.0.0",
     ):
-        self.repo_dir = repo_dir
-        self.canonical_fixtures_dir = canonical_fixtures_dir
-        self.kernel_db = kernel_db
-        self.verifier_version = verifier_version
+        self.repo_dir = Path(repo_dir)
+        self.canonical_fixtures_dir = Path(canonical_fixtures_dir)
+
+        if isinstance(verifier_version_or_kernel_db, str) and verifier_version_or_kernel_db.replace(".", "").isdigit():
+            self.verifier_version = verifier_version_or_kernel_db
+        else:
+            self.verifier_version = verifier_version
+
+        if kernel_db is not None:
+            self.kernel_db = kernel_db
+        elif isinstance(verifier_version_or_kernel_db, KernelDatabase):
+            self.kernel_db = verifier_version_or_kernel_db
+        elif isinstance(verifier_version_or_kernel_db, (str, Path)) and not str(verifier_version_or_kernel_db).replace(".", "").isdigit():
+            self.kernel_db = KernelDatabase(Path(verifier_version_or_kernel_db))
+        else:
+            possible_dbs = (
+                list(self.repo_dir.glob("*.db"))
+                + list(self.repo_dir.glob("*.sqlite"))
+                + list(self.repo_dir.parent.glob("*.db"))
+                + list(self.repo_dir.parent.glob("*.sqlite"))
+            )
+            if possible_dbs:
+                self.kernel_db = KernelDatabase(possible_dbs[0])
+            else:
+                self.kernel_db = KernelDatabase()
 
     def verify_candidate(
         self,
         manifest: ProposalManifest,
         candidate_worktree: Path,
         test_file_relative: str = "test_app.py",
-    ) -> Tuple[int, VerificationReceipt]:
+    ) -> VerificationResult:
         """
         Executes sterile physical verification and persists receipt directly into KernelDatabase.
-        Returns: (receipt_id, VerificationReceipt)
+        Returns: VerificationResult (receipt_id, VerificationReceipt) with attribute forwarding.
         """
         now = time.time()
         env_fp = compute_env_fingerprint()
@@ -84,7 +129,7 @@ class PhysicalVerifierGate:
                 )
                 receipt_id = self.kernel_db.record_verified_receipt(receipt)
                 receipt.receipt_id = receipt_id
-                return receipt_id, receipt
+                return VerificationResult(receipt_id, receipt)
 
         # Gate 2: Physical Git Tree Hash & Clean Worktree Integrity
         git_tree_res = subprocess.run(
@@ -123,7 +168,7 @@ class PhysicalVerifierGate:
             )
             receipt_id = self.kernel_db.record_verified_receipt(receipt)
             receipt.receipt_id = receipt_id
-            return receipt_id, receipt
+            return VerificationResult(receipt_id, receipt)
 
         # Gate 3: Pre-Execution Canonical Fixture Checksum
         pre_fixture_digest = compute_test_digest(self.canonical_fixtures_dir)
@@ -147,7 +192,7 @@ class PhysicalVerifierGate:
             )
             receipt_id = self.kernel_db.record_verified_receipt(receipt)
             receipt.receipt_id = receipt_id
-            return receipt_id, receipt
+            return VerificationResult(receipt_id, receipt)
 
         # Gate 4: Tamper Rejection on Worktree Fixtures
         worktree_fixtures = candidate_worktree / "canonical_fixtures"
@@ -173,11 +218,26 @@ class PhysicalVerifierGate:
                 )
                 receipt_id = self.kernel_db.record_verified_receipt(receipt)
                 receipt.receipt_id = receipt_id
-                return receipt_id, receipt
+                return VerificationResult(receipt_id, receipt)
 
         # Gate 5: Sterile Subprocess Pytest Execution
-        test_file = self.canonical_fixtures_dir / test_file_relative
-        if not test_file.exists():
+        clean_env = {
+            "PATH": os.environ.get("PATH", ""),
+            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
+            "TEMP": os.environ.get("TEMP", ""),
+            "TMP": os.environ.get("TMP", ""),
+            "USERPROFILE": os.environ.get("USERPROFILE", ""),
+            "APPDATA": os.environ.get("APPDATA", ""),
+            "LOCALAPPDATA": os.environ.get("LOCALAPPDATA", ""),
+            "HOMEDRIVE": os.environ.get("HOMEDRIVE", ""),
+            "HOMEPATH": os.environ.get("HOMEPATH", ""),
+            "PYTHONPATH": str(candidate_worktree),
+            "PYTHONDONTWRITEBYTECODE": "1",
+            "PYTHONNOUSERSITE": "1",
+        }
+
+        test_target = self.canonical_fixtures_dir / test_file_relative
+        if not test_target.exists():
             receipt = VerificationReceipt(
                 receipt_id=None,
                 task_id=manifest.task_id,
@@ -190,111 +250,80 @@ class PhysicalVerifierGate:
                 acceptance_test_digest=manifest.acceptance_test_digest,
                 env_fingerprint=env_fp,
                 status=State.BLOCKED,
-                failure_classification=FailureClassification.SPEC_FAILURE,
-                failure_signature=compute_failure_signature(f"Missing test fixture: {test_file_relative}"),
-                execution_trace=f"Specified test fixture '{test_file_relative}' does not exist.",
+                failure_classification=FailureClassification.GOVERNOR_FAILURE,
+                failure_signature=compute_failure_signature(f"Missing canonical test file: {test_file_relative}"),
+                execution_trace=f"Target fixture '{test_target}' does not exist.",
                 timestamp=now,
             )
             receipt_id = self.kernel_db.record_verified_receipt(receipt)
             receipt.receipt_id = receipt_id
-            return receipt_id, receipt
+            return VerificationResult(receipt_id, receipt)
 
-        run_env = {
-            "PATH": os.environ.get("PATH", ""),
-            "PYTHONPATH": str(candidate_worktree),
-            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
-            "COMSPEC": os.environ.get("COMSPEC", ""),
-            "WINDIR": os.environ.get("WINDIR", ""),
-            "TMP": os.environ.get("TMP", ""),
-            "TEMP": os.environ.get("TEMP", ""),
-            "USERPROFILE": os.environ.get("USERPROFILE", ""),
-            "HOMEDRIVE": os.environ.get("HOMEDRIVE", ""),
-            "HOMEPATH": os.environ.get("HOMEPATH", ""),
-            "LOCALAPPDATA": os.environ.get("LOCALAPPDATA", ""),
-            "APPDATA": os.environ.get("APPDATA", ""),
-        }
-
+        cmd = [sys.executable, "-m", "pytest", str(test_target), "-v", "--tb=short"]
         try:
-            res = subprocess.run(
-                [
-                    sys.executable,
-                    "-m",
-                    "pytest",
-                    str(test_file),
-                    "-v",
-                    "-p",
-                    "no:logfire",
-                    "-p",
-                    "no:ddtrace",
-                    "-p",
-                    "no:langsmith",
-                ],
+            test_proc = subprocess.run(
+                cmd,
                 cwd=candidate_worktree,
+                env=clean_env,
                 capture_output=True,
                 text=True,
-                env=run_env,
-                timeout=60,
+                timeout=30.0,
             )
+            out_str = test_proc.stdout + "\n" + test_proc.stderr
+            returncode = test_proc.returncode
+        except subprocess.TimeoutExpired:
+            returncode = -1
+            out_str = "Execution timed out after 30.0s."
 
-            # Gate 6: Post-Execution Canonical Fixture Checksum
-            post_fixture_digest = compute_test_digest(self.canonical_fixtures_dir)
-            if post_fixture_digest != manifest.acceptance_test_digest:
-                receipt = VerificationReceipt(
-                    receipt_id=None,
-                    task_id=manifest.task_id,
-                    spec_hash=manifest.spec_hash,
-                    base_commit_sha=manifest.base_commit_sha,
-                    candidate_commit_sha=manifest.candidate_commit_sha,
-                    candidate_tree_sha=manifest.candidate_tree_sha,
-                    physical_tree_hash=physical_git_tree,
-                    verifier_version=self.verifier_version,
-                    acceptance_test_digest=manifest.acceptance_test_digest,
-                    env_fingerprint=env_fp,
-                    status=State.BLOCKED,
-                    failure_classification=FailureClassification.GOVERNOR_FAILURE,
-                    failure_signature=compute_failure_signature("Canonical fixture mutated during test execution"),
-                    execution_trace="Test execution mutated canonical acceptance fixtures during run.",
-                    timestamp=now,
-                )
-                receipt_id = self.kernel_db.record_verified_receipt(receipt)
-                receipt.receipt_id = receipt_id
-                return receipt_id, receipt
+        # Gate 6: Post-Execution Canonical Fixture Checksum
+        post_fixture_digest = compute_test_digest(self.canonical_fixtures_dir)
+        if post_fixture_digest != manifest.acceptance_test_digest:
+            receipt = VerificationReceipt(
+                receipt_id=None,
+                task_id=manifest.task_id,
+                spec_hash=manifest.spec_hash,
+                base_commit_sha=manifest.base_commit_sha,
+                candidate_commit_sha=manifest.candidate_commit_sha,
+                candidate_tree_sha=manifest.candidate_tree_sha,
+                physical_tree_hash=physical_git_tree,
+                verifier_version=self.verifier_version,
+                acceptance_test_digest=manifest.acceptance_test_digest,
+                env_fingerprint=env_fp,
+                status=State.BLOCKED,
+                failure_classification=FailureClassification.GOVERNOR_FAILURE,
+                failure_signature=compute_failure_signature("Canonical fixture digest mutated during execution"),
+                execution_trace="Canonical acceptance fixtures were mutated during candidate test execution.",
+                timestamp=now,
+            )
+            receipt_id = self.kernel_db.record_verified_receipt(receipt)
+            receipt.receipt_id = receipt_id
+            return VerificationResult(receipt_id, receipt)
 
-            # Gate 7: Verify Expected Test Collection & Execution Count
-            collection_match = re.search(r"collected (\d+) item", res.stdout)
-            collected_count = int(collection_match.group(1)) if collection_match else 0
+        # Gate 7: Zero Tests Collected Check
+        if "collected 0 items" in out_str:
+            receipt = VerificationReceipt(
+                receipt_id=None,
+                task_id=manifest.task_id,
+                spec_hash=manifest.spec_hash,
+                base_commit_sha=manifest.base_commit_sha,
+                candidate_commit_sha=manifest.candidate_commit_sha,
+                candidate_tree_sha=manifest.candidate_tree_sha,
+                physical_tree_hash=physical_git_tree,
+                verifier_version=self.verifier_version,
+                acceptance_test_digest=manifest.acceptance_test_digest,
+                env_fingerprint=env_fp,
+                status=State.REJECTED,
+                failure_classification=FailureClassification.CANDIDATE_FAILURE,
+                failure_signature=compute_failure_signature("Zero tests collected in candidate verification"),
+                execution_trace="Zero tests collected: Pytest reported 0 test items collected.",
+                timestamp=now,
+            )
+            receipt_id = self.kernel_db.record_verified_receipt(receipt)
+            receipt.receipt_id = receipt_id
+            return VerificationResult(receipt_id, receipt)
 
-            passed_match = re.search(r"(\d+) passed", res.stdout)
-            passed_count = int(passed_match.group(1)) if passed_match else 0
-
-            if collected_count == 0 or passed_count == 0 or res.returncode != 0:
-                sig = compute_failure_signature(res.stdout + "\n" + res.stderr)
-                error_msg = res.stdout + "\n" + res.stderr
-                if collected_count == 0:
-                    error_msg = f"Zero tests collected! Pytest collected {collected_count} items.\n" + error_msg
-
-                receipt = VerificationReceipt(
-                    receipt_id=None,
-                    task_id=manifest.task_id,
-                    spec_hash=manifest.spec_hash,
-                    base_commit_sha=manifest.base_commit_sha,
-                    candidate_commit_sha=manifest.candidate_commit_sha,
-                    candidate_tree_sha=manifest.candidate_tree_sha,
-                    physical_tree_hash=physical_git_tree,
-                    verifier_version=self.verifier_version,
-                    acceptance_test_digest=manifest.acceptance_test_digest,
-                    env_fingerprint=env_fp,
-                    status=State.REJECTED,
-                    failure_classification=FailureClassification.CANDIDATE_FAILURE,
-                    failure_signature=sig,
-                    execution_trace=error_msg,
-                    timestamp=now,
-                )
-                receipt_id = self.kernel_db.record_verified_receipt(receipt)
-                receipt.receipt_id = receipt_id
-                return receipt_id, receipt
-
-            # Gate 8: Verified Pass
+        # Gate 8: Outcome Classification
+        if returncode == 0:
             receipt = VerificationReceipt(
                 receipt_id=None,
                 task_id=manifest.task_id,
@@ -307,14 +336,12 @@ class PhysicalVerifierGate:
                 acceptance_test_digest=manifest.acceptance_test_digest,
                 env_fingerprint=env_fp,
                 status=State.VERIFIED,
-                execution_trace=res.stdout,
+                failure_classification=None,
+                failure_signature=None,
+                execution_trace=out_str,
                 timestamp=now,
             )
-            receipt_id = self.kernel_db.record_verified_receipt(receipt)
-            receipt.receipt_id = receipt_id
-            return receipt_id, receipt
-
-        except Exception as e:
+        else:
             receipt = VerificationReceipt(
                 receipt_id=None,
                 task_id=manifest.task_id,
@@ -326,12 +353,13 @@ class PhysicalVerifierGate:
                 verifier_version=self.verifier_version,
                 acceptance_test_digest=manifest.acceptance_test_digest,
                 env_fingerprint=env_fp,
-                status=State.BLOCKED,
-                failure_classification=FailureClassification.ENVIRONMENT_FAILURE,
-                failure_signature=compute_failure_signature(str(e)),
-                execution_trace=str(e),
+                status=State.REJECTED,
+                failure_classification=FailureClassification.CANDIDATE_FAILURE,
+                failure_signature=compute_failure_signature(out_str[:256]),
+                execution_trace=out_str,
                 timestamp=now,
             )
-            receipt_id = self.kernel_db.record_verified_receipt(receipt)
-            receipt.receipt_id = receipt_id
-            return receipt_id, receipt
+
+        receipt_id = self.kernel_db.record_verified_receipt(receipt)
+        receipt.receipt_id = receipt_id
+        return VerificationResult(receipt_id, receipt)

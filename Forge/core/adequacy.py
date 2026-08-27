@@ -44,8 +44,16 @@ class RawClauseTokenizer:
         # 1. Split on structural line breaks / bullets
         lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
         for line_idx, line in enumerate(lines):
-            # Split sentence boundaries
-            sentences = [s.strip() for s in re.split(r"[.;]+", line) if s.strip()]
+            # Split sentence boundaries and compound action conjunctions
+            sentences = [
+                s.strip()
+                for s in re.split(
+                    r"[.;]+|\s+and\s+(?=(?:validate|decompose|extract|calculate|write|detect|commit|check|verify|run))",
+                    line,
+                    flags=re.IGNORECASE
+                )
+                if s.strip()
+            ]
             for s_idx, s in enumerate(sentences):
                 # Detect constraints / deliverables
                 s_lower = s.lower()

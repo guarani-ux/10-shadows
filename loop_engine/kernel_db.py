@@ -53,7 +53,7 @@ class KernelDatabase:
     Unified Single-Database Transactional Boundary for 10 SHADOWS.
     """
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 1
 
     def __init__(self, db_path: Optional[Path] = None):
         self.db_path = db_path or KERNEL_DB_PATH

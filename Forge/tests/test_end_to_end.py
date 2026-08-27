@@ -17,7 +17,7 @@ def test_acceptance_test_a_direct(test_store, mock_model, temp_dir):
         "requested_surface": "ANSWER"
     }
 
-    result = engine.run(request)
+    result = engine.run_legacy(request)
 
     assert result["route"] == "DIRECT"
     assert result["evaluation"]["success"] is True
@@ -41,7 +41,7 @@ def test_acceptance_test_b_build(test_store, mock_model, temp_dir):
         "requested_surface": "SYSTEM"
     }
 
-    result = engine.run(request)
+    result = engine.run_legacy(request)
 
     assert result["route"] == "BUILD"
     assert result["evaluation"]["success"] is True
@@ -86,7 +86,7 @@ def test_acceptance_test_c_act(test_store, mock_model, sandbox_adapter, temp_dir
         "requested_surface": "ACTION"
     }
 
-    result = engine.run(request)
+    result = engine.run_legacy(request)
 
     assert result["route"] == "ACT"
     receipt = result["result"]
@@ -129,7 +129,7 @@ def test_acceptance_test_d_learn(test_store, mock_model, temp_dir):
         "requested_surface": "ACTION"
     }
 
-    result = engine.run(request)
+    result = engine.run_legacy(request)
 
     assert result["route"] == "ACT"
     assert result["evaluation"]["success"] is False

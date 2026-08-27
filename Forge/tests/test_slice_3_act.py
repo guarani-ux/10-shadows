@@ -1,5 +1,6 @@
 import pytest
 from pathlib import Path
+from forge.adapters.actions import SandboxFileAdapter
 from forge.core.authorize import AuthorizationGate
 from forge.core.execute import execute_action
 from forge.core.schema import validate_contract

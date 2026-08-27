@@ -44,7 +44,7 @@ class MockModelAdapter(ModelAdapter):
 
         # Check explicit registered response
         for key, resp in self.preset_responses.items():
-            if key in instruction:
+            if key.lower() in instruction.lower():
                 return resp
 
         # Custom handler fallback

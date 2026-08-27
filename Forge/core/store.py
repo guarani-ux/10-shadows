@@ -1,3 +1,9 @@
+"""
+forge/core/store.py
+Persistent transactional SQLite store for Forge with WAL mode and CAS revisions.
+"""
+
+import contextlib
 import hashlib
 import json
 import sqlite3
@@ -24,12 +30,17 @@ class ForgeStore:
         self.db_path = str(db_path)
         self._init_db()
 
-    def _get_connection(self) -> sqlite3.Connection:
+    @contextlib.contextmanager
+    def _get_connection(self):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA foreign_keys = ON;")
         conn.execute("PRAGMA journal_mode = WAL;")
-        return conn
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
 
     def _init_db(self) -> None:
         with self._get_connection() as conn:
@@ -212,10 +223,6 @@ class ForgeStore:
             )
 
     def update_transaction_cas(self, transaction_id: str, expected_revision: int, new_state: str) -> bool:
-        """
-        Performs atomic Compare-And-Swap (CAS) update on transaction state.
-        Fails if another worker has modified the record revision.
-        """
         now = utc_now_iso()
         with self._get_connection() as conn:
             row = conn.execute("SELECT * FROM transactions WHERE transaction_id = ?", (transaction_id,)).fetchone()

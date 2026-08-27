@@ -100,6 +100,8 @@ class AuthorizationGate:
         validate_contract("AuthorizationDecision", decision)
 
         if self.store:
+            if not self.store.get_transaction(transaction_id):
+                self.store.record_transaction(transaction_id, proposal.get("task_id", "default_task"))
             self.store.record_authorization(
                 authorization_id=authorization_id,
                 transaction_id=transaction_id,

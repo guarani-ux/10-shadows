@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python scripts/verify_plan_audit.py",
+            "command": "python ../scripts/verify_plan_audit.py",
             "timeout": 15
           }
         ]

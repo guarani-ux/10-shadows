@@ -7,9 +7,22 @@ Validates:
 2. Verifier Daemon sterile isolation & secret stripping.
 3. Verifier Daemon atomic replacement & permanent receipt ledger (.receipts/).
 4. 3-Strike Governor ceiling enforcement.
-5. Pre-Tool Audit Gate execution.
+5. Pre-Tool Audit Gate execution and adversarial fail-closed verification:
+   A. Auditor unavailable -> DENY
+   B. Missing required hook payload / empty stdin -> DENY
+   C. Malformed payload -> DENY
+   D. Missing active plan -> DENY
+   E. Audit result REVISE -> DENY
+   F. Audit result BLOCK -> DENY
+   G. Unresolved HIGH finding -> DENY
+   H. Unresolved CRITICAL finding -> DENY
+   I. Missing required acceptance evidence -> DENY
+   J. Valid hardened plan satisfying authorization requirements -> ALLOW
+   K. Legitimate exempt planning/scratch operation -> ALLOW
+   L. Attempt to disguise a production mutation as an exempt path -> DENY
 """
 
+import io
 import json
 import os
 import sqlite3
@@ -27,7 +40,9 @@ from loop_engine.verifier_daemon import (
     RECEIPTS_LEDGER_DIR,
 )
 from scripts.install_git_hooks import install_hooks, PRE_COMMIT_HOOK_PATH
-from scripts.verify_plan_audit import verify_plan, is_exempt_path
+from scripts import verify_plan_audit
+from scripts.verify_plan_audit import verify_plan, is_exempt_path, main as audit_gate_main
+from zero_trust_engine.auditor import PlanAuditor, AuditResult, Severity, Finding, FindingStatus, AuditReport
 
 
 # ---------------------------------------------------------------------------
@@ -175,13 +190,15 @@ def test_verifier_daemon_strike_ceiling_blocks_execution(tmp_path):
 
 
 # ---------------------------------------------------------------------------
-# 5. Pre-Tool Audit Gate Tests
+# 5. Pre-Tool Audit Gate Tests & Adversarial Fail-Closed Matrix
 # ---------------------------------------------------------------------------
 def test_pre_tool_audit_gate_exempt_paths():
-    """Verifies that non-production paths (scratch, tests, artifacts) are automatically allowed."""
+    """Verifies that non-production paths (scratch, tests, artifacts, plans) are allowed."""
     assert is_exempt_path("c:\\10 SHADOWS\\scratch\\debug.py") is True
     assert is_exempt_path("c:\\10 SHADOWS\\.gemini\\artifacts\\plan.md") is True
     assert is_exempt_path("c:\\10 SHADOWS\\plan.md") is True
+    assert is_exempt_path("c:\\10 SHADOWS\\implementation_plan.md") is True
+    assert is_exempt_path("c:\\10 SHADOWS\\walkthrough.md") is True
     assert is_exempt_path("c:\\10 SHADOWS\\svris\\core\\db.py") is False
 
 
@@ -205,3 +222,255 @@ def test_pre_tool_audit_gate_production_path_evaluation():
     res_prod = verify_plan(payload_prod)
     # With valid plan.md present in repo, decision should be allow
     assert res_prod["decision"] == "allow"
+
+
+# Scenario A: Auditor unavailable -> DENY
+def test_audit_gate_auditor_unavailable_denies(monkeypatch):
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", None)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "Auditor engine unavailable" in res["reason"]
+
+
+# Scenario B: Missing required hook payload / empty stdin -> DENY
+def test_audit_gate_missing_or_empty_stdin_denies(monkeypatch, capsys):
+    monkeypatch.setattr("sys.stdin", io.StringIO(""))
+    audit_gate_main()
+    captured = capsys.readouterr().out
+    result = json.loads(captured)
+    assert result["decision"] == "deny"
+    assert "Missing hook input payload" in result["reason"]
+
+
+# Scenario C: Malformed payload -> DENY
+def test_audit_gate_malformed_payload_denies():
+    assert verify_plan(None)["decision"] == "deny"
+    assert verify_plan([])["decision"] == "deny"
+    assert verify_plan({})["decision"] == "deny"
+    assert verify_plan({"toolCall": None})["decision"] == "deny"
+    assert verify_plan({"toolCall": {"args": None}})["decision"] == "deny"
+    assert verify_plan({"toolCall": {"args": {"TargetFile": ""}}})["decision"] == "deny"
+    assert verify_plan({"toolCall": {"args": {"other": 123}}})["decision"] == "deny"
+
+
+# Scenario D: Missing active plan -> DENY production mutation
+def test_audit_gate_missing_plan_denies(monkeypatch, tmp_path):
+    monkeypatch.setattr(verify_plan_audit, "PROJECT_ROOT", tmp_path)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "No active plan.md or implementation plan found" in res["reason"]
+
+
+# Scenario E: Audit result REVISE -> DENY
+def test_audit_gate_audit_result_revise_denies(monkeypatch):
+    class FakeReviseAuditor:
+        def audit_plan(self, text, scope=None):
+            return AuditReport(
+                outcome=AuditResult.REVISE,
+                scope_evaluations={},
+                findings=[Finding(
+                    finding_id="F-HIGH-1",
+                    name="Vacuous Test Oracle",
+                    severity=Severity.HIGH,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Test checks",
+                    failure_scenario="Trivial assert",
+                    impact="Defects escape",
+                    required_plan_change="Add assertions",
+                    required_verification="Run tests",
+                    residual_risk="None",
+                )],
+                required_acceptance_evidence=["traces"],
+            )
+
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", FakeReviseAuditor)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "Active plan audit requires REVISION" in res["reason"]
+
+
+# Scenario F: Audit result BLOCK -> DENY
+def test_audit_gate_audit_result_block_denies(monkeypatch):
+    class FakeBlockAuditor:
+        def audit_plan(self, text, scope=None):
+            return AuditReport(
+                outcome=AuditResult.BLOCK,
+                scope_evaluations={},
+                findings=[Finding(
+                    finding_id="F-CRIT-1",
+                    name="Production-Path Disconnect",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Entrypoint disconnect",
+                    failure_scenario="Unwired code",
+                    impact="Silent failure",
+                    required_plan_change="Wire entrypoint",
+                    required_verification="Run entrypoint",
+                    residual_risk="None",
+                )],
+                required_acceptance_evidence=["traces"],
+            )
+
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", FakeBlockAuditor)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "Active plan audit is BLOCKED" in res["reason"]
+
+
+# Scenario G: Unresolved HIGH finding -> DENY
+def test_audit_gate_unresolved_high_finding_denies(monkeypatch):
+    class FakeHighFindingAuditor:
+        def audit_plan(self, text, scope=None):
+            return AuditReport(
+                outcome=AuditResult.PASS,
+                scope_evaluations={},
+                findings=[Finding(
+                    finding_id="F-HIGH-2",
+                    name="Unresolved High Security Risk",
+                    severity=Severity.HIGH,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="High risk",
+                    failure_scenario="Escape",
+                    impact="Loss",
+                    required_plan_change="Fix",
+                    required_verification="Verify",
+                    residual_risk="None",
+                )],
+                required_acceptance_evidence=["traces"],
+            )
+
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", FakeHighFindingAuditor)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "unresolved findings" in res["reason"]
+
+
+# Scenario H: Unresolved CRITICAL finding -> DENY
+def test_audit_gate_unresolved_critical_finding_denies(monkeypatch):
+    class FakeCritFindingAuditor:
+        def audit_plan(self, text, scope=None):
+            return AuditReport(
+                outcome=AuditResult.PASS,
+                scope_evaluations={},
+                findings=[Finding(
+                    finding_id="F-CRIT-2",
+                    name="Fatal Isolation Failure",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Critical risk",
+                    failure_scenario="Crash",
+                    impact="Torn state",
+                    required_plan_change="Fix isolation",
+                    required_verification="Verify isolation",
+                    residual_risk="None",
+                )],
+                required_acceptance_evidence=["traces"],
+            )
+
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", FakeCritFindingAuditor)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "unresolved findings" in res["reason"]
+
+
+# Scenario I: Missing required acceptance evidence -> DENY
+def test_audit_gate_missing_acceptance_evidence_denies(monkeypatch):
+    class FakeNoEvidenceAuditor:
+        def audit_plan(self, text, scope=None):
+            return AuditReport(
+                outcome=AuditResult.PASS,
+                scope_evaluations={},
+                findings=[],
+                required_acceptance_evidence=[],
+            )
+
+    monkeypatch.setattr(verify_plan_audit, "PlanAuditor", FakeNoEvidenceAuditor)
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "deny"
+    assert "Required acceptance evidence is unspecified or missing" in res["reason"]
+
+
+# Scenario J: Valid hardened plan satisfying authorization requirements -> ALLOW
+def test_audit_gate_valid_hardened_plan_allows():
+    payload = {
+        "toolCall": {
+            "name": "write_to_file",
+            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+        }
+    }
+    res = verify_plan(payload)
+    assert res["decision"] == "allow"
+    assert "Plan audit status: PASS" in res["reason"]
+
+
+# Scenario K: Legitimate exempt planning/scratch operations -> ALLOW
+def test_audit_gate_exempt_planning_and_scratch_allows():
+    for path in [
+        "c:\\10 SHADOWS\\scratch\\debug.py",
+        "c:\\10 SHADOWS\\.gemini\\artifacts\\plan.md",
+        "c:\\10 SHADOWS\\plan.md",
+        "c:\\10 SHADOWS\\implementation_plan.md",
+        "c:\\10 SHADOWS\\walkthrough.md",
+        "scratch/temp_test.py",
+    ]:
+        payload = {
+            "toolCall": {
+                "name": "write_to_file",
+                "args": {"TargetFile": path},
+            }
+        }
+        res = verify_plan(payload)
+        assert res["decision"] == "allow", f"Failed for {path}"
+
+
+# Scenario L: Attempt to disguise a production mutation as an exempt path -> DENY
+def test_audit_gate_path_traversal_disguise_denies():
+    disguised_paths = [
+        "scratch/../loop_engine/base.py",
+        "c:\\10 SHADOWS\\scratch\\..\\loop_engine\\base.py",
+        "artifacts/../../svris/core/db.py",
+    ]
+    for path in disguised_paths:
+        assert is_exempt_path(path) is False, f"Path traversal not normalized: {path}"

@@ -1,3 +1,5 @@
 pytest
 pydantic
 jsonschema
+yt-dlp
+youtube-transcript-api

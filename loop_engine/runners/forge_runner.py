@@ -52,7 +52,6 @@ class ForgeDomainRunner(BaseLoop):
                 "intent": raw_input,
                 "context": [],
                 "constraints": ["ast_safe", "no_eval"],
-                "requested_surface": "AUTO",
             }
         else:
             request = raw_input
@@ -68,7 +67,14 @@ class ForgeDomainRunner(BaseLoop):
         deficits = []
 
         if not request.get("code") and request.get("intent"):
-            forge_res = self.forge.run(request)
+            forge_payload = {
+                "intent": request["intent"],
+                "source_data": request.get("source_data", {}),
+                "metadata": request.get("metadata", {}),
+            }
+            if "explicit_semantic_contracts" in request:
+                forge_payload["explicit_semantic_contracts"] = request["explicit_semantic_contracts"]
+            forge_res = self.forge.run(forge_payload)
             resolution_proof = forge_res.get("resolution_proof")
             if forge_res.get("status") == "SUCCESS":
                 code_content = str(forge_res.get("result", {}).get("final_state", {}).get("repaired_code", code_content))

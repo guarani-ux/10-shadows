@@ -226,13 +226,50 @@ class KernelDatabase:
                 );
 
                 CREATE TABLE IF NOT EXISTS promotion_wal (
-                    promotion_id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    wal_id INTEGER PRIMARY KEY AUTOINCREMENT,
                     task_id TEXT NOT NULL,
                     target_branch TEXT NOT NULL,
                     candidate_commit_sha TEXT NOT NULL,
                     state TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                );
+
+                CREATE TABLE IF NOT EXISTS semantic_proofs (
+                    proof_id TEXT PRIMARY KEY,
+                    binding_hash TEXT NOT NULL,
+                    requirement_hash TEXT NOT NULL,
+                    semantic_contract_hash TEXT NOT NULL,
+                    authority_source TEXT NOT NULL,
+                    authority_record_id TEXT NOT NULL,
+                    verifier_version TEXT NOT NULL,
+                    status TEXT NOT NULL,
                     created_at REAL NOT NULL,
-                    completed_at REAL
+                    superseded_by TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS domain_authorities (
+                    authority_id TEXT PRIMARY KEY,
+                    namespace TEXT NOT NULL,
+                    version TEXT NOT NULL,
+                    scope_json TEXT NOT NULL,
+                    mapping_json TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    source_evidence_refs_json TEXT NOT NULL,
+                    registration_authority_ref TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    created_at REAL NOT NULL,
+                    superseded_by TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS authority_evidence (
+                    evidence_id TEXT PRIMARY KEY,
+                    evidence_class TEXT NOT NULL,
+                    claim_scope TEXT NOT NULL,
+                    content_hash TEXT NOT NULL,
+                    provenance_json TEXT NOT NULL,
+                    verification_receipt_ref TEXT,
+                    status TEXT NOT NULL,
+                    created_at REAL NOT NULL
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_runs_parent ON runs(parent_run_id);
@@ -613,3 +650,188 @@ class KernelDatabase:
                 "UPDATE escalations SET status = ? WHERE escalation_id = ?;",
                 (f"RESOLVED_{decision}", escalation_id),
             )
+
+    # ----------------------------------------------------
+    # Semantic Authority Custody
+    # ----------------------------------------------------
+    def record_semantic_proof(
+        self,
+        proof_id: str,
+        binding_hash: str,
+        requirement_hash: str,
+        semantic_contract_hash: str,
+        authority_source: str,
+        authority_record_id: str,
+        verifier_version: str = "1.0.0",
+        status: str = "VERIFIED",
+    ) -> None:
+        """Persists a verified semantic applicability proof."""
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO semantic_proofs (
+                    proof_id, binding_hash, requirement_hash, semantic_contract_hash,
+                    authority_source, authority_record_id, verifier_version, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    proof_id,
+                    binding_hash,
+                    requirement_hash,
+                    semantic_contract_hash,
+                    authority_source,
+                    authority_record_id,
+                    verifier_version,
+                    status,
+                    time.time(),
+                ),
+            )
+
+    def get_semantic_proof(self, proof_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a semantic proof by proof_id."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM semantic_proofs WHERE proof_id = ?", (proof_id,)).fetchone()
+            return dict(row) if row else None
+
+    def get_semantic_proof_by_binding_hash(self, binding_hash: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a verified semantic proof by binding_hash."""
+        with self.get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM semantic_proofs WHERE binding_hash = ? AND status = 'VERIFIED' ORDER BY created_at DESC LIMIT 1",
+                (binding_hash,),
+            ).fetchone()
+            return dict(row) if row else None
+
+    def register_domain_authority(
+        self,
+        authority_id: str,
+        namespace: str,
+        version: str,
+        scope: Dict[str, Any],
+        mapping: Dict[str, Any],
+        content_hash: str,
+        source_evidence_refs: List[str],
+        registration_authority_ref: str,
+        status: str = "VERIFIED",
+    ) -> None:
+        """Registers an authorized domain ontology / semantic mapping."""
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO domain_authorities (
+                    authority_id, namespace, version, scope_json, mapping_json,
+                    content_hash, source_evidence_refs_json, registration_authority_ref,
+                    status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    authority_id,
+                    namespace,
+                    version,
+                    json.dumps(scope, default=str),
+                    json.dumps(mapping, default=str),
+                    content_hash,
+                    json.dumps(source_evidence_refs),
+                    registration_authority_ref,
+                    status,
+                    time.time(),
+                ),
+            )
+
+    def get_domain_authority(self, authority_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a domain authority by authority_id."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM domain_authorities WHERE authority_id = ?", (authority_id,)).fetchone()
+            if row:
+                d = dict(row)
+                d["scope"] = json.loads(d["scope_json"])
+                d["mapping"] = json.loads(d["mapping_json"])
+                d["source_evidence_refs"] = json.loads(d["source_evidence_refs_json"])
+                return d
+            return None
+
+    def find_domain_authorities(self, namespace: Optional[str] = None, status: str = "VERIFIED") -> List[Dict[str, Any]]:
+        """Finds all domain authorities for a namespace."""
+        with self.get_connection() as conn:
+            if namespace:
+                rows = conn.execute(
+                    "SELECT * FROM domain_authorities WHERE namespace = ? AND status = ?",
+                    (namespace, status),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM domain_authorities WHERE status = ?",
+                    (status,),
+                ).fetchall()
+            results = []
+            for r in rows:
+                d = dict(r)
+                d["scope"] = json.loads(d["scope_json"])
+                d["mapping"] = json.loads(d["mapping_json"])
+                d["source_evidence_refs"] = json.loads(d["source_evidence_refs_json"])
+                results.append(d)
+            return results
+
+    def record_authority_evidence(
+        self,
+        evidence_id: str,
+        evidence_class: str,
+        claim_scope: str,
+        content_hash: str,
+        provenance: Dict[str, Any],
+        verification_receipt_ref: Optional[str] = None,
+        status: str = "VERIFIED",
+    ) -> None:
+        """Records a trusted authority evidence record."""
+        with self.get_connection() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO authority_evidence (
+                    evidence_id, evidence_class, claim_scope, content_hash,
+                    provenance_json, verification_receipt_ref, status, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+                """,
+                (
+                    evidence_id,
+                    evidence_class,
+                    claim_scope,
+                    content_hash,
+                    json.dumps(provenance, default=str),
+                    verification_receipt_ref,
+                    status,
+                    time.time(),
+                ),
+            )
+
+    def get_authority_evidence(self, evidence_id: str) -> Optional[Dict[str, Any]]:
+        """Retrieves a trusted authority evidence record."""
+        with self.get_connection() as conn:
+            row = conn.execute("SELECT * FROM authority_evidence WHERE evidence_id = ?", (evidence_id,)).fetchone()
+            if row:
+                d = dict(row)
+                d["provenance"] = json.loads(d["provenance_json"])
+                return d
+            return None
+
+    def get_approval_for_subject(self, subject_type: str, subject_hash: str) -> Optional[Dict[str, Any]]:
+        """Retrieves an approval decision for a specific subject hash (e.g. binding_hash)."""
+        with self.get_connection() as conn:
+            # Check resulting_plan_hash or search decision_payload_json for subject_hash
+            row = conn.execute(
+                "SELECT * FROM approvals WHERE resulting_plan_hash = ? AND decision = 'APPROVE' ORDER BY timestamp DESC LIMIT 1",
+                (subject_hash,),
+            ).fetchone()
+            if not row:
+                # Also check if subject_hash is in decision_payload_json
+                rows = conn.execute(
+                    "SELECT * FROM approvals WHERE decision = 'APPROVE' ORDER BY timestamp DESC"
+                ).fetchall()
+                for r in rows:
+                    try:
+                        payload = json.loads(r["decision_payload_json"])
+                        if payload.get("binding_hash") == subject_hash or payload.get("subject_hash") == subject_hash:
+                            row = r
+                            break
+                    except Exception:
+                        pass
+            return dict(row) if row else None

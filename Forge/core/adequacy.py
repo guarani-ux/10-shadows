@@ -48,7 +48,7 @@ class RawClauseTokenizer:
             sentences = [
                 s.strip()
                 for s in re.split(
-                    r"[.;]+|\s+and\s+(?=(?:validate|decompose|extract|calculate|write|detect|commit|check|verify|run))",
+                    r"(?:\.(?:\s+|$)|;+)|\s+and\s+(?=(?:validate|decompose|extract|calculate|write|detect|commit|check|verify|run))",
                     line,
                     flags=re.IGNORECASE
                 )

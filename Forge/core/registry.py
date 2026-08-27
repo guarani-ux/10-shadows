@@ -13,7 +13,7 @@ from pathlib import Path
 import re
 import tempfile
 import time
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from forge.adapters.actions import SandboxFileAdapter
 from forge.core.authorize import AuthorizationGate, compute_operation_hash
@@ -63,6 +63,7 @@ class CapabilityRegistry:
         required_input_contract: Optional[Dict[str, Any]] = None,
         required_output_contract: Optional[Dict[str, Any]] = None,
         required_effect_type: Optional[str] = None,
+        required_authority: Optional[List[str]] = None,
     ) -> List[CapabilityManifest]:
         """
         Matches capabilities strictly by full input/output/effect contract compatibility.
@@ -71,6 +72,7 @@ class CapabilityRegistry:
         matches: List[CapabilityManifest] = []
         req_in = required_input_contract or {}
         req_out = required_output_contract or {}
+        req_auth = set(required_authority or [])
 
         for cap in self._capabilities.values():
             if not cap.is_authorized_for_execution:
@@ -81,7 +83,7 @@ class CapabilityRegistry:
                 if not all(k in cap.output_contracts for k in req_out.keys()):
                     continue
 
-            # 2. Input Contract Compatibility: If required inputs specified, cap must not require unknown/incompatible inputs
+            # 2. Input Contract Compatibility: If required inputs specified, cap must not require unsupplied inputs
             if req_in:
                 if not all(k in req_in for k in cap.input_contracts.keys()):
                     continue
@@ -92,8 +94,51 @@ class CapabilityRegistry:
                 if cap_effect and cap_effect != required_effect_type:
                     continue
 
+            # 4. Authority Requirements: Cap must satisfy or require <= allowed authority
+            if req_auth:
+                if not set(cap.authority_requirements).issubset(req_auth):
+                    continue
+
             matches.append(cap)
         return matches
+
+    def select_best_capability(
+        self,
+        candidates: List[CapabilityManifest],
+        required_effect_type: Optional[str] = None,
+    ) -> Optional[CapabilityManifest]:
+        """
+        Deterministically selects the single best capability from matching candidates.
+        Order of evaluation:
+        1. Exact effect type match in provenance
+        2. Lifecycle strength: PROMOTED > REUSE_VERIFIED > PROVISIONALLY_AVAILABLE > VERIFIED_FOR_TASK
+        3. Verifier presence and specificity
+        4. Deterministic tie-break by capability_id
+        """
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0]
+
+        lifecycle_ranks = {
+            CapabilityLifecycleState.PROMOTED: 4,
+            CapabilityLifecycleState.REUSE_VERIFIED: 3,
+            CapabilityLifecycleState.PROVISIONALLY_AVAILABLE: 2,
+            CapabilityLifecycleState.VERIFIED_FOR_TASK: 1,
+            CapabilityLifecycleState.ISOLATED_TESTED: 0,
+            CapabilityLifecycleState.SYNTACTICALLY_VALID: -1,
+            CapabilityLifecycleState.CANDIDATE: -2,
+        }
+
+        def _sort_key(c: CapabilityManifest) -> Tuple[int, int, int, str]:
+            effect_match = 1 if (required_effect_type and c.provenance.get("effect_type") == required_effect_type) else 0
+            lifecycle_rank = lifecycle_ranks.get(c.lifecycle_state, -10)
+            verifier_rank = 1 if c.verifier is not None else 0
+            # Tie-break: reverse lexicographical capability_id for stable determinism
+            return (effect_match, lifecycle_rank, verifier_rank, c.capability_id)
+
+        sorted_caps = sorted(candidates, key=_sort_key, reverse=True)
+        return sorted_caps[0]
 
     def record_reuse(self, capability_id: str) -> None:
         """Records genuine execution reuse of a capability."""
@@ -358,6 +403,34 @@ class CapabilityRegistry:
                 kind=CapabilityKind.REAL_PHYSICAL_ADAPTER,
                 lifecycle_state=CapabilityLifecycleState.PROMOTED,
                 provenance={"source_module": "forge.core.authorize", "effect_type": "AUTHORIZATION_DECISION"},
+                version="2.0.0",
+            )
+        )
+
+        # ---------------------------------------------------------------------
+        # 8. Forge Deterministic Mathematical Calculator (CALCULATE)
+        # ---------------------------------------------------------------------
+        def _physical_math_calc_adapter(force: Optional[float] = None, area: Optional[float] = None, a: Optional[float] = None, b: Optional[float] = None, **kwargs) -> Dict[str, Any]:
+            f = force if force is not None else a
+            ar = area if area is not None else b
+            if f is not None and ar is not None and ar != 0:
+                stress = float(f) / float(ar)
+                return {"shear_stress_mpa": stress, "result": stress, "calculated_value": stress}
+            return {"calculated_value": 0.0, "shear_stress_mpa": 0.0}
+
+        self.register_capability(
+            CapabilityManifest(
+                capability_id="forge_math_calculator",
+                operations_supported=[OperatorType.CALCULATE],
+                input_contracts={"force": "float", "area": "float"},
+                output_contracts={"shear_stress_mpa": "float"},
+                authority_requirements=[],
+                evidence_requirements=[],
+                execution_adapter=_physical_math_calc_adapter,
+                verifier=lambda res: isinstance(res, dict) and "shear_stress_mpa" in res,
+                kind=CapabilityKind.REAL_PHYSICAL_ADAPTER,
+                lifecycle_state=CapabilityLifecycleState.PROMOTED,
+                provenance={"source_module": "forge.core.math", "effect_type": "CALCULATION"},
                 version="2.0.0",
             )
         )

@@ -4,10 +4,9 @@ Deterministic Structural Decomposition Verifier & Coverage Evaluator.
 
 Proves that a proposed RequiredOperation DAG mathematically satisfies a CanonicalObjective
 through explicit structural proof links:
-CanonicalRequirement -> SatisfactionObligation -> CapabilityBinding -> RequiredOperation
+CanonicalRequirement -> SatisfactionObligation -> CapabilityBinding -> RequiredOperation -> VerificationContract
 
-All lexical / word-overlap heuristics (req_words, substring matching) and default
-global input sets are permanently excised.
+All lexical / word-overlap heuristics and default global input sets are permanently excised.
 """
 
 import hashlib
@@ -38,7 +37,6 @@ class DecompositionCoverageEvaluator:
     ) -> DecompositionProof:
         obj_hash = hashlib.sha256(objective_id.encode("utf-8")).hexdigest()
         
-        # If known_inputs is not supplied, default to empty set (NO manufactured inputs)
         produced_outputs = set(known_inputs) if known_inputs is not None else set()
 
         mapped_ops = [op.operation_id for op in operations]
@@ -77,26 +75,40 @@ class DecompositionCoverageEvaluator:
                 produced_outputs.add(out)
 
         # 3. Structural Requirement Coverage Proof
-        # Strict structural mapping: requirement_id must be linked in operation postconditions or ID
+        # Strict structural mapping: requirement_id must be linked in operation lineage or ID
         for req in canonical_requirements:
             is_covered = any(
                 req.requirement_id in op.operation_id
+                or op.source_obligation_id == f"obl_{req.requirement_id}"
                 or any(req.requirement_id in post for post in op.postconditions)
                 or any(f"req_{req.requirement_id}" in post for post in op.postconditions)
                 or any(f"obl_{req.requirement_id}" in post for post in op.postconditions)
-                or any(f"obl_{req.requirement_id}" in op.operation_id for _ in [1])
                 for op in operations
             )
             if not is_covered:
                 uncovered_reqs.append(req.description)
 
-        # 4. Strict Verification Gate Completeness
-        gate_conditions = {vc.observable_success_condition.lower() for vc in verification_contracts}
+        # 4. Strict Structural Verification Gate Completeness
         verified_ops_count = 0
         for op in operations:
-            if any(post.lower() in gate_conditions or any(post.lower() in g for g in gate_conditions) for post in op.postconditions):
+            is_op_verified = any(
+                vc.bound_operation_id == op.operation_id
+                or (vc.bound_obligation_id and vc.bound_obligation_id == op.source_obligation_id)
+                or any(post == vc.observable_success_condition for post in op.postconditions)
+                for vc in verification_contracts
+            )
+            if is_op_verified:
                 verified_ops_count += 1
-            elif any(dep_op.operation_id for dep_op in operations if op.operation_id in dep_op.dependencies and any(post.lower() in gate_conditions for post in dep_op.postconditions)):
+            elif any(
+                dep_op.operation_id for dep_op in operations
+                if op.operation_id in dep_op.dependencies
+                and any(
+                    vc.bound_operation_id == dep_op.operation_id
+                    or (vc.bound_obligation_id and vc.bound_obligation_id == dep_op.source_obligation_id)
+                    or any(post == vc.observable_success_condition for post in dep_op.postconditions)
+                    for vc in verification_contracts
+                )
+            ):
                 # Ancestor operation feeding into a verified downstream gate
                 verified_ops_count += 1
 

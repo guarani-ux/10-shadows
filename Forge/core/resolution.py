@@ -1,21 +1,19 @@
 """
 forge/core/resolution.py
-Recursive Grounded Satisfaction Resolver for 10 SHADOWS Forge.
+Grounded Satisfaction Resolver for 10 SHADOWS Forge.
 
-Resolves SatisfactionObligations against physically verified capability contracts
-via recursive frontier expansion. RequiredOperations are strictly the OUTPUT of
-grounded resolution, never the input.
+Resolves grounded SatisfactionObligations against physically verified capability contracts.
+Matches capabilities strictly by declared contract interfaces, effect types, and authority requirements.
+RequiredOperations are strictly the OUTPUT of grounded resolution, never the input.
 
-Zero domain/benchmark keyword heuristics are permitted.
+Zero domain/benchmark keyword heuristics. Zero token overlap matching.
 Missing inputs emit INPUT_DEFICIT. Missing capabilities emit CAPABILITY_DEFICIT.
 """
 
 from typing import Any, Dict, List, Optional, Set, Tuple
-import re
 
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
-    CanonicalRequirement,
     CapabilityBinding,
     CapabilityKind,
     CapabilityManifest,
@@ -27,21 +25,13 @@ from forge.core.substrate import (
     ResolutionDeficit,
     ResolutionProof,
     SatisfactionObligation,
-    VerificationContract,
+    compute_digest,
 )
-
-
-def _tokenize_text(text: str) -> Set[str]:
-    """Splits text and snake_case / camelCase identifiers into alphanumeric lowercase tokens."""
-    if not text:
-        return set()
-    return set(re.findall(r"[a-zA-Z0-9]+", text.lower()))
 
 
 class GroundedSatisfactionResolver:
     """
-    Recursively resolves the Unresolved Satisfaction Frontier against the
-    authoritative CapabilityRegistry using exact input, output, and effect contracts.
+    Resolves grounded SatisfactionObligations against the authoritative CapabilityRegistry.
     """
 
     def __init__(self, registry: CapabilityRegistry):
@@ -55,27 +45,19 @@ class GroundedSatisfactionResolver:
         available_authority: Optional[Set[str]] = None,
     ) -> ResolutionProof:
         """
-        Recursively resolves the satisfaction frontier into verified capability bindings
+        Resolves the satisfaction frontier into verified capability bindings
         and induced RequiredOperations.
         """
-        frontier = list(obligations)
         resolved_bindings: Dict[str, CapabilityBinding] = {}
         induced_operations: List[RequiredOperation] = []
         deficits: List[ResolutionDeficit] = []
         
         evidence_pool = available_evidence or {}
-        authority_pool = available_authority if available_authority is not None else {"SANDBOX_FILE_WRITE", "SUBPROCESS_EXECUTE"}
+        authority_pool = available_authority if available_authority is not None else {"SANDBOX_FILE_WRITE", "SUBPROCESS_EXECUTE", "LOCAL_IO"}
         produced_outputs: Set[str] = set(available_inputs)
 
-        visited_obligations: Set[str] = set()
-
-        while frontier:
-            obligation = frontier.pop(0)
-            if obligation.obligation_id in visited_obligations:
-                continue
-            visited_obligations.add(obligation.obligation_id)
-
-            # 1. Authority Check: Model hypotheses cannot close obligations without grounding
+        for obligation in obligations:
+            # 1. Closure Authority Check
             if not obligation.has_closure_authority:
                 deficits.append(
                     ResolutionDeficit(
@@ -99,56 +81,52 @@ class GroundedSatisfactionResolver:
                 )
                 continue
 
-            # 3. Match against physically verified capabilities in registry
-            req_desc = obligation.provenance.get("requirement_description", "")
-            req_words = _tokenize_text(req_desc)
-            source_intent = obligation.provenance.get("source_intent", "")
-            intent_words = _tokenize_text(source_intent)
+            # 3. Match against physically verified capabilities in registry by strict contract interface
+            candidate_matches = self.registry.find_capabilities_matching_contracts(
+                required_input_contract=obligation.required_input_contract,
+                required_output_contract=obligation.required_output_contract,
+                required_effect_type=obligation.required_effect_type,
+                required_authority=obligation.required_authority,
+            )
 
-            candidate_matches: List[Tuple[int, CapabilityManifest]] = []
-
-            for cap in self.registry._capabilities.values():
-                if not cap.is_authorized_for_execution:
-                    continue
-
-                cap_tokens = _tokenize_text(cap.capability_id)
-                effect_tokens = _tokenize_text(cap.provenance.get("effect_type", ""))
-                in_tokens = _tokenize_text(" ".join(cap.input_contracts.keys()))
-                out_tokens = _tokenize_text(" ".join(cap.output_contracts.keys()))
-                op_tokens = _tokenize_text(" ".join(op.value for op in cap.operations_supported))
-                all_cap_tokens = cap_tokens | effect_tokens | in_tokens | out_tokens | op_tokens
-
-                # Match against clause-specific words
-                clause_overlap = len(all_cap_tokens & req_words)
-                # Match against full intent words
-                intent_overlap = len(all_cap_tokens & intent_words)
-
-                # Check if capability inputs are grounded in environment
-                inputs_grounded = all(k in produced_outputs for k in cap.input_contracts.keys())
-                grounding_bonus = 5 if inputs_grounded else 0
-
-                affinity_score = (clause_overlap * 20) + (intent_overlap * 2) + grounding_bonus
-
-                if (clause_overlap > 0 or (len(obligations) == 1 and intent_overlap > 0)) and affinity_score > 0:
-                    candidate_matches.append((affinity_score, cap))
-
-            # Sort candidate matches by highest affinity
-            candidate_matches.sort(key=lambda x: x[0], reverse=True)
+            # If no strict match by exact input/output/effect, try matching by effect type + output contract
+            if not candidate_matches and obligation.required_effect_type:
+                candidate_matches = [
+                    cap for cap in self.registry._capabilities.values()
+                    if cap.is_authorized_for_execution
+                    and (cap.provenance.get("effect_type") == obligation.required_effect_type or obligation.required_effect_type in [op.value for op in cap.operations_supported])
+                    and (not obligation.required_output_contract or all(k in cap.output_contracts for k in obligation.required_output_contract.keys()))
+                ]
 
             if not candidate_matches:
                 deficits.append(
                     ResolutionDeficit(
                         deficit_type="CAPABILITY_DEFICIT",
                         obligation_id=obligation.obligation_id,
-                        reason=f"No verified physical capability matches required obligation '{obligation.obligation_id}' ({obligation.provenance.get('requirement_description')}).",
+                        reason=f"No verified physical capability matches required contract for obligation '{obligation.obligation_id}' (effect: '{obligation.required_effect_type}').",
                         missing_element=str(obligation.required_effect_type),
                     )
                 )
                 continue
 
-            selected_cap = candidate_matches[0][1]
+            # Select best capability deterministically
+            selected_cap = self.registry.select_best_capability(
+                candidate_matches,
+                required_effect_type=obligation.required_effect_type,
+            )
 
-            # 4. Check Input Grounding
+            if not selected_cap:
+                deficits.append(
+                    ResolutionDeficit(
+                        deficit_type="CAPABILITY_SELECTION_DEFICIT",
+                        obligation_id=obligation.obligation_id,
+                        reason=f"Multiple materially different capabilities match obligation '{obligation.obligation_id}' without clear selection policy.",
+                        missing_element="CAPABILITY_SELECTION_AUTHORITY",
+                    )
+                )
+                continue
+
+            # 4. Check Input Grounding (Is every input of selected capability supplied in env or upstream outputs?)
             missing_inputs = [k for k in selected_cap.input_contracts.keys() if k not in produced_outputs]
 
             if missing_inputs:
@@ -203,15 +181,32 @@ class GroundedSatisfactionResolver:
                 continue
 
             # 7. Bind Capability & Mechanically Induce RequiredOperation
+            cap_manifest_hash = compute_digest({
+                "cap_id": selected_cap.capability_id,
+                "version": selected_cap.version,
+                "in": selected_cap.input_contracts,
+                "out": selected_cap.output_contracts,
+            })
+
             binding = CapabilityBinding(
                 obligation_id=obligation.obligation_id,
                 capability_id=selected_cap.capability_id,
                 manifest=selected_cap,
+                semantic_binding_hash=obligation.semantic_binding_hash,
+                capability_manifest_hash=cap_manifest_hash,
             )
             resolved_bindings[obligation.obligation_id] = binding
 
+            op_id = f"op_{obligation.obligation_id}"
+            obl_hash = compute_digest({
+                "id": obligation.obligation_id,
+                "effect": obligation.required_effect_type,
+                "in": obligation.required_input_contract,
+                "out": obligation.required_output_contract,
+            })
+
             induced_op = RequiredOperation(
-                operation_id=f"op_{obligation.obligation_id}",
+                operation_id=op_id,
                 operator=selected_cap.operations_supported[0],
                 semantic_responsibility=f"Physical execution of {selected_cap.capability_id} for {obligation.obligation_id}",
                 inputs=list(selected_cap.input_contracts.keys()),
@@ -219,6 +214,11 @@ class GroundedSatisfactionResolver:
                 postconditions=[f"Satisfied {obligation.obligation_id}"],
                 evidence_requirements=obligation.required_evidence,
                 bound_capability_id=selected_cap.capability_id,
+                source_obligation_id=obligation.obligation_id,
+                source_obligation_hash=obl_hash,
+                semantic_proof_id=obligation.applicability_proof_id,
+                semantic_binding_hash=obligation.semantic_binding_hash,
+                capability_binding_hash=cap_manifest_hash,
             )
             induced_operations.append(induced_op)
 
@@ -227,6 +227,12 @@ class GroundedSatisfactionResolver:
                 produced_outputs.add(out)
 
         is_resolved = (len(deficits) == 0 and len(resolved_bindings) == len(obligations))
+        resolution_hash = compute_digest({
+            "resolved": is_resolved,
+            "obligations": [o.obligation_id for o in obligations],
+            "ops": [op.operation_id for op in induced_operations],
+            "deficits": [d.deficit_type for d in deficits],
+        })
 
         return ResolutionProof(
             is_resolved=is_resolved,
@@ -236,4 +242,6 @@ class GroundedSatisfactionResolver:
             resolution_deficits=deficits,
             deficit_type=deficits[0].deficit_type if deficits else None,
             cost_score=float(len(deficits) * 10 + len(induced_operations)),
+            resolution_hash=resolution_hash,
+            semantic_proof_ids=tuple([o.applicability_proof_id for o in obligations if o.applicability_proof_id]),
         )

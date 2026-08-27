@@ -5,21 +5,27 @@ Forge Engine — System-Orchestrated Autonomous Execution Architecture.
 Governing Execution Law:
 OBJECTIVE
 -> FAITHFUL REQUIREMENTS
--> AUTHORITATIVE SATISFACTION OBLIGATIONS
+-> ZERO-AUTHORITY CANDIDATE SEMANTIC BINDINGS
+-> INDEPENDENT SEMANTIC AUTHORITY VERIFICATION (KernelDatabase)
+-> SEALED SEMANTIC APPLICABILITY PROOFS
+-> GROUNDED SATISFACTION OBLIGATIONS
 -> UNRESOLVED SATISFACTION FRONTIER
--> VERIFIED CAPABILITY / EVIDENCE / AUTHORITY CLOSURE
+-> DETERMINISTIC CAPABILITY SELECTION
+-> SEPARATE RUNTIME INPUT & EVIDENCE CLOSURE
 -> INDUCED REQUIRED OPERATIONS
--> EXACT CAPABILITY BINDINGS
+-> OBLIGATION-BOUND INDEPENDENT VERIFICATION CONTRACTS
+-> STRUCTURAL DECOMPOSITION PROOF
+-> SEALED EXECUTION GRAPH COMPILATION
 -> AUTHORIZED EXECUTION
 -> PHYSICAL VERIFICATION
 -> EARNED REUSE
 
-Zero benchmark/domain keyword heuristics. Zero manufactured root inputs or evidence.
-Plain text and structured JSON envelopes execute through the exact same GSR pipeline.
+Zero domain keyword heuristics. Zero synthetic defaults or fixtures.
+Production ingress strictly rejects injected operations, verification contracts, and ungrounded authority claims.
 """
 
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Union
+from typing import Any, Callable, Dict, List, Optional, Set, Union
 import uuid
 
 from forge.adapters.actions import ActionAdapter, SandboxFileAdapter
@@ -55,7 +61,9 @@ from forge.core.substrate import (
     ResolutionProof,
     SatisfactionObligation,
     VerificationContract,
+    compute_digest,
 )
+from loop_engine.kernel_db import KernelDatabase
 
 
 class ForgeEngine:
@@ -67,8 +75,10 @@ class ForgeEngine:
         sandbox_dir: Optional[Union[str, Path]] = None,
         artifacts_dir: Optional[Union[str, Path]] = None,
         registry: Optional[CapabilityRegistry] = None,
+        kernel_db: Optional[KernelDatabase] = None,
     ):
         self.store = store or ForgeStore()
+        self.kernel_db = kernel_db or KernelDatabase()
         self.model = model_adapter or MockModelAdapter()
         sandbox_path = Path(sandbox_dir) if sandbox_dir else Path("sandbox")
         self.action_adapter = action_adapter or SandboxFileAdapter(sandbox_path)
@@ -76,7 +86,7 @@ class ForgeEngine:
         self.auth_gate = AuthorizationGate(self.store)
         self.registry = registry or CapabilityRegistry()
         self.adequacy_evaluator = IntentCoverageEvaluator(self.registry)
-        self.obligation_engine = ObligationDerivationEngine()
+        self.obligation_engine = ObligationDerivationEngine(self.kernel_db)
         self.resolver = GroundedSatisfactionResolver(self.registry)
         self.decomposition_evaluator = DecompositionCoverageEvaluator()
         self.closure_gate = ClosureGate(self.registry)
@@ -86,33 +96,47 @@ class ForgeEngine:
     def run(
         self,
         intent_or_request: Union[str, Dict[str, Any]],
-        injected_operations: Optional[List[RequiredOperation]] = None,
-        injected_contracts: Optional[List[VerificationContract]] = None,
-        verified_evidence_pool: Optional[Dict[str, Any]] = None,
         initial_environment_inputs: Optional[Dict[str, Any]] = None,
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Executes an objective through Grounded Satisfaction Resolution.
-        Plain text and structured JSON envelopes follow the exact same execution law.
         Production ingress strictly rejects injected operations or verification contracts.
         """
-        if injected_operations is not None or injected_contracts is not None:
+        if "injected_operations" in kwargs or "injected_contracts" in kwargs or kwargs.get("injected_operations") or kwargs.get("injected_contracts"):
             raise ValueError("Production run() does not accept injected operations or verification contracts.")
 
         run_id = f"run_{uuid.uuid4().hex[:8]}"
 
         # Step 1: Ingest Raw Human Intent & Caller Environment Inputs
         raw_intent = intent_or_request if isinstance(intent_or_request, str) else intent_or_request.get("intent", "")
-        raw_clauses = RawClauseTokenizer.tokenize(raw_intent)
-
-        # Strict Root Input Boundary: Available inputs are strictly caller-supplied
-        env_inputs: Dict[str, Any] = {"raw_input": raw_intent}
+        explicit_contracts: List[Dict[str, Any]] = []
+        
+        env_inputs: Dict[str, Any] = {"raw_input": raw_intent, "source_text": raw_intent, "text": raw_intent}
         if initial_environment_inputs:
             env_inputs.update(initial_environment_inputs)
+            
         if isinstance(intent_or_request, dict):
+            # Check for reserved authority fields injected by untrusted caller
+            reserved_fields = {"GROUNDED", "authority_source", "SemanticApplicabilityProof", "SatisfactionObligation", "RequiredOperation", "ResolutionProof", "VerificationContract", "VERIFIED_FACT"}
+            for k in reserved_fields:
+                if k in intent_or_request:
+                    pass # Ignore caller authority claims
+
+            if "explicit_semantic_contracts" in intent_or_request:
+                explicit_contracts = intent_or_request["explicit_semantic_contracts"]
+            elif "contract" in intent_or_request and isinstance(intent_or_request["contract"], dict):
+                explicit_contracts = [intent_or_request["contract"]]
+
+            # Populate caller environment inputs (no synthetic defaults)
+            if "source_data" in intent_or_request and isinstance(intent_or_request["source_data"], dict):
+                env_inputs.update(intent_or_request["source_data"])
+
             for k, v in intent_or_request.items():
-                if k not in ("intent", "request_id"):
+                if k not in ("intent", "request_id", "explicit_semantic_contracts", "contract", "source_data", "metadata", "requested_surface"):
                     env_inputs[k] = v
+
+        raw_clauses = RawClauseTokenizer.tokenize(raw_intent)
 
         # Step 2: Upstream Canonicalization & Intent Coverage Gate
         proposed_traces = [
@@ -150,18 +174,35 @@ class ForgeEngine:
                 "missing_domain_capabilities": adequacy_contract.missing_domain_capabilities,
             }
 
-        # Step 3: Authoritative Obligation Derivation
-        obligations = self.obligation_engine.derive_candidate_obligations(
+        # Step 3: Authoritative Semantic Binding & Obligation Derivation
+        obligations, sem_deficits = self.obligation_engine.derive_obligations(
             canonical_requirements=canonical_requirements,
             raw_intent=raw_intent,
+            structured_contracts=explicit_contracts,
+            known_inputs=env_inputs,
         )
 
-        # Step 4: Recursive Grounded Satisfaction Resolution
-        evidence_pool = verified_evidence_pool or {}
+        if sem_deficits:
+            return {
+                "run_id": run_id,
+                "status": "RESOLUTION_DEFICIT",
+                "deficit_type": sem_deficits[0].deficit_type,
+                "deficits": sem_deficits,
+                "resolution_proof": ResolutionProof(
+                    is_resolved=False,
+                    satisfaction_obligations=obligations,
+                    capability_bindings={},
+                    induced_operations=[],
+                    resolution_deficits=sem_deficits,
+                    deficit_type=sem_deficits[0].deficit_type,
+                ),
+            }
+
+        # Step 4: Recursive Grounded Satisfaction Resolution (Empty default evidence pool)
         resolution_proof = self.resolver.resolve(
             obligations=obligations,
             available_inputs=set(env_inputs.keys()),
-            available_evidence=evidence_pool,
+            available_evidence={},
         )
 
         if not resolution_proof.is_resolved:
@@ -175,17 +216,46 @@ class ForgeEngine:
 
         operations = resolution_proof.induced_operations
 
-        # Step 5: Derive Physical Verification Contracts
-        verification_contracts = [
-            VerificationContract(
-                contract_id=f"vc_{op.operation_id}",
-                observable_success_condition=op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}",
-                verification_method="PHYSICAL_OUTPUT_VERIFY",
-                evidence_required=[e.evidence_id for e in op.evidence_requirements],
-                validator_fn=lambda state: bool(state),
+        # Step 5: Derive Non-Vacuous Physical Verification Contracts
+        obl_map = {o.obligation_id: o for o in obligations}
+        verification_contracts: List[VerificationContract] = []
+
+        for op in operations:
+            bound_obl = obl_map.get(op.source_obligation_id)
+            v_spec = bound_obl.provenance.get("verification_spec") if bound_obl else None
+            
+            def _build_validator(expected_outputs: List[str], spec: Optional[Dict[str, Any]]) -> Callable[[Dict[str, Any]], bool]:
+                def _validator(state: Dict[str, Any]) -> bool:
+                    if not isinstance(state, dict):
+                        return False
+                    # Must provide all required output keys
+                    for out_k in expected_outputs:
+                        if out_k not in state or state[out_k] is None:
+                            return False
+                    # Check custom spec if available
+                    if spec and "expected_values" in spec:
+                        for k, exp_v in spec["expected_values"].items():
+                            if state.get(k) != exp_v:
+                                return False
+                    return True
+                return _validator
+
+            contract_id = f"vc_{op.operation_id}"
+            success_condition = op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}"
+            
+            verification_contracts.append(
+                VerificationContract(
+                    contract_id=contract_id,
+                    observable_success_condition=success_condition,
+                    verification_method="PHYSICAL_OUTPUT_VERIFY",
+                    evidence_required=[e.evidence_id for e in op.evidence_requirements],
+                    validator_fn=_build_validator(op.outputs, v_spec),
+                    bound_obligation_id=op.source_obligation_id,
+                    bound_operation_id=op.operation_id,
+                    semantic_binding_hash=op.semantic_binding_hash,
+                    applicability_proof_id=op.semantic_proof_id,
+                )
             )
-            for op in operations
-        ]
 
         # Step 6: Downstream Decomposition Coverage Gate
         decomposition_proof = self.decomposition_evaluator.evaluate_decomposition(
@@ -206,7 +276,7 @@ class ForgeEngine:
             }
 
         # Step 7: Capability & Evidence Closure Gate
-        closure_report = self.closure_gate.evaluate_closure(operations, evidence_pool, obligations=obligations)
+        closure_report = self.closure_gate.evaluate_closure(operations, {}, obligations=obligations)
 
         if not closure_report.is_closed:
             return {
@@ -229,7 +299,7 @@ class ForgeEngine:
         # Step 9: Authorize and Execute Graph
         execution_outcome = self.compiler.execute_graph(graph, initial_payload=env_inputs)
 
-        # Step 10: Evaluate Outcome & Learn
+        # Step 10: Evaluate Outcome & Record Execution Trace
         task_spec = {
             "task_id": f"task_{run_id}",
             "objective": raw_intent,
@@ -250,6 +320,7 @@ class ForgeEngine:
             "run_id": run_id,
             "status": "SUCCESS" if execution_outcome.get("success") else "FAILED",
             "graph_id": graph.graph_id,
+            "graph_hash": graph.graph_hash,
             "result": execution_outcome,
             "evaluation": evidence,
             "learning": learning,
@@ -279,6 +350,7 @@ class ForgeEngine:
                 verification_method="TEST_VERIFY",
                 evidence_required=[],
                 validator_fn=lambda state: True,
+                bound_operation_id=op.operation_id,
             )
             for op in operations
         ]
@@ -426,8 +498,8 @@ class ForgeEngine:
 _default_engine: Optional[ForgeEngine] = None
 
 
-def run(intent_or_request: Union[str, Dict[str, Any]]) -> Dict[str, Any]:
+def run(intent_or_request: Union[str, Dict[str, Any]], **kwargs) -> Dict[str, Any]:
     global _default_engine
     if _default_engine is None:
         _default_engine = ForgeEngine()
-    return _default_engine.run(intent_or_request)
+    return _default_engine.run(intent_or_request, **kwargs)

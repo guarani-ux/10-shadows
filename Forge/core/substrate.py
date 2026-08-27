@@ -1,17 +1,36 @@
 """
 forge/core/substrate.py
-Domain-Agnostic Substrate for 10 SHADOWS Forge.
+Domain-Agnostic Canonical Substrate for 10 SHADOWS Forge.
 
 Defines the mathematical primitives, atomic operator ontology, 7-stage capability
 lifecycles, obligation authorities, capability kinds, evidence classifications,
-objective adequacy states, resolution structures, and closure schemas.
+semantic contracts, candidate bindings, applicability proofs, and immutable provenance links.
 """
 
 from dataclasses import dataclass, field
 from enum import Enum
 import hashlib
 import json
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+
+def canonical_json(data: Any) -> str:
+    """Computes deterministic canonical JSON string with sorted keys and compact separators."""
+    def _default(o: Any) -> Any:
+        if isinstance(o, Enum):
+            return o.value
+        if hasattr(o, "__dict__"):
+            return o.__dict__
+        if isinstance(o, (set, tuple)):
+            return list(o)
+        return str(o)
+
+    return json.dumps(data, sort_keys=True, separators=(",", ":"), default=_default)
+
+
+def compute_digest(data: Any) -> str:
+    """Computes deterministic SHA256 hex digest of canonical JSON serialization."""
+    return hashlib.sha256(canonical_json(data).encode("utf-8")).hexdigest()
 
 
 class OperatorType(str, Enum):
@@ -37,6 +56,7 @@ class EvidenceClass(str, Enum):
     DOCUMENTED_METRIC = "DOCUMENTED_METRIC"    # Empirical benchmark or telemetry measurement
     DIRECT_QUOTE = "DIRECT_QUOTE"              # Unaltered source quotation
     EMPIRICAL_TEST = "EMPIRICAL_TEST"          # Machine-signed test execution receipt
+    SOURCE_PROVIDED = "SOURCE_PROVIDED"        # Explicitly supplied in input (NOT externally verified fact)
     UNVERIFIED_MODEL_PRIOR = "UNVERIFIED_MODEL_PRIOR"  # Latent LLM memory (ZERO authority for closure)
 
 
@@ -95,6 +115,85 @@ class RequirementOrigin(str, Enum):
     ASSUMED = "ASSUMED"
 
 
+class SemanticBindingStatus(str, Enum):
+    """Lifecycle status of candidate semantic interpretations."""
+    PROPOSED = "PROPOSED"                                    # Unverified candidate interpretation
+    GROUNDED = "GROUNDED"                                    # Verified by independent authority in KernelDatabase
+    AMBIGUOUS = "AMBIGUOUS"                                  # Multiple conflicting interpretations with no deciding authority
+    UNSUPPORTED = "UNSUPPORTED"                              # No authority grounds this interpretation
+    DOMAIN_AUTHORITY_REQUIRED = "DOMAIN_AUTHORITY_REQUIRED"  # Requires kernel-registered domain authority
+    HUMAN_AUTHORITY_REQUIRED = "HUMAN_AUTHORITY_REQUIRED"    # Requires explicit human decision receipt
+
+
+class SemanticAuthoritySource(str, Enum):
+    """Legal sources of semantic applicability authority."""
+    SOURCE_EXPLICIT_CONTRACT = "SOURCE_EXPLICIT_CONTRACT"    # Explicit machine-readable contract at ingress
+    VERIFIED_DOMAIN_AUTHORITY = "VERIFIED_DOMAIN_AUTHORITY"  # Registered in KernelDatabase with valid evidence
+    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"                    # Hardcoded architectural TCB invariant
+    EXPLICIT_HUMAN_APPROVAL = "EXPLICIT_HUMAN_APPROVAL"      # Approved by human gate bound to exact hash
+    AUTHORITATIVE_EXTERNAL_EVIDENCE = "AUTHORITATIVE_EXTERNAL_EVIDENCE" # Machine-signed evidence establishing R -> S
+    UNVERIFIED_MODEL_PROPOSAL = "UNVERIFIED_MODEL_PROPOSAL"  # Zero closure authority
+
+
+@dataclass(frozen=True)
+class ContractField:
+    """Typed schema definition for semantic input/output fields."""
+    type_name: str
+    required: bool = True
+    unit: Optional[str] = None
+    constraints: Dict[str, Any] = field(default_factory=dict)
+    schema_ref: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SemanticContract:
+    """Canonical representation of a semantic transformation contract."""
+    effect_type: str
+    inputs: Dict[str, ContractField]
+    outputs: Dict[str, ContractField]
+    transformation_rule: Optional[str] = None
+    evidence_requirements: Tuple["EvidenceRequirement", ...] = ()
+    authority_requirements: Tuple[str, ...] = ()
+    verification_spec: Optional[Dict[str, Any]] = None
+    schema_version: str = "1.0"
+
+    @property
+    def contract_hash(self) -> str:
+        return compute_digest({
+            "effect_type": self.effect_type,
+            "inputs": {k: v.__dict__ for k, v in self.inputs.items()},
+            "outputs": {k: v.__dict__ for k, v in self.outputs.items()},
+            "transformation_rule": self.transformation_rule,
+            "evidence": [e.evidence_id for e in self.evidence_requirements],
+            "authority": list(self.authority_requirements),
+            "verification_spec": self.verification_spec,
+            "schema_version": self.schema_version,
+        })
+
+
+@dataclass(frozen=True)
+class CandidateSemanticBinding:
+    """Candidate interpretation of a requirement (ZERO authority by definition)."""
+    binding_hash: str
+    requirement_hash: str
+    source_requirement_id: str
+    semantic_contract: SemanticContract
+    is_blocking: bool
+    candidate_provenance: Dict[str, Any]
+
+
+@dataclass(frozen=True)
+class SemanticApplicabilityProof:
+    """Proof of semantic applicability resolved from KernelDatabase custody."""
+    proof_id: str
+    binding_hash: str
+    requirement_hash: str
+    semantic_contract_hash: str
+    authority_source: SemanticAuthoritySource
+    authority_record_id: str
+    verifier_version: str = "1.0.0"
+
+
 @dataclass
 class RawClause:
     clause_id: str
@@ -119,6 +218,21 @@ class CanonicalRequirement:
     origin: RequirementOrigin
     source_clause_id: Optional[str] = None
     required_domain_capability: Optional[str] = None
+    requirement_hash: str = ""
+    is_blocking: bool = True
+    blocking_authority: str = "SOURCE_DEFAULT"
+
+    def __post_init__(self):
+        if not self.requirement_hash:
+            self.requirement_hash = compute_digest({
+                "id": self.requirement_id,
+                "desc": self.description,
+                "origin": self.origin.value,
+                "clause_id": self.source_clause_id,
+                "domain_cap": self.required_domain_capability,
+                "blocking": self.is_blocking,
+                "blocking_auth": self.blocking_authority,
+            })
 
 
 @dataclass
@@ -137,7 +251,7 @@ class ObjectiveAdequacyContract:
         return self.adequacy_state == ObjectiveAdequacyState.ADEQUATE_FOR_EXECUTION
 
 
-@dataclass
+@dataclass(frozen=True)
 class EvidenceRequirement:
     evidence_id: str
     claim_or_decision_supported: str
@@ -153,6 +267,12 @@ class VerificationContract:
     verification_method: str
     evidence_required: List[str]
     validator_fn: Optional[Callable[[Any], bool]] = None
+    bound_obligation_id: str = ""
+    bound_operation_id: str = ""
+    semantic_binding_hash: str = ""
+    applicability_proof_id: str = ""
+    verification_authority_id: str = ""
+    verification_spec_hash: str = ""
 
 
 @dataclass
@@ -172,6 +292,10 @@ class SatisfactionObligation:
     required_verification: List[VerificationContract] = field(default_factory=list)
     is_blocking: bool = True
     provenance: Dict[str, Any] = field(default_factory=dict)
+    requirement_hash: str = ""
+    semantic_binding_hash: str = ""
+    applicability_proof_id: str = ""
+    applicability_proof_hash: str = ""
 
     @property
     def has_closure_authority(self) -> bool:
@@ -205,7 +329,6 @@ class CapabilityManifest:
 
     @property
     def is_authorized_for_execution(self) -> bool:
-        # Only REAL or VERIFIED external adapters at authorized lifecycle states may execute in production
         return (
             self.kind in (CapabilityKind.REAL_PHYSICAL_ADAPTER, CapabilityKind.VERIFIED_EXTERNAL_ADAPTER)
             and self.lifecycle_state in (
@@ -231,6 +354,11 @@ class RequiredOperation:
     uncertainty: float = 0.0
     failure_modes: List[str] = field(default_factory=list)
     bound_capability_id: Optional[str] = None
+    source_obligation_id: str = ""
+    source_obligation_hash: str = ""
+    semantic_proof_id: str = ""
+    semantic_binding_hash: str = ""
+    capability_binding_hash: str = ""
 
 
 @dataclass
@@ -240,11 +368,13 @@ class CapabilityBinding:
     manifest: CapabilityManifest
     input_mapping: Dict[str, str] = field(default_factory=dict)
     output_mapping: Dict[str, str] = field(default_factory=dict)
+    semantic_binding_hash: str = ""
+    capability_manifest_hash: str = ""
 
 
 @dataclass
 class ResolutionDeficit:
-    deficit_type: str  # CAPABILITY_DEFICIT | EVIDENCE_DEFICIT | AUTHORITY_DEFICIT | VERIFIER_DEFICIT | SEMANTIC_BINDING_DEFICIT | DOMAIN_MODEL_DEFICIT | REPRESENTATION_DEFICIT
+    deficit_type: str  # SEMANTIC_BINDING_DEFICIT | AMBIGUOUS | DOMAIN_AUTHORITY_REQUIRED | HUMAN_AUTHORITY_REQUIRED | REPRESENTATION_DEFICIT | CAPABILITY_DEFICIT | CAPABILITY_SELECTION_DEFICIT | INPUT_DEFICIT | EVIDENCE_DEFICIT | VERIFIER_DEFICIT
     obligation_id: str
     reason: str
     missing_element: str
@@ -260,6 +390,8 @@ class ResolutionProof:
     resolution_deficits: List[ResolutionDeficit]
     deficit_type: Optional[str] = None
     cost_score: float = 0.0
+    resolution_hash: str = ""
+    semantic_proof_ids: Tuple[str, ...] = ()
 
 
 @dataclass
@@ -314,3 +446,4 @@ class ExecutionGraph:
     human_gates: List[str]
     stop_conditions: List[str]
     failure_routes: Dict[str, str]
+    graph_hash: str = ""

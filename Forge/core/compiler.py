@@ -5,7 +5,8 @@ Typed Execution Graph Compiler and Deterministic DAG Runner.
 Enforces:
 1. Two-Key Gatekeeper Law (Adequacy == ADEQUATE_FOR_EXECUTION && Decomposition == SATISFIED).
 2. Sealed Capability Bindings (Consumes exact bindings sealed in ResolutionProof; NO reselection or operator fallback).
-3. Deterministic execution with physical verifier gates.
+3. Lineage Preservation: Every node carries proof IDs and hashes.
+4. Deterministic execution with physical verifier gates and independent obligation verification.
 """
 
 import hashlib
@@ -24,6 +25,7 @@ from forge.core.substrate import (
     RequiredOperation,
     ResolutionProof,
     VerificationContract,
+    compute_digest,
 )
 
 
@@ -113,6 +115,13 @@ class ExecutionGraphCompiler:
             ev_deps[op.operation_id] = [e.evidence_id for e in op.evidence_requirements]
 
         graph_id = f"graph_{uuid.uuid4().hex[:8]}"
+        graph_hash = compute_digest({
+            "graph_id": graph_id,
+            "obj_hash": decomposition_proof.objective_hash,
+            "ops": [op.operation_id for op in operations],
+            "bindings": bindings,
+            "gates": [vc.contract_id for vc in verification_contracts],
+        })
 
         return ExecutionGraph(
             graph_id=graph_id,
@@ -124,6 +133,7 @@ class ExecutionGraphCompiler:
             human_gates=human_gates or [],
             stop_conditions=["All operations executed and verified"],
             failure_routes={op.operation_id: "ESCALATE" for op in operations},
+            graph_hash=graph_hash,
         )
 
     def compile_execution_graph(
@@ -230,9 +240,11 @@ class ExecutionGraphCompiler:
                 "operator": op.operator.value,
                 "capability_id": cap_id,
                 "output": op_output,
+                "source_obligation_id": op.source_obligation_id,
+                "semantic_proof_id": op.semantic_proof_id,
             })
 
-        # Run verification gates
+        # Run independent obligation-bound verification gates
         for gate in graph.verification_gates:
             if gate.validator_fn:
                 gate_passed = gate.validator_fn(state_store)
@@ -249,6 +261,7 @@ class ExecutionGraphCompiler:
             "success": True,
             "status": "SUCCESS",
             "graph_id": graph.graph_id,
+            "graph_hash": graph.graph_hash,
             "final_state": state_store,
             "trace": execution_trace,
         }

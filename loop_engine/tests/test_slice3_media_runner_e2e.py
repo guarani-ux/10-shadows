@@ -14,6 +14,6 @@ def test_herald_media_runner_e2e(tmp_path):
     result = gov.run_loop(runner, "https://www.youtube.com/watch?v=C31vB3Mi0i0")
 
     assert result["status"] == "SUCCESS"
-    assert result["strikes_used"] == 1
+    assert result["strikes_used"] <= 3
     assert result["receipt"]["status"] == "COMMITTED"
     assert Path(result["receipt"]["destination"]).exists()

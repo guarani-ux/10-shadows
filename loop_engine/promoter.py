@@ -32,22 +32,22 @@ class PromotionCoordinator:
         self.kernel_db = kernel_db
         self.verifier_gate = verifier_gate
 
-    def promote(self, task_id: str, receipt_or_id: Any) -> bool:
+    def promote(self, task_id: str, receipt_id: Any) -> bool:
         """
         Promotes a candidate strictly from a persisted receipt in KernelDatabase.
         Accepts receipt_id (int) or VerificationReceipt / VerificationResult.
         """
-        if isinstance(receipt_or_id, int):
-            receipt_id = receipt_or_id
-        elif hasattr(receipt_or_id, "receipt_id") and isinstance(receipt_or_id.receipt_id, int):
-            receipt_id = receipt_or_id.receipt_id
-        elif isinstance(receipt_or_id, tuple) and len(receipt_or_id) > 0 and isinstance(receipt_or_id[0], int):
-            receipt_id = receipt_or_id[0]
+        if isinstance(receipt_id, int):
+            rid = receipt_id
+        elif hasattr(receipt_id, "receipt_id") and isinstance(receipt_id.receipt_id, int):
+            rid = receipt_id.receipt_id
+        elif isinstance(receipt_id, tuple) and len(receipt_id) > 0 and isinstance(receipt_id[0], int):
+            rid = receipt_id[0]
         else:
-            raise ReceiptMismatchError(f"Invalid receipt identifier: {receipt_or_id}")
+            raise ReceiptMismatchError(f"Invalid receipt identifier: {receipt_id}")
 
         # 1. Fetch and validate receipt from KernelDatabase
-        receipt = self.kernel_db.get_verified_receipt(receipt_id)
+        receipt = self.kernel_db.get_verified_receipt(rid)
         if not receipt:
             raise ReceiptNotFoundError(f"No receipt found with receipt_id={receipt_id}")
 

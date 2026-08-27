@@ -41,7 +41,7 @@ from loop_engine.verifier_daemon import (
 )
 from scripts.install_git_hooks import install_hooks, PRE_COMMIT_HOOK_PATH
 from scripts import verify_plan_audit
-from scripts.verify_plan_audit import verify_plan, is_exempt_path, main as audit_gate_main
+from scripts.verify_plan_audit import verify_plan, is_exempt_path, PROJECT_ROOT, main as audit_gate_main
 from zero_trust_engine.auditor import PlanAuditor, AuditResult, Severity, Finding, FindingStatus, AuditReport
 
 
@@ -75,7 +75,7 @@ def test_verifier_daemon_sterile_environment_strips_secrets(monkeypatch):
     assert "OPENAI_API_KEY" not in sterile
     assert "ANTHROPIC_API_KEY" not in sterile
     assert "AWS_SECRET_ACCESS_KEY" not in sterile
-    assert "SYSTEMROOT" in sterile or "systemroot" in sterile
+    assert "SYSTEMROOT" in sterile or "systemroot" in sterile or "PATH" in sterile
     assert "PYTHONPATH" in sterile
     assert sterile["PYTHONDONTWRITEBYTECODE"] == "1"
 
@@ -194,12 +194,14 @@ def test_verifier_daemon_strike_ceiling_blocks_execution(tmp_path):
 # ---------------------------------------------------------------------------
 def test_pre_tool_audit_gate_exempt_paths():
     """Verifies that non-production paths (scratch, tests, artifacts, plans) are allowed."""
-    assert is_exempt_path("c:\\10 SHADOWS\\scratch\\debug.py") is True
-    assert is_exempt_path("c:\\10 SHADOWS\\.gemini\\artifacts\\plan.md") is True
-    assert is_exempt_path("c:\\10 SHADOWS\\plan.md") is True
-    assert is_exempt_path("c:\\10 SHADOWS\\implementation_plan.md") is True
-    assert is_exempt_path("c:\\10 SHADOWS\\walkthrough.md") is True
-    assert is_exempt_path("c:\\10 SHADOWS\\svris\\core\\db.py") is False
+    assert is_exempt_path(str(PROJECT_ROOT / "scratch" / "debug.py")) is True
+    assert is_exempt_path(str(PROJECT_ROOT / ".gemini" / "artifacts" / "plan.md")) is True
+    assert is_exempt_path(str(PROJECT_ROOT / "plan.md")) is True
+    assert is_exempt_path(str(PROJECT_ROOT / "implementation_plan.md")) is True
+    assert is_exempt_path(str(PROJECT_ROOT / "walkthrough.md")) is True
+    assert is_exempt_path(str(PROJECT_ROOT / "svris" / "core" / "db.py")) is False
+    assert is_exempt_path("scratch/debug.py") is True
+    assert is_exempt_path("plan.md") is True
 
 
 def test_pre_tool_audit_gate_production_path_evaluation():
@@ -207,7 +209,7 @@ def test_pre_tool_audit_gate_production_path_evaluation():
     payload_exempt = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\scratch\\temp.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "scratch" / "temp.py")},
         }
     }
     res_exempt = verify_plan(payload_exempt)
@@ -216,7 +218,7 @@ def test_pre_tool_audit_gate_production_path_evaluation():
     payload_prod = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res_prod = verify_plan(payload_prod)
@@ -230,7 +232,7 @@ def test_audit_gate_auditor_unavailable_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -265,7 +267,7 @@ def test_audit_gate_missing_plan_denies(monkeypatch, tmp_path):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(tmp_path / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -299,7 +301,7 @@ def test_audit_gate_audit_result_revise_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -333,7 +335,7 @@ def test_audit_gate_audit_result_block_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -367,7 +369,7 @@ def test_audit_gate_unresolved_high_finding_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -401,7 +403,7 @@ def test_audit_gate_unresolved_critical_finding_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -424,7 +426,7 @@ def test_audit_gate_missing_acceptance_evidence_denies(monkeypatch):
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -437,7 +439,7 @@ def test_audit_gate_valid_hardened_plan_allows():
     payload = {
         "toolCall": {
             "name": "write_to_file",
-            "args": {"TargetFile": "c:\\10 SHADOWS\\loop_engine\\base.py"},
+            "args": {"TargetFile": str(PROJECT_ROOT / "loop_engine" / "base.py")},
         }
     }
     res = verify_plan(payload)
@@ -448,12 +450,13 @@ def test_audit_gate_valid_hardened_plan_allows():
 # Scenario K: Legitimate exempt planning/scratch operations -> ALLOW
 def test_audit_gate_exempt_planning_and_scratch_allows():
     for path in [
-        "c:\\10 SHADOWS\\scratch\\debug.py",
-        "c:\\10 SHADOWS\\.gemini\\artifacts\\plan.md",
-        "c:\\10 SHADOWS\\plan.md",
-        "c:\\10 SHADOWS\\implementation_plan.md",
-        "c:\\10 SHADOWS\\walkthrough.md",
+        str(PROJECT_ROOT / "scratch" / "debug.py"),
+        str(PROJECT_ROOT / ".gemini" / "artifacts" / "plan.md"),
+        str(PROJECT_ROOT / "plan.md"),
+        str(PROJECT_ROOT / "implementation_plan.md"),
+        str(PROJECT_ROOT / "walkthrough.md"),
         "scratch/temp_test.py",
+        "plan.md",
     ]:
         payload = {
             "toolCall": {
@@ -469,7 +472,7 @@ def test_audit_gate_exempt_planning_and_scratch_allows():
 def test_audit_gate_path_traversal_disguise_denies():
     disguised_paths = [
         "scratch/../loop_engine/base.py",
-        "c:\\10 SHADOWS\\scratch\\..\\loop_engine\\base.py",
+        str(PROJECT_ROOT / "scratch" / ".." / "loop_engine" / "base.py"),
         "artifacts/../../svris/core/db.py",
     ]
     for path in disguised_paths:

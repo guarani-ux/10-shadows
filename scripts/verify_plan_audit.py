@@ -39,7 +39,8 @@ def is_exempt_path(target_path_str: str) -> bool:
         return False
 
     try:
-        raw_path = Path(target_path_str)
+        normalized_str = target_path_str.replace("\\", "/")
+        raw_path = Path(normalized_str)
         if not raw_path.is_absolute():
             resolved_path = (PROJECT_ROOT / raw_path).resolve()
         else:

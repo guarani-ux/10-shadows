@@ -10,8 +10,11 @@ htmlcov/
 
 # Staging & Ephemeral Worktrees
 scratch/
+sandbox/
 .tmp/
 *.bak
+*.sqlite
+*.db
 
 # Virtual Environments
 venv/

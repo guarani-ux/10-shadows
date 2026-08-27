@@ -30,4 +30,13 @@ jobs:
         run: pip install -r requirements-dev.txt
 
       - name: Run test suite
-        run: python -m pytest -v --tb=short --junitxml=test-results.xml
+        run: |
+          python -m pytest -q --tb=short 2>&1 | tee test_out.txt
+
+      - name: Publish Summary
+        if: always()
+        run: |
+          echo "## Pytest Output Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -n 120 test_out.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

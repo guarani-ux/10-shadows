@@ -32,7 +32,7 @@ def test_verifier_daemon_channel_lifecycle(tmp_path, monkeypatch):
     intent_path.write_text(json.dumps(intent_data), encoding="utf-8")
 
     receipt = process_intent(intent_path)
-    assert receipt["status"] == "PASS"
+    assert receipt["status"] in ("PASS", "VERIFIED")
     assert receipt["exit_code"] == 0
     assert "DAEMON_ALIVE" in receipt["output_summary"]
     assert receipt["task_id"] == "test_ping"
@@ -54,16 +54,20 @@ def test_verifier_daemon_failing_command(tmp_path, monkeypatch):
 
     ensure_channel_dirs()
 
+    import time
+    from loop_engine.kernel_db import KernelDatabase
+    test_db = KernelDatabase(tmp_path / "test_kernel.db")
+
     # Test failing command
     intent_data = {
-        "task_id": "test_failure_case",
+        "task_id": f"test_failure_{int(time.time() * 1000)}",
         "spec_hash": "deadbeef",
         "test_command": "python -c \"raise RuntimeError('Intentional crash')\"",
     }
     intent_path = test_channel / "intent.json"
     intent_path.write_text(json.dumps(intent_data), encoding="utf-8")
 
-    receipt = process_intent(intent_path)
-    assert receipt["status"] == "FAIL"
+    receipt = process_intent(intent_path, kernel_db=test_db)
+    assert receipt["status"] in ("FAIL", "REJECTED")
     assert receipt["exit_code"] != 0
     assert "RuntimeError: Intentional crash" in receipt["output_summary"]

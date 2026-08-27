@@ -139,16 +139,14 @@ def test_negative_trap_prompt_injection_in_source_payload(test_db_path):
         ]
     )
 
-    candidates = extract_candidate_claims(
-        raw_text=adversarial_payload,
-        source_id="src_2022_report",
-        topic_id="top_semis",
-        model_adapter=mock_model,
-    )
-
-    # Invariant: Provenance gate halts the injected candidate
+    # Invariant: Provenance gate halts the injected candidate during extraction
     with pytest.raises(ProvenanceError):
-        verify_and_promote_claim(test_db_path, candidates[0])
+        extract_candidate_claims(
+            raw_text=adversarial_payload,
+            source_id="src_2022_report",
+            topic_id="top_semis",
+            model_adapter=mock_model,
+        )
 
 
 def test_positive_incremental_topic_delta(test_db_path):
@@ -161,6 +159,7 @@ def test_positive_incremental_topic_delta(test_db_path):
         topic_id="top_semis",
         source_id="src_2025_report",
         relationship_state="SUPPORTS",
+        quote_text="Active node 2nm entering risk production.",
         confidence=0.95,
         rationale="2025 milestone",
     )
@@ -170,6 +169,7 @@ def test_positive_incremental_topic_delta(test_db_path):
         topic_id="top_semis",
         source_id="src_2022_report",
         relationship_state="SUPPORTS",
+        quote_text="Legacy equipment utilization is 70%.",
         confidence=0.9,
         rationale="Old utilization",
         review_after=past_date,

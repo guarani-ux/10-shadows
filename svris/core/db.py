@@ -26,10 +26,10 @@ def get_connection(db_path: str, readonly: bool = False) -> sqlite3.Connection:
     return conn
 
 
-def init_db(db_path: str) -> None:
+def init_db(db_path: str, schema_path: Optional[str] = None) -> None:
     """Initializes the database using canonical DDL schema."""
-    schema_path = os.path.join(os.path.dirname(__file__), "schema.sql")
-    with open(schema_path, "r", encoding="utf-8") as f:
+    target_schema_path = schema_path or os.path.join(os.path.dirname(__file__), "schema.sql")
+    with open(target_schema_path, "r", encoding="utf-8") as f:
         schema_sql = f.read()
 
     conn = sqlite3.connect(db_path)
@@ -37,6 +37,10 @@ def init_db(db_path: str) -> None:
     conn.executescript(schema_sql)
     conn.commit()
     conn.close()
+
+
+# Backward compatibility alias
+initialize_database = init_db
 
 
 def update_claim_cas(

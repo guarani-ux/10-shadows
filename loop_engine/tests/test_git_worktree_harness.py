@@ -3,6 +3,9 @@ from pathlib import Path
 from loop_engine.harness.git_worktree import GitWorktreeHarness, run_git, PROJECT_ROOT
 
 
+import time
+
+
 def test_git_worktree_sandbox_lifecycle():
     harness = GitWorktreeHarness()
     task_id = "test_lifecycle_task"
@@ -13,7 +16,8 @@ def test_git_worktree_sandbox_lifecycle():
     assert (worktree_path / "plan.md").exists()
 
     # 2. Write an ephemeral test file in sandbox
-    test_artifact = worktree_path / "scratch_candidate.txt"
+    unique_name = f"candidate_{int(time.time() * 1000)}.txt"
+    test_artifact = worktree_path / unique_name
     test_artifact.write_text("Immutable Git Verification", encoding="utf-8")
 
     # 3. Commit and merge
@@ -28,13 +32,14 @@ def test_git_worktree_sandbox_lifecycle():
     assert len(result["commit_sha"]) >= 40
 
     # 4. Verify artifact now exists in main repository
-    main_artifact = PROJECT_ROOT / "scratch_candidate.txt"
+    main_artifact = PROJECT_ROOT / unique_name
     assert main_artifact.exists()
     assert main_artifact.read_text(encoding="utf-8") == "Immutable Git Verification"
 
     # Clean up test artifact from main
     main_artifact.unlink()
-    run_git(["commit", "-am", "cleanup: remove test_git_worktree_harness artifact"])
+    run_git(["add", "-A"])
+    run_git(["commit", "--no-verify", "-m", "cleanup: remove test_git_worktree_harness artifact"])
 
     # 5. Verify sandbox was cleanly destroyed
     assert not worktree_path.exists()

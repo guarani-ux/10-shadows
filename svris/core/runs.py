@@ -132,13 +132,14 @@ def ingest_and_bind_source(
     conn.close()
 
     # 3. Create Physical Content Snapshot & Chunks
-    snapshot_id = create_source_snapshot(
+    snapshot_res = create_source_snapshot(
         db_path=db_path,
         source_id=source_id,
         raw_text=raw_text,
         media_type="text/plain",
         canonical_url=canonical_url,
     )
+    snapshot_id = snapshot_res["snapshot_id"] if isinstance(snapshot_res, dict) else snapshot_res
     chunk_ids = create_source_chunks(db_path=db_path, snapshot_id=snapshot_id)
 
     # 4. Bind Source & Snapshot to Research Run

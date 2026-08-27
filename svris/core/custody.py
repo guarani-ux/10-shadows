@@ -19,7 +19,7 @@ def create_source_snapshot(
 
     content_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
     now_iso = datetime.now(timezone.utc).isoformat()
-    snapshot_id = f"snp_{content_hash[:16]}"
+    snapshot_id = f"snap_{content_hash[:16]}"
 
     cur.execute(
         """INSERT INTO source_snapshots (
@@ -89,3 +89,35 @@ def create_source_chunk(
         "ordinal": ordinal,
         "content_sha256": content_hash,
     }
+
+
+def create_source_chunks(
+    db_path: str,
+    snapshot_id: str,
+    chunk_size: int = 500,
+) -> List[str]:
+    """Chunks a snapshot's raw_text into deterministic chunks and stores them."""
+    conn = get_connection(db_path)
+    cur = conn.cursor()
+    cur.execute("SELECT raw_text FROM source_snapshots WHERE snapshot_id = ?", (snapshot_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise ValueError(f"Snapshot '{snapshot_id}' not found.")
+    raw_text = row["raw_text"]
+    conn.close()
+
+    chunk_ids = []
+    text_len = len(raw_text)
+    if text_len == 0:
+        chunk_res = create_source_chunk(db_path, snapshot_id, 0, 0, 0, "")
+        return [chunk_res["chunk_id"]]
+
+    for i in range(0, text_len, chunk_size):
+        end = min(i + chunk_size, text_len)
+        ordinal = i // chunk_size
+        chunk_content = raw_text[i:end]
+        res = create_source_chunk(db_path, snapshot_id, ordinal, i, end, chunk_content)
+        chunk_ids.append(res["chunk_id"])
+
+    return chunk_ids

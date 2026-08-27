@@ -1,0 +1,10 @@
+{
+  "task_id": "test_failure_case",
+  "plan_hash": "deadbeef",
+  "git_diff_hash": "",
+  "test_digest": "STRIKE_CEILING_BLOCKED",
+  "status": "BLOCKED",
+  "strikes_used": 3,
+  "error": "Task 'test_failure_case' has reached the 3-strike failure ceiling and is forcefully halted.",
+  "timestamp_utc": "2026-08-27T14:38:57.283025+00:00"
+}

@@ -1,0 +1,12 @@
+{
+  "task_id": "test_failure_1787841804450",
+  "plan_hash": "deadbeef",
+  "git_diff_hash": "",
+  "test_digest": "48ea5c6bbfba5006bd8c5396c48a17efa1e551934e0e74b879ef64ee10c7fb36",
+  "status": "REJECTED",
+  "exit_code": 1,
+  "duration_seconds": 0.077,
+  "promotion": null,
+  "output_summary": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n    raise RuntimeError('Intentional crash')\nRuntimeError: Intentional crash",
+  "timestamp_utc": "2026-08-27T14:43:24.529889+00:00"
+}

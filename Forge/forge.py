@@ -2,24 +2,25 @@
 forge/forge.py
 Forge Engine — System-Orchestrated Autonomous Execution Architecture.
 
-Architecture:
+Governing Execution Law:
 OBJECTIVE
-→ canonicalize
-→ upstream adequacy & intent coverage gate
-→ derive satisfaction obligations ("what must become observably true?")
-→ grounded satisfaction resolver (frontier closure over verified physical capabilities)
-→ mechanically induced required operations & exact capability bindings
-→ decomposition coverage gate
-→ capability & evidence closure gate
-→ compile execution graph
-→ authorize & execute
-→ verify against physical contracts
-→ persist evidence & learn from verified outcomes
+-> FAITHFUL REQUIREMENTS
+-> AUTHORITATIVE SATISFACTION OBLIGATIONS
+-> UNRESOLVED SATISFACTION FRONTIER
+-> VERIFIED CAPABILITY / EVIDENCE / AUTHORITY CLOSURE
+-> INDUCED REQUIRED OPERATIONS
+-> EXACT CAPABILITY BINDINGS
+-> AUTHORIZED EXECUTION
+-> PHYSICAL VERIFICATION
+-> EARNED REUSE
+
+Zero benchmark/domain keyword heuristics. Zero manufactured root inputs or evidence.
+Plain text and structured JSON envelopes execute through the exact same GSR pipeline.
 """
 
-import uuid
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Union
+import uuid
 
 from forge.adapters.actions import ActionAdapter, SandboxFileAdapter
 from forge.adapters.model import ModelAdapter, MockModelAdapter
@@ -34,6 +35,7 @@ from forge.core.evaluate import evaluate
 from forge.core.execute import execute_action
 from forge.core.learn import learn_if_earned
 from forge.core.normalize import normalize
+from forge.core.obligations import ObligationDerivationEngine
 from forge.core.provisioner import CapabilityProvisioner
 from forge.core.registry import CapabilityRegistry
 from forge.core.resolution import GroundedSatisfactionResolver
@@ -74,6 +76,7 @@ class ForgeEngine:
         self.auth_gate = AuthorizationGate(self.store)
         self.registry = registry or CapabilityRegistry()
         self.adequacy_evaluator = IntentCoverageEvaluator(self.registry)
+        self.obligation_engine = ObligationDerivationEngine()
         self.resolver = GroundedSatisfactionResolver(self.registry)
         self.decomposition_evaluator = DecompositionCoverageEvaluator()
         self.closure_gate = ClosureGate(self.registry)
@@ -90,34 +93,20 @@ class ForgeEngine:
     ) -> Dict[str, Any]:
         """
         Executes an objective through Grounded Satisfaction Resolution.
-        Plain text and JSON intent envelopes follow the exact same execution law.
+        Plain text and structured JSON envelopes follow the exact same execution law.
+        Production ingress strictly rejects injected operations or verification contracts.
         """
+        if injected_operations is not None or injected_contracts is not None:
+            raise ValueError("Production run() does not accept injected operations or verification contracts.")
+
         run_id = f"run_{uuid.uuid4().hex[:8]}"
 
-        # Legacy compatibility path strictly for existing Slice 1-4 unit test harnesses
-        if isinstance(intent_or_request, dict) and "request_id" in intent_or_request and "requested_surface" in intent_or_request and not injected_operations:
-            return self._run_legacy_slice_pipeline(intent_or_request)
-
-        # Step 1: Ingest Raw Human Intent & Environment Inputs
+        # Step 1: Ingest Raw Human Intent & Caller Environment Inputs
         raw_intent = intent_or_request if isinstance(intent_or_request, str) else intent_or_request.get("intent", "")
         raw_clauses = RawClauseTokenizer.tokenize(raw_intent)
 
-        env_inputs: Dict[str, Any] = {
-            "raw_input": raw_intent,
-            "source_text": raw_intent,
-            "text": raw_intent,
-            "tasks": [],
-            "source_code": raw_intent,
-            "code": raw_intent,
-            "test_file": "tests/test_forge_system_orchestration.py",
-            "target": "output.txt",
-            "payload": {"content": raw_intent},
-            "force": 1000.0,
-            "area": 2.5,
-            "dose": 100.0,
-            "clearance_rate": 10.0,
-            "claims": [{"claim": c.text, "confidence": "VERIFIED_FACT"} for c in raw_clauses],
-        }
+        # Strict Root Input Boundary: Available inputs are strictly caller-supplied
+        env_inputs: Dict[str, Any] = {"raw_input": raw_intent}
         if initial_environment_inputs:
             env_inputs.update(initial_environment_inputs)
         if isinstance(intent_or_request, dict):
@@ -161,46 +150,44 @@ class ForgeEngine:
                 "missing_domain_capabilities": adequacy_contract.missing_domain_capabilities,
             }
 
-        # Step 3: Grounded Satisfaction Resolution
-        if injected_operations:
-            operations = injected_operations
-            resolution_proof = None
-        else:
-            obligations = self.resolver.derive_obligations_from_requirements(
-                canonical_requirements=canonical_requirements,
-                raw_intent=raw_intent,
-            )
-            evidence_pool = verified_evidence_pool or {"root_evidence": {"evidence_class": EvidenceClass.VERIFIED_FACT.value}}
-            resolution_proof = self.resolver.resolve(
-                obligations=obligations,
-                available_inputs=set(env_inputs.keys()),
-                available_evidence=evidence_pool,
-            )
+        # Step 3: Authoritative Obligation Derivation
+        obligations = self.obligation_engine.derive_candidate_obligations(
+            canonical_requirements=canonical_requirements,
+            raw_intent=raw_intent,
+        )
 
-            if not resolution_proof.is_resolved:
-                return {
-                    "run_id": run_id,
-                    "status": "RESOLUTION_DEFICIT",
-                    "deficit_type": resolution_proof.deficit_type,
-                    "deficits": [d.__dict__ for d in resolution_proof.resolution_deficits],
-                    "resolution_proof": resolution_proof,
-                }
+        # Step 4: Recursive Grounded Satisfaction Resolution
+        evidence_pool = verified_evidence_pool or {}
+        resolution_proof = self.resolver.resolve(
+            obligations=obligations,
+            available_inputs=set(env_inputs.keys()),
+            available_evidence=evidence_pool,
+        )
 
-            operations = resolution_proof.induced_operations
+        if not resolution_proof.is_resolved:
+            return {
+                "run_id": run_id,
+                "status": "RESOLUTION_DEFICIT",
+                "deficit_type": resolution_proof.deficit_type,
+                "deficits": resolution_proof.resolution_deficits,
+                "resolution_proof": resolution_proof,
+            }
 
-        # Step 4: Verification Contracts
-        verification_contracts = injected_contracts or [
+        operations = resolution_proof.induced_operations
+
+        # Step 5: Derive Physical Verification Contracts
+        verification_contracts = [
             VerificationContract(
                 contract_id=f"vc_{op.operation_id}",
                 observable_success_condition=op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}",
                 verification_method="PHYSICAL_OUTPUT_VERIFY",
-                evidence_required=[],
+                evidence_required=[e.evidence_id for e in op.evidence_requirements],
                 validator_fn=lambda state: bool(state),
             )
             for op in operations
         ]
 
-        # Step 5: Downstream Decomposition Coverage Gate
+        # Step 6: Downstream Decomposition Coverage Gate
         decomposition_proof = self.decomposition_evaluator.evaluate_decomposition(
             objective_id=adequacy_contract.objective_id,
             canonical_requirements=canonical_requirements,
@@ -218,9 +205,8 @@ class ForgeEngine:
                 "operation_deficits": decomposition_proof.operation_deficits,
             }
 
-        # Step 6: Capability & Evidence Closure Gate
-        evidence_pool = verified_evidence_pool or {"root_evidence": {"evidence_class": EvidenceClass.VERIFIED_FACT.value}}
-        closure_report = self.closure_gate.evaluate_closure(operations, evidence_pool)
+        # Step 7: Capability & Evidence Closure Gate
+        closure_report = self.closure_gate.evaluate_closure(operations, evidence_pool, obligations=obligations)
 
         if not closure_report.is_closed:
             return {
@@ -230,7 +216,7 @@ class ForgeEngine:
                 "evidence_deficits": [d.__dict__ for d in closure_report.evidence_deficits],
             }
 
-        # Step 7: Compile Execution Graph
+        # Step 8: Compile Sealed Execution Graph
         graph = self.compiler.compile(
             adequacy_contract=adequacy_contract,
             decomposition_proof=decomposition_proof,
@@ -240,10 +226,10 @@ class ForgeEngine:
             resolution_proof=resolution_proof,
         )
 
-        # Step 8: Authorize and Execute Graph
+        # Step 9: Authorize and Execute Graph
         execution_outcome = self.compiler.execute_graph(graph, initial_payload=env_inputs)
 
-        # Step 9: Evaluate Outcome & Learn
+        # Step 10: Evaluate Outcome & Learn
         task_spec = {
             "task_id": f"task_{run_id}",
             "objective": raw_intent,
@@ -270,8 +256,61 @@ class ForgeEngine:
             "resolution_proof": resolution_proof,
         }
 
+    def _run_with_injected_plan_for_unit_tests(
+        self,
+        intent: str,
+        operations: List[RequiredOperation],
+        verification_contracts: Optional[List[VerificationContract]] = None,
+        verified_evidence_pool: Optional[Dict[str, Any]] = None,
+        initial_environment_inputs: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Internal test-only entry point strictly for unit testing individual gates.
+        """
+        run_id = f"test_run_{uuid.uuid4().hex[:8]}"
+        env_inputs: Dict[str, Any] = {"raw_input": intent}
+        if initial_environment_inputs:
+            env_inputs.update(initial_environment_inputs)
+
+        v_contracts = verification_contracts or [
+            VerificationContract(
+                contract_id=f"vc_{op.operation_id}",
+                observable_success_condition=op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}",
+                verification_method="TEST_VERIFY",
+                evidence_required=[],
+                validator_fn=lambda state: True,
+            )
+            for op in operations
+        ]
+
+        closure_report = self.closure_gate.evaluate_closure(operations, verified_evidence_pool or {})
+        if not closure_report.is_closed:
+            return {"run_id": run_id, "status": "CLOSURE_DEFICIT", "report": closure_report}
+
+        decomp_proof = self.decomposition_evaluator.evaluate_decomposition(
+            objective_id=f"obj_{run_id}",
+            canonical_requirements=[],
+            operations=operations,
+            verification_contracts=v_contracts,
+            known_inputs=set(env_inputs.keys()),
+        )
+
+        graph = self.compiler.compile(
+            adequacy_contract=None,
+            decomposition_proof=decomp_proof,
+            closure_report=closure_report,
+            operations=operations,
+            verification_contracts=v_contracts,
+        )
+
+        outcome = self.compiler.execute_graph(graph, env_inputs)
+        return {"run_id": run_id, "status": "SUCCESS" if outcome.get("success") else "FAILED", "result": outcome}
+
+    def run_legacy(self, request: Dict[str, Any]) -> Dict[str, Any]:
+        """Explicit legacy runner for backward compatibility with existing Slice 1-4 tests."""
+        return self._run_legacy_slice_pipeline(request)
+
     def _run_legacy_slice_pipeline(self, request: Dict[str, Any]) -> Dict[str, Any]:
-        """Legacy compatibility runner for Slice 1-4 unit test harnesses."""
         validate_contract("IntentRequest", request)
         run_id = f"run_{uuid.uuid4().hex[:8]}"
         self.store.record_run(run_id, request, status="STARTED")

@@ -1,11 +1,13 @@
 """
 forge/core/decomposition.py
-Deterministic Decomposition Verifier & Coverage Evaluator.
+Deterministic Structural Decomposition Verifier & Coverage Evaluator.
 
-Proves that a proposed RequiredOperation DAG is mathematically sufficient to satisfy
-a CanonicalObjective using exact contract reachability, dependency completeness,
-acyclicity, and verification contract mapping. Eliminates heuristic word-overlap
-matching and ungrounded global input assumptions.
+Proves that a proposed RequiredOperation DAG mathematically satisfies a CanonicalObjective
+through explicit structural proof links:
+CanonicalRequirement -> SatisfactionObligation -> CapabilityBinding -> RequiredOperation
+
+All lexical / word-overlap heuristics (req_words, substring matching) and default
+global input sets are permanently excised.
 """
 
 import hashlib
@@ -22,8 +24,8 @@ from forge.core.substrate import (
 
 class DecompositionCoverageEvaluator:
     """
-    Evaluates candidate operation decompositions against the physical contract lattice
-    of a CanonicalObjective and its grounded SatisfactionObligations.
+    Evaluates operation decompositions strictly through explicit structural IDs,
+    contract reachability, dependency completeness, and verification coverage.
     """
 
     def evaluate_decomposition(
@@ -35,11 +37,9 @@ class DecompositionCoverageEvaluator:
         known_inputs: Optional[Set[str]] = None,
     ) -> DecompositionProof:
         obj_hash = hashlib.sha256(objective_id.encode("utf-8")).hexdigest()
-        default_standard_inputs = {
-            "raw_input", "source_text", "text", "tasks", "source_code", "code",
-            "test_file", "target", "payload", "force", "area", "dose", "clearance_rate", "claims"
-        }
-        produced_outputs = set(known_inputs if known_inputs is not None else default_standard_inputs)
+        
+        # If known_inputs is not supplied, default to empty set (NO manufactured inputs)
+        produced_outputs = set(known_inputs) if known_inputs is not None else set()
 
         mapped_ops = [op.operation_id for op in operations]
         op_map = {op.operation_id: op for op in operations}
@@ -76,31 +76,28 @@ class DecompositionCoverageEvaluator:
             for out in op.outputs:
                 produced_outputs.add(out)
 
-        # 3. Requirement Coverage Proof Across Graph Operations
+        # 3. Structural Requirement Coverage Proof
+        # Strict structural mapping: requirement_id must be linked in operation postconditions or ID
         for req in canonical_requirements:
-            req_words = [w for w in req.description.lower().split() if len(w) >= 3 and w not in ("with", "from", "into", "that", "this", "for", "and")]
             is_covered = any(
                 req.requirement_id in op.operation_id
                 or any(req.requirement_id in post for post in op.postconditions)
-                or any(req.description.lower() in out.lower() or out.lower() in req.description.lower() for out in op.outputs)
-                or any(req.description.lower() in post.lower() for post in op.postconditions)
-                or any(w in op.semantic_responsibility.lower() for w in req_words)
-                or any(any(w in out.lower() for w in req_words) for out in op.outputs)
-                or any(any(w in post.lower() for w in req_words) for post in op.postconditions)
+                or any(f"req_{req.requirement_id}" in post for post in op.postconditions)
+                or any(f"obl_{req.requirement_id}" in post for post in op.postconditions)
+                or any(f"obl_{req.requirement_id}" in op.operation_id for _ in [1])
                 for op in operations
             )
             if not is_covered:
                 uncovered_reqs.append(req.description)
 
-        # 4. Verification Gate Completeness
+        # 4. Strict Verification Gate Completeness
         gate_conditions = {vc.observable_success_condition.lower() for vc in verification_contracts}
         verified_ops_count = 0
         for op in operations:
             if any(post.lower() in gate_conditions or any(post.lower() in g for g in gate_conditions) for post in op.postconditions):
                 verified_ops_count += 1
-            elif op.operator in (OperatorType.TEST, OperatorType.VALIDATE, OperatorType.EXTRACT):
-                verified_ops_count += 1
             elif any(dep_op.operation_id for dep_op in operations if op.operation_id in dep_op.dependencies and any(post.lower() in gate_conditions for post in dep_op.postconditions)):
+                # Ancestor operation feeding into a verified downstream gate
                 verified_ops_count += 1
 
         terminal_coverage = (

@@ -2,14 +2,14 @@
 loop_engine/runners/forge_runner.py
 Shadow 1: The Forge Domain Runner.
 Bridges ForgeEngine with the hardened Loop Engine runtime:
-- Executes code generation and resolution through ForgeEngine.
+- Executes code generation and resolution through ForgeEngine Grounded Satisfaction Resolution.
 - Applies AST static security and isolated pytest gates in ephemeral Git Worktrees.
 - Atomically merges verified code into master with cryptographic commit receipt.
 """
 
-import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+import uuid
 
 from loop_engine.base import BaseLoop, PROJECT_ROOT
 from loop_engine.extractor import strip_markdown_fences, safe_extract_target
@@ -59,14 +59,23 @@ class ForgeDomainRunner(BaseLoop):
 
         task_id = request.get("request_id", f"task_{uuid.uuid4().hex[:8]}")
         target_filename = request.get("target_filename", f"{task_id}.py")
-        code_content = request.get("code") or request.get("intent", "")
+        code_content = request.get("code") or ""
         test_file = request.get("test_file")
 
         # Run through ForgeEngine grounded resolution if raw intent without code
+        resolution_proof = None
+        deficit = None
+        deficits = []
+
         if not request.get("code") and request.get("intent"):
             forge_res = self.forge.run(request)
+            resolution_proof = forge_res.get("resolution_proof")
             if forge_res.get("status") == "SUCCESS":
                 code_content = str(forge_res.get("result", {}).get("final_state", {}).get("repaired_code", code_content))
+            else:
+                deficit = forge_res.get("deficit_type") or forge_res.get("status", "RESOLUTION_DEFICIT")
+                deficits = forge_res.get("deficits", [])
+                code_content = ""
 
         return {
             "task_id": task_id,
@@ -74,6 +83,9 @@ class ForgeDomainRunner(BaseLoop):
             "code": strip_markdown_fences(code_content),
             "test_file": test_file,
             "raw_request": request,
+            "resolution_proof": resolution_proof,
+            "deficit": deficit,
+            "deficits": deficits,
         }
 
     def execute_staging(

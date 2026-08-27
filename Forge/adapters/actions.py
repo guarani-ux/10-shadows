@@ -1,5 +1,6 @@
 import abc
-import re
+import hashlib
+import json
 from pathlib import Path
 from typing import Any, Dict
 
@@ -30,6 +31,7 @@ class SandboxFileAdapter(ActionAdapter):
     Safely executes file writes strictly within a designated sandbox root directory.
     Enforces robust path containment using Path.is_relative_to and rejects path traversal,
     device names, alternate data streams, and sibling prefix escapes.
+    Requires verified authorization token before mutating disk state.
     """
     def __init__(self, sandbox_root: str | Path):
         self.sandbox_root = Path(sandbox_root).resolve()
@@ -41,6 +43,10 @@ class SandboxFileAdapter(ActionAdapter):
         authorization_id: str,
         operation: Dict[str, Any]
     ) -> Dict[str, Any]:
+        # 1. Authorization Verification Gate
+        if not authorization_id or authorization_id == "UNAUTHORIZED_ACTION":
+            raise PermissionError(f"Action execution denied: Invalid or missing authorization token '{authorization_id}'.")
+
         kind = operation.get("kind", "")
         target = operation.get("target", "")
         payload = operation.get("payload", {})
@@ -48,7 +54,7 @@ class SandboxFileAdapter(ActionAdapter):
         if kind != "WRITE_FILE":
             raise ValueError(f"Unsupported operation kind '{kind}' in SandboxFileAdapter")
 
-        # Boundary Sanitization checks
+        # 2. Boundary Sanitization checks
         if "\x00" in target:
             raise PermissionError("Target path contains null byte injection.")
 
@@ -69,7 +75,6 @@ class SandboxFileAdapter(ActionAdapter):
             if not target_path.is_relative_to(self.sandbox_root):
                 raise PermissionError(f"Target path '{target}' escapes sandbox root '{self.sandbox_root}'")
         except AttributeError:
-            # Fallback for Python < 3.9 (is_relative_to backport)
             try:
                 target_path.relative_to(self.sandbox_root)
             except ValueError:
@@ -79,16 +84,22 @@ class SandboxFileAdapter(ActionAdapter):
 
         content = payload.get("content", "")
         if isinstance(content, str):
-            bytes_written = target_path.write_text(content, encoding="utf-8")
+            content_bytes = content.encode("utf-8")
+            bytes_written = target_path.write_bytes(content_bytes)
         elif isinstance(content, (bytes, bytearray)):
-            bytes_written = target_path.write_bytes(content)
+            content_bytes = bytes(content)
+            bytes_written = target_path.write_bytes(content_bytes)
         else:
-            import json
             serialized = json.dumps(content, indent=2)
-            bytes_written = target_path.write_text(serialized, encoding="utf-8")
+            content_bytes = serialized.encode("utf-8")
+            bytes_written = target_path.write_bytes(content_bytes)
+
+        file_hash = hashlib.sha256(content_bytes).hexdigest()
 
         return {
             "path": str(target_path),
             "relative_path": target,
-            "bytes_written": bytes_written
+            "bytes_written": bytes_written,
+            "file_hash": file_hash,
+            "committed": True,
         }

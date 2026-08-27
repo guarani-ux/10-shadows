@@ -2,10 +2,10 @@
 forge/core/compiler.py
 Typed Execution Graph Compiler and Deterministic DAG Runner.
 
-Enforces the Two-Key Gatekeeper Law:
-ExecutionGraph compilation requires BOTH ObjectiveAdequacyContract == ADEQUATE_FOR_EXECUTION
-AND DecompositionProof.closure_status == SATISFIED AND ClosureReport.is_closed == True.
-Binds exact capability identities from ResolutionProof.
+Enforces:
+1. Two-Key Gatekeeper Law (Adequacy == ADEQUATE_FOR_EXECUTION && Decomposition == SATISFIED).
+2. Sealed Capability Bindings (Consumes exact bindings sealed in ResolutionProof; NO reselection or operator fallback).
+3. Deterministic execution with physical verifier gates.
 """
 
 import hashlib
@@ -68,7 +68,14 @@ class ExecutionGraphCompiler:
                 f"Missing domain caps: {adequacy_contract.missing_domain_capabilities}"
             )
 
-        # Two-Key Gate 2: Downstream Decomposition Coverage Check
+        # Gate 2: Capability & Evidence Closure Check
+        if closure_report and not closure_report.is_closed:
+            raise ClosureDeficitError(
+                f"Cannot compile ExecutionGraph: Closure is open. "
+                f"Missing capabilities: {[d.missing_capability for d in closure_report.capability_deficits]}"
+            )
+
+        # Two-Key Gate 3: Downstream Decomposition Coverage Check
         if decomposition_proof.closure_status != "SATISFIED":
             raise DecompositionIncompleteError(
                 f"Cannot compile ExecutionGraph: Decomposition closure status is '{decomposition_proof.closure_status}'. "
@@ -76,34 +83,33 @@ class ExecutionGraphCompiler:
                 f"Deficits: {decomposition_proof.operation_deficits}"
             )
 
-        # Gate 3: Capability & Evidence Closure Check
-        if closure_report and not closure_report.is_closed:
-            raise ClosureDeficitError(
-                f"Cannot compile ExecutionGraph: Closure is open. "
-                f"Missing capabilities: {[d.missing_capability for d in closure_report.capability_deficits]}"
-            )
-
-        # Bind operations to authorized capabilities (from resolution proof or bound_capability_id)
+        # Bind operations strictly to exact sealed capabilities (NO reselection or fallback)
         bindings: Dict[str, str] = {}
         ev_deps: Dict[str, List[str]] = {}
 
         for op in operations:
+            bound_cap_id: Optional[str] = None
             if op.bound_capability_id:
-                cap = self.registry.get_capability(op.bound_capability_id)
-                if not cap or not cap.is_authorized_for_execution:
-                    raise ClosureDeficitError(f"Bound capability '{op.bound_capability_id}' is unauthorized")
-                bindings[op.operation_id] = cap.capability_id
-            elif resolution_proof and op.operation_id in [f"op_{b.obligation_id}" for b in resolution_proof.capability_bindings.values()]:
+                bound_cap_id = op.bound_capability_id
+            elif resolution_proof:
                 for b in resolution_proof.capability_bindings.values():
-                    if f"op_{b.obligation_id}" == op.operation_id:
-                        bindings[op.operation_id] = b.capability_id
+                    if f"op_{b.obligation_id}" == op.operation_id or b.obligation_id in op.operation_id:
+                        bound_cap_id = b.capability_id
                         break
-            else:
-                matching_caps = self.registry.find_capabilities_for_operator(op.operator)
-                if not matching_caps:
-                    raise ClosureDeficitError(f"No authorized capability bound for operator {op.operator}")
-                bindings[op.operation_id] = matching_caps[0].capability_id
 
+            if not bound_cap_id:
+                raise ClosureDeficitError(
+                    f"Sealed Compiler Error: Operation '{op.operation_id}' lacks sealed capability binding. "
+                    f"Reselection or arbitrary fallback is forbidden."
+                )
+
+            cap = self.registry.get_capability(bound_cap_id)
+            if not cap or not cap.is_authorized_for_execution:
+                raise ClosureDeficitError(
+                    f"Bound capability '{bound_cap_id}' for operation '{op.operation_id}' is missing or unauthorized."
+                )
+
+            bindings[op.operation_id] = cap.capability_id
             ev_deps[op.operation_id] = [e.evidence_id for e in op.evidence_requirements]
 
         graph_id = f"graph_{uuid.uuid4().hex[:8]}"
@@ -118,6 +124,41 @@ class ExecutionGraphCompiler:
             human_gates=human_gates or [],
             stop_conditions=["All operations executed and verified"],
             failure_routes={op.operation_id: "ESCALATE" for op in operations},
+        )
+
+    def compile_execution_graph(
+        self,
+        objective_id: str,
+        operations: List[RequiredOperation],
+        verification_contracts: List[VerificationContract],
+        evidence_pool: Dict[str, Any],
+        resolution_proof: Optional[ResolutionProof] = None,
+        adequacy_contract: Optional[ObjectiveAdequacyContract] = None,
+    ) -> ExecutionGraph:
+        """
+        Direct compilation helper verifying sealed bindings and closure.
+        """
+        from forge.core.closure import ClosureGate
+        from forge.core.decomposition import DecompositionCoverageEvaluator
+
+        decomp_eval = DecompositionCoverageEvaluator()
+        closure_gate = ClosureGate(self.registry)
+
+        closure_rep = closure_gate.evaluate_closure(operations, evidence_pool)
+        decomp_proof = decomp_eval.evaluate_decomposition(
+            objective_id=objective_id,
+            canonical_requirements=[],
+            operations=operations,
+            verification_contracts=verification_contracts,
+        )
+
+        return self.compile(
+            adequacy_contract=adequacy_contract,
+            decomposition_proof=decomp_proof,
+            closure_report=closure_rep,
+            operations=operations,
+            verification_contracts=verification_contracts,
+            resolution_proof=resolution_proof,
         )
 
     def execute_graph(

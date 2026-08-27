@@ -5,8 +5,8 @@
   "test_digest": "f08c96db07763ec381270566c6233f6a8d5cd1c3f79a1a74edc64da369aae383",
   "status": "VERIFIED",
   "exit_code": 0,
-  "duration_seconds": 0.078,
+  "duration_seconds": 0.063,
   "promotion": null,
   "output_summary": "DAEMON_ALIVE",
-  "timestamp_utc": "2026-08-27T14:57:41.332428+00:00"
+  "timestamp_utc": "2026-08-27T15:16:38.614122+00:00"
 }

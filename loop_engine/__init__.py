@@ -46,6 +46,18 @@ from loop_engine.epistemic import (
 from loop_engine.disposition import ActionDisposition, evaluate_execution_disposition
 from loop_engine.sterile_env import build_sterile_environment
 from loop_engine.ast_guard import scan_ast, scan_python_worktree
+from loop_engine.governance import (
+    GovernanceConfig,
+    GovernanceConfigurationError,
+    load_canonical_governance,
+)
+from loop_engine.transition import (
+    PrivilegedTransitionEngine,
+    TransitionRequest,
+    TransitionReceipt,
+    TransitionRejection,
+)
+
 
 __all__ = [
     "BaseLoop",

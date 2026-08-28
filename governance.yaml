@@ -38,5 +38,3 @@ environment:
     - "LOCALAPPDATA"
     - "COMSPEC"
     - "WINDIR"
-
-fail_closed: true

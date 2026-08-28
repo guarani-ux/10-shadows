@@ -52,12 +52,23 @@ class StepExecutionResult(BaseModel):
     last_error: Optional[str] = None
 
 
+from loop_engine.governance import (
+    GovernanceConfig,
+    load_canonical_governance,
+    GovernanceConfigurationError,
+)
+
+class GovernanceOverrideProhibitedError(TypeError):
+    """Raised when a caller attempts to manually override canonical strike governance."""
+    pass
+
+
 class StepGovernor:
     """
     Step-Level Governor and Anti-Oscillation Engine.
     
     Owns:
-    - Single-step attempt counting (1..max_strikes).
+    - Single-step attempt counting (1..max_strikes) strictly governed by canonical governance.yaml.
     - Ephemeral staging workspace allocation and isolated destruction.
     - Anti-tamper spec sealing.
     - Deterministic trace compaction and cumulative negative constraint memory.
@@ -65,10 +76,28 @@ class StepGovernor:
     - Injection of measured attempts/strikes into runner commit routines.
     """
 
-    def __init__(self, max_strikes: int = 3, max_error_lines: int = 25, kernel_db: Optional[KernelDatabase] = None):
-        self.max_strikes = max_strikes
+    def __init__(
+        self,
+        kernel_db: Optional[KernelDatabase] = None,
+        governance_config: Optional[GovernanceConfig] = None,
+        max_error_lines: int = 25,
+        **kwargs: Any,
+    ):
+        if "max_strikes" in kwargs or "max_attempts" in kwargs:
+            override_key = "max_strikes" if "max_strikes" in kwargs else "max_attempts"
+            raise GovernanceOverrideProhibitedError(
+                f"Manual strike override '{override_key}={kwargs[override_key]}' is prohibited. "
+                "The strike ceiling is exclusively governed by canonical governance.yaml."
+            )
+        if kwargs:
+            raise TypeError(f"StepGovernor.__init__() got unexpected keyword argument(s): {list(kwargs.keys())}")
+
+        self.governance = governance_config or load_canonical_governance()
+        self.max_strikes = self.governance.governor.strike_ceiling
+        self.execution_timeout_seconds = self.governance.governor.execution_timeout_seconds
         self.max_error_lines = max_error_lines
         self.kernel_db = kernel_db or KernelDatabase()
+
 
     def compact_error_trace(self, raw_error: str) -> str:
         """Compacts verbose error tracebacks to preserve root-cause failure data within token budget."""

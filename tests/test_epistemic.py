@@ -13,13 +13,19 @@ Enforces Pirate King Constraints:
 """
 
 import pytest
+from loop_engine.authority import (
+    ProofWitness,
+    issue_proof_witness,
+)
 from loop_engine.epistemic import (
     EvidenceOrigin,
     EpistemicStatus,
     EpistemicDisposition,
     EvidenceEnvelope,
     SemanticLaunderingError,
-    create_envelope,
+    canonical_json_digest,
+    create_unverified_envelope,
+    mint_verified_envelope,
     transform_envelope,
 )
 
@@ -42,23 +48,23 @@ class TestEvidenceOriginAndStatus:
 
 class TestEvidenceEnvelopeImmutabilityAndLineage:
     def test_create_envelope_deterministic_hash(self):
-        env1 = create_envelope(
+        env1 = create_unverified_envelope(
             payload={"key": "value", "count": 10},
-            origin=EvidenceOrigin.PHYSICAL_OBSERVATION,
-            status=EpistemicStatus.VERIFIED,
+            origin=EvidenceOrigin.DECLARED_SPEC,
+            status=EpistemicStatus.INFERRED,
             source_id="obs_001",
         )
-        env2 = create_envelope(
+        env2 = create_unverified_envelope(
             payload={"key": "value", "count": 10},
-            origin=EvidenceOrigin.PHYSICAL_OBSERVATION,
-            status=EpistemicStatus.VERIFIED,
+            origin=EvidenceOrigin.DECLARED_SPEC,
+            status=EpistemicStatus.INFERRED,
             source_id="obs_001",
         )
         assert env1.envelope_hash == env2.envelope_hash
         assert len(env1.envelope_hash) == 64
 
     def test_envelope_is_immutable(self):
-        env = create_envelope(
+        env = create_unverified_envelope(
             payload={"data": [1, 2, 3]},
             origin=EvidenceOrigin.MODEL_INFERENCE,
             status=EpistemicStatus.INFERRED,
@@ -68,10 +74,10 @@ class TestEvidenceEnvelopeImmutabilityAndLineage:
             env.status = EpistemicStatus.VERIFIED  # Frozen dataclass mutation blocked
 
     def test_transform_envelope_preserves_lineage(self):
-        parent = create_envelope(
+        parent = create_unverified_envelope(
             payload={"raw_text": "sample source text"},
-            origin=EvidenceOrigin.PHYSICAL_OBSERVATION,
-            status=EpistemicStatus.VERIFIED,
+            origin=EvidenceOrigin.DECLARED_SPEC,
+            status=EpistemicStatus.INFERRED,
             source_id="raw_doc",
         )
 
@@ -82,13 +88,14 @@ class TestEvidenceEnvelopeImmutabilityAndLineage:
         )
 
         assert child.parent_hash == parent.envelope_hash
+        assert parent.envelope_hash in child.parent_hashes
         assert child.origin == EvidenceOrigin.DERIVED_TRANSFORM
-        assert child.status == EpistemicStatus.VERIFIED
+        assert child.status == EpistemicStatus.INFERRED
 
 
 class TestSemanticLaunderingRejection:
     def test_infer_to_verified_without_verifier_raises_laundering_error(self):
-        parent = create_envelope(
+        parent = create_unverified_envelope(
             payload={"claim": "System is ultra fast"},
             origin=EvidenceOrigin.MODEL_INFERENCE,
             status=EpistemicStatus.HYPOTHESIS,
@@ -96,7 +103,6 @@ class TestSemanticLaunderingRejection:
         )
 
         with pytest.raises(SemanticLaunderingError, match="Semantic laundering detected"):
-            # Attempting to silently upgrade status without verifier authority
             transform_envelope(
                 parent_envelope=parent,
                 new_payload={"claim": "System is ultra fast"},
@@ -105,10 +111,10 @@ class TestSemanticLaunderingRejection:
             )
 
     def test_synthetic_origin_cannot_upgrade_to_physical_observation(self):
-        parent = create_envelope(
+        parent = create_unverified_envelope(
             payload={"mock_data": True},
             origin=EvidenceOrigin.SYNTHETIC_FIXTURE,
-            status=EpistemicStatus.VERIFIED,
+            status=EpistemicStatus.INFERRED,
             source_id="mock_fixture",
         )
 
@@ -135,7 +141,7 @@ class TestEpistemicDispositions:
         assert len(deficits) == 7
 
     def test_deficit_envelope_serializability(self):
-        env = create_envelope(
+        env = create_unverified_envelope(
             payload={"missing_domain": "quantum_encryption"},
             origin=EvidenceOrigin.DECLARED_SPEC,
             status=EpistemicStatus.UNKNOWN,

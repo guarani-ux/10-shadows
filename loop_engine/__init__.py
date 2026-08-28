@@ -32,6 +32,20 @@ from loop_engine.verifiers.test_gate import (
 )
 from loop_engine.runners.code_runner import CodeRunnerLoop
 from loop_engine.verifier_daemon import process_intent, run_daemon
+from loop_engine.authority import ProofWitness, VerificationContractWitness, issue_proof_witness, create_verification_contract_witness
+from loop_engine.capability import CapabilityContract, evaluate_capability_applicability
+from loop_engine.epistemic import (
+    EvidenceOrigin,
+    EpistemicStatus,
+    EpistemicDisposition,
+    EvidenceEnvelope,
+    create_unverified_envelope,
+    mint_verified_envelope,
+    transform_envelope,
+)
+from loop_engine.disposition import ActionDisposition, evaluate_execution_disposition
+from loop_engine.sterile_env import build_sterile_environment
+from loop_engine.ast_guard import scan_ast, scan_python_worktree
 
 __all__ = [
     "BaseLoop",
@@ -59,4 +73,23 @@ __all__ = [
     "CodeRunnerLoop",
     "process_intent",
     "run_daemon",
+    "ProofWitness",
+    "VerificationContractWitness",
+    "issue_proof_witness",
+    "create_verification_contract_witness",
+    "CapabilityContract",
+    "evaluate_capability_applicability",
+    "EvidenceOrigin",
+    "EpistemicStatus",
+    "EpistemicDisposition",
+    "EvidenceEnvelope",
+    "create_unverified_envelope",
+    "mint_verified_envelope",
+    "transform_envelope",
+    "ActionDisposition",
+    "evaluate_execution_disposition",
+    "build_sterile_environment",
+    "scan_ast",
+    "scan_python_worktree",
 ]
+

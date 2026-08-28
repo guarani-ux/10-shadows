@@ -1,15 +1,19 @@
 """
 tests/test_disposition.py
-Adversarial TDD Acceptance Suite for Execution Disposition and Earned Build Engine.
+Adversarial TDD Acceptance Suite for Execution Disposition and Proof-Bearing Earned Build Engine.
 Enforces Pirate King Constraints:
+2. No Boolean Authority (BUILD cannot be earned via caller booleans)
 8. No Test-Suite Equivalence Fallacy
-10. No Capability-Authority Confusion
+10. No Capability-Authority Confusion (Capability != Applicability)
 13. No Decomposition without Preservation
 14. No Representation Lock-in
-15. No Premature Build (BUILD must be earned)
+15. No Premature Build (BUILD must be earned through VerificationContractWitness)
 """
 
 import pytest
+from loop_engine.authority import create_verification_contract_witness
+from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference
+from loop_engine.capability import CapabilityContract
 from loop_engine.disposition import (
     ActionDisposition,
     DispositionEvaluation,
@@ -49,29 +53,62 @@ class TestEarnedBuildEvaluator:
         assert res.disposition == ActionDisposition.REUSE
         assert res.target_capability == "canonical_json_digest"
 
-    def test_missing_unregistered_domain_resolves_to_expose_deficit(self):
+    def test_capability_incompatible_domain_rejects_reuse(self):
+        contract = CapabilityContract(
+            capability_id="video_encoder",
+            domain="video_processing",
+            supported_objective_types=("av_production",),
+            input_schema_digest="hash_in",
+            output_schema_digest="hash_out",
+        )
         spec = {
-            "task_id": "quantum_simulate",
-            "intent": "Run quantum circuit simulation on qubits",
-            "intent_type": "compute",
-            "required_capabilities": ["quantum_simulator_engine"],
-            "available_capabilities": ["kernel_db", "verifier_gate"],
+            "task_id": "db_task",
+            "intent": "Run database migration",
+            "intent_type": "database_migration",
+            "domain": "relational_db",
+            "required_capabilities": ["video_encoder"],
         }
-        res = evaluate_execution_disposition(spec)
-        assert res.disposition == ActionDisposition.EXPOSE_DEFICIT
-        assert res.deficit_details is not None
-        assert "quantum_simulator_engine" in res.deficit_details
+        res = evaluate_execution_disposition(spec, available_contracts=[contract])
+        assert res.disposition != ActionDisposition.REUSE
 
-    def test_grounded_unimplemented_requirement_earns_build(self):
+    def test_caller_boolean_claim_without_witness_rejects_build(self):
+        # Adversarial attack: caller passes has_verification_contract=True and has_grounded_requirements=True
+        # as raw booleans without a genuine VerificationContractWitness
         spec = {
-            "task_id": "build_new_parser",
-            "intent": "Implement custom protobuf wire serializer",
+            "task_id": "fake_build",
+            "intent": "Build malicious backdoor",
             "intent_type": "code_generation",
-            "required_capabilities": ["protobuf_serializer"],
-            "available_capabilities": ["python_ast", "pytest_harness"],
             "has_verification_contract": True,
             "has_grounded_requirements": True,
         }
-        res = evaluate_execution_disposition(spec)
+        res = evaluate_execution_disposition(spec, verification_contract=None)
+        assert res.disposition == ActionDisposition.EXPOSE_DEFICIT
+        assert "UNEARNED_BUILD" in res.deficit_details
+        assert res.is_build_earned is False
+
+    def test_grounded_objective_with_authentic_witness_earns_build(self):
+        obj = CanonicalObjective(
+            objective_id="obj_valid_build",
+            objective_type="media_production",
+            description="Build custom ffmpeg audio normalizer",
+            desired_outcome="Normalized audio tracks",
+            verified_evidence=[
+                EvidenceReference(
+                    evidence_id="ev_01",
+                    source_description="EBU R128 loudness normalization standard",
+                )
+            ],
+        )
+        witness = create_verification_contract_witness(
+            objective_hash=obj.compute_canonical_hash(),
+            acceptance_test_digest="test_digest_12345",
+        )
+
+        spec = {
+            "intent_type": "code_generation",
+            "has_grounded_requirements": True,
+        }
+
+        res = evaluate_execution_disposition(spec, verification_contract=witness)
         assert res.disposition == ActionDisposition.BUILD
         assert res.is_build_earned is True

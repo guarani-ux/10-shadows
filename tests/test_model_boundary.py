@@ -13,6 +13,8 @@ from loop_engine.model.boundary import (
     MockModelProfile,
     ModelRequest,
     ModelResponse,
+    ProviderExecutionReceipt,
+    compute_provider_payload_digest,
 )
 
 
@@ -102,10 +104,56 @@ def test_gemini_adapter_fails_closed_without_api_key(monkeypatch):
     assert "GEMINI_API_KEY not configured" in resp.error_message
 
 
-def test_evidence_modality_separation():
-    mock_adapter = MockModelAdapter()
-    assert mock_adapter.evidence_modality == EvidenceModality.STRUCTURAL_MOCK
+def test_gemini_adapter_fails_closed_with_invalid_key_or_offline():
+    adapter = GeminiModelAdapter(api_key="definitely-invalid-key-offline")
+    req = ModelRequest(task_id="task_gem_invalid", objective="Generate code")
+    resp = adapter.execute(req)
+    # Must fail closed with error message and cannot return a fabricated success stub
+    assert resp.is_success is False
+    assert resp.provider_receipt is None
+    assert "Gemini API execution failure" in (resp.error_message or "")
 
-    gemini_adapter = GeminiModelAdapter(api_key="test-key")
-    assert gemini_adapter.evidence_modality == EvidenceModality.EMPIRICAL_MODEL
 
+def test_provider_execution_receipt_verification():
+    candidate_payload = {"code": "def solve(): return 42\n"}
+    objective = "Solve the equation"
+    req = ModelRequest(task_id="task_rcpt_1", objective=objective)
+
+    payload_digest = compute_provider_payload_digest(
+        candidate_payload=candidate_payload,
+        raw_response={"status": "ok"},
+        objective=objective,
+    )
+    receipt = ProviderExecutionReceipt(
+        request_id="req_123",
+        response_id="resp_456",
+        provider_name="google",
+        model_id="gemini-3.7-flash",
+        latency_seconds=0.45,
+        tokens_prompt=50,
+        tokens_completion=20,
+        tokens_total=70,
+        payload_digest=payload_digest,
+    )
+    assert receipt.receipt_digest != ""
+    assert len(receipt.receipt_digest) == 64
+
+    resp = ModelResponse(
+        task_id="task_rcpt_1",
+        candidate_payload=candidate_payload,
+        model_identifier="gemini-3.7-flash",
+        provider="google",
+        raw_response={"status": "ok"},
+        provider_receipt=receipt,
+    )
+    assert receipt.is_valid_for_response(resp, req) is True
+
+    # Tampering with payload breaks validation
+    corrupted_resp = resp.model_copy(deep=True)
+    corrupted_resp.candidate_payload = {"code": "def solve(): return 'hacked'\n"}
+    assert receipt.is_valid_for_response(corrupted_resp, req) is False
+
+    # Tampering with receipt digest breaks validation
+    corrupted_receipt = receipt.model_copy(deep=True)
+    corrupted_receipt.receipt_digest = "0" * 64
+    assert corrupted_receipt.is_valid_for_response(resp, req) is False

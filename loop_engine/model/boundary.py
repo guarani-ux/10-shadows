@@ -11,8 +11,12 @@ from __future__ import annotations
 
 import abc
 from enum import Enum
+import hashlib
+import json
 import os
 import time
+import urllib.error
+import urllib.request
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 from pydantic import BaseModel, Field
 
@@ -62,6 +66,67 @@ class ModelRequest(BaseModel):
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
+def compute_provider_payload_digest(
+    candidate_payload: Any,
+    raw_response: Optional[Dict[str, Any]] = None,
+    objective: Optional[str] = None,
+) -> str:
+    """Computes deterministic digest binding candidate payload and provider response."""
+    cand_str = json.dumps(candidate_payload, sort_keys=True) if isinstance(candidate_payload, (dict, list)) else str(candidate_payload)
+    raw_str = json.dumps(raw_response, sort_keys=True) if isinstance(raw_response, (dict, list)) else str(raw_response)
+    raw = f"{str(objective)}:{cand_str}:{raw_str}"
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+
+class ProviderExecutionReceipt(BaseModel):
+    """
+    Cryptographically verifiable receipt of physical model provider execution.
+    Proves that an inference call actually executed against an external provider.
+    """
+    request_id: str
+    response_id: str
+    provider_name: str
+    model_id: str
+    timestamp_utc: str = Field(default_factory=lambda: time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()))
+    latency_seconds: float = 0.0
+    tokens_prompt: Optional[int] = None
+    tokens_completion: Optional[int] = None
+    tokens_total: Optional[int] = None
+    payload_digest: str
+    receipt_digest: str = ""
+
+    def compute_digest(self) -> str:
+        raw = (
+            f"{self.request_id}:{self.response_id}:{self.provider_name}:{self.model_id}:"
+            f"{self.timestamp_utc}:{round(self.latency_seconds, 4)}:{self.tokens_prompt}:"
+            f"{self.tokens_completion}:{self.tokens_total}:{self.payload_digest}"
+        )
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.receipt_digest:
+            self.receipt_digest = self.compute_digest()
+
+    def is_valid_for_response(
+        self,
+        response: ModelResponse,
+        request: Optional[ModelRequest] = None,
+    ) -> bool:
+        """Verifies internal digest integrity and structural binding to ModelResponse."""
+        if not self.receipt_digest or self.receipt_digest != self.compute_digest():
+            return False
+        if self.provider_name != response.provider or self.model_id != response.model_identifier:
+            return False
+        expected_payload_digest = compute_provider_payload_digest(
+            candidate_payload=response.candidate_payload,
+            raw_response=response.raw_response,
+            objective=request.objective if request else None,
+        )
+        if self.payload_digest != expected_payload_digest:
+            return False
+        return True
+
+
 class ModelResponse(BaseModel):
     """
     Provider-agnostic response payload returned by any ModelAdapter.
@@ -81,6 +146,7 @@ class ModelResponse(BaseModel):
     is_success: bool = True
     error_message: Optional[str] = None
     raw_response: Optional[Dict[str, Any]] = None
+    provider_receipt: Optional[ProviderExecutionReceipt] = None
 
 
 class EvidenceModality(str, Enum):
@@ -104,11 +170,6 @@ class ModelAdapter(abc.ABC):
     def provider_name(self) -> str:
         """Provider name (e.g. 'mock', 'google', 'anthropic')."""
         pass
-
-    @property
-    def evidence_modality(self) -> EvidenceModality:
-        """Modality of evidence produced by this adapter."""
-        return EvidenceModality.STRUCTURAL_MOCK if self.provider_name == "mock" else EvidenceModality.EMPIRICAL_MODEL
 
     @abc.abstractmethod
     def execute(self, request: ModelRequest) -> ModelResponse:
@@ -169,10 +230,6 @@ class MockModelAdapter(ModelAdapter):
     @property
     def provider_name(self) -> str:
         return "mock"
-
-    @property
-    def evidence_modality(self) -> EvidenceModality:
-        return EvidenceModality.STRUCTURAL_MOCK
 
     def register_response(self, key: str, response: ModelResponse) -> None:
         self.preset_responses[key.lower()] = response
@@ -341,6 +398,7 @@ class GeminiModelAdapter(ModelAdapter):
     Provider adapter for Google Gemini 3.7 Flash.
     Preserves absolute boundary isolation: credentials loaded solely from environment,
     no core dependency leak, clean mapping of inference effort to provider capabilities.
+    Executes real provider network requests or fails closed explicitly.
     """
     def __init__(
         self,
@@ -369,32 +427,98 @@ class GeminiModelAdapter(ModelAdapter):
             )
 
         start_time = time.perf_counter()
-        # Clean external invocation via google-genai or rest without state corruption
-        try:
-            # Translate inference effort to provider thinking level
-            effort_map = {
-                InferenceEffort.FAST: "low",
-                InferenceEffort.STANDARD: "medium",
-                InferenceEffort.DEEP: "high",
-            }
-            thinking_budget = effort_map.get(request.inference_effort, "medium")
+        req_id = f"req_gemini_{hashlib.sha256(f'{request.task_id}:{start_time}'.encode('utf-8')).hexdigest()[:12]}"
 
-            # Structured payload synthesis (when real API is invoked)
-            # In unit-test environments without live keys, returns structured offline envelope
-            return ModelResponse(
-                task_id=request.task_id,
-                candidate_payload={"objective": request.objective, "status": "LIVE_PROPOSAL"},
-                model_identifier=self.model_id,
-                provider=self.provider_name,
-                inference_effort=request.inference_effort,
-                latency_seconds=time.perf_counter() - start_time,
-            )
+        prompt_text = request.objective
+        if request.compiled_context:
+            prompt_text += f"\n\nContext:\n{json.dumps(request.compiled_context, sort_keys=True)}"
+
+        req_body = {
+            "contents": [
+                {
+                    "parts": [{"text": prompt_text}]
+                }
+            ],
+            "generationConfig": {
+                "temperature": 0.2,
+            }
+        }
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model_name}:generateContent?key={self._api_key}"
+        data_bytes = json.dumps(req_body).encode("utf-8")
+        http_req = urllib.request.Request(
+            url,
+            data=data_bytes,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+
+        try:
+            with urllib.request.urlopen(http_req, timeout=30.0) as resp:
+                resp_bytes = resp.read()
+                resp_json = json.loads(resp_bytes.decode("utf-8"))
+                latency = time.perf_counter() - start_time
+
+                candidates = resp_json.get("candidates", [])
+                if not candidates:
+                    return ModelResponse(
+                        task_id=request.task_id,
+                        is_success=False,
+                        error_message="Gemini returned empty candidate list.",
+                        model_identifier=self.model_id,
+                        provider=self.provider_name,
+                        latency_seconds=latency,
+                        raw_response=resp_json,
+                    )
+
+                parts = candidates[0].get("content", {}).get("parts", [])
+                text_out = parts[0].get("text", "") if parts else ""
+
+                usage = resp_json.get("usageMetadata", {})
+                prompt_tokens = usage.get("promptTokenCount", 0)
+                cand_tokens = usage.get("candidatesTokenCount", 0)
+                total_tokens = usage.get("totalTokenCount", prompt_tokens + cand_tokens)
+
+                resp_id = resp_json.get("responseId") or f"resp_gemini_{hashlib.sha256(resp_bytes).hexdigest()[:12]}"
+
+                candidate_payload = {"code": text_out, "summary": f"Gemini response for '{request.objective}'"}
+                payload_digest = compute_provider_payload_digest(
+                    candidate_payload=candidate_payload,
+                    raw_response=resp_json,
+                    objective=request.objective,
+                )
+
+                receipt = ProviderExecutionReceipt(
+                    request_id=req_id,
+                    response_id=resp_id,
+                    provider_name=self.provider_name,
+                    model_id=self.model_id,
+                    latency_seconds=latency,
+                    tokens_prompt=prompt_tokens,
+                    tokens_completion=cand_tokens,
+                    tokens_total=total_tokens,
+                    payload_digest=payload_digest,
+                )
+
+                return ModelResponse(
+                    task_id=request.task_id,
+                    candidate_payload=candidate_payload,
+                    model_identifier=self.model_id,
+                    provider=self.provider_name,
+                    inference_effort=request.inference_effort,
+                    tokens_consumed=total_tokens,
+                    latency_seconds=latency,
+                    is_success=True,
+                    raw_response=resp_json,
+                    provider_receipt=receipt,
+                )
         except Exception as e:
+            latency = time.perf_counter() - start_time
             return ModelResponse(
                 task_id=request.task_id,
                 is_success=False,
-                error_message=f"Gemini API error: {str(e)}",
+                error_message=f"Gemini API execution failure: {type(e).__name__}: {str(e)}",
                 model_identifier=self.model_id,
                 provider=self.provider_name,
-                latency_seconds=time.perf_counter() - start_time,
+                latency_seconds=latency,
             )

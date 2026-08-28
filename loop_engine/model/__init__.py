@@ -14,6 +14,8 @@ from loop_engine.model.boundary import (
     ModelAdapter,
     ModelRequest,
     ModelResponse,
+    ProviderExecutionReceipt,
+    compute_provider_payload_digest,
 )
 from loop_engine.model.context_compiler import (
     CompiledContext,
@@ -54,6 +56,8 @@ __all__ = [
     "ModelAdapter",
     "ModelRequest",
     "ModelResponse",
+    "ProviderExecutionReceipt",
+    "compute_provider_payload_digest",
     "CompiledContext",
     "ContextClass",
     "ContextCompiler",

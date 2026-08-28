@@ -35,6 +35,8 @@ from loop_engine.model.boundary import (
     ModelAdapter,
     ModelRequest,
     ModelResponse,
+    ProviderExecutionReceipt,
+    compute_provider_payload_digest,
 )
 from loop_engine.model.candidate_search import (
     CandidateEvaluation,
@@ -121,12 +123,24 @@ class TaskRunRecord(BaseModel):
     tokens_consumed: int
     deficits_resolved: int = 0
     failure_signatures_recorded: List[str] = Field(default_factory=list)
+    provider_receipt: Optional[ProviderExecutionReceipt] = None
     receipt_digest: str = ""
 
     def model_post_init(self, __context: Any) -> None:
-        # Enforce invariant: Mock runs cannot be labeled empirical
-        if (self.provider == "mock" or "mock" in self.model_id.lower()) and self.evidence_modality == EvidenceModality.EMPIRICAL_MODEL:
-            raise ValueError("Mock runs cannot be labeled empirical.")
+        # Enforce invariant: EMPIRICAL_MODEL requires valid ProviderExecutionReceipt
+        if self.evidence_modality == EvidenceModality.EMPIRICAL_MODEL:
+            if self.provider == "mock" or "mock" in self.model_id.lower():
+                raise ValueError("Mock runs cannot be labeled empirical.")
+            if self.provider_receipt is None:
+                raise ValueError("EMPIRICAL_MODEL requires a valid ProviderExecutionReceipt.")
+            if not isinstance(self.provider_receipt, ProviderExecutionReceipt):
+                raise ValueError("provider_receipt must be an instance of ProviderExecutionReceipt.")
+            if not self.provider_receipt.receipt_digest or self.provider_receipt.receipt_digest != self.provider_receipt.compute_digest():
+                raise ValueError("Corrupted ProviderExecutionReceipt digest.")
+            if self.provider_receipt.provider_name != self.provider or self.provider_receipt.model_id != self.model_id:
+                raise ValueError("ProviderExecutionReceipt does not match record provider or model identity.")
+            if self.provider_receipt.provider_name == "mock":
+                raise ValueError("Mock provider receipt cannot establish empirical modality.")
 
         if self.qualification == EvidenceQualification.UNQUALIFIED:
             self.is_qualified_success = False
@@ -136,12 +150,13 @@ class TaskRunRecord(BaseModel):
             self.is_qualified_success = bool(self.is_success and self.score > 0.0)
 
         if not self.receipt_digest:
+            receipt_part = self.provider_receipt.receipt_digest if self.provider_receipt else ""
             raw = (
                 f"{self.task_id}:{self.task_seed}:{self.dimension.value}:{self.model_id}:"
                 f"{self.execution_mode}:{self.is_success}:{self.score}:{self.evidence_modality.value}:"
                 f"{self.qualification.value}:{self.is_qualified_success}:{self.supplied_context_digest}:"
                 f"{self.candidate_digest}:{self.verifier_identity}:{self.verifier_version}:"
-                f"{self.execution_trace_digest}:{self.attempts}:{self.total_model_calls}"
+                f"{self.execution_trace_digest}:{self.attempts}:{self.total_model_calls}:{receipt_part}"
             )
             self.receipt_digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
@@ -168,6 +183,13 @@ class BenchmarkResult(BaseModel):
         if self.evidence_modality == EvidenceModality.EMPIRICAL_MODEL:
             if "mock" in self.model_a_id.lower() or "mock" in self.model_b_id.lower():
                 raise ValueError("Mock runs cannot be labeled empirical.")
+            if not self.records:
+                raise ValueError("EMPIRICAL_MODEL benchmark result requires verified physical records.")
+            for r in self.records:
+                if r.evidence_modality != EvidenceModality.EMPIRICAL_MODEL:
+                    raise ValueError("EMPIRICAL_MODEL benchmark result cannot contain non-empirical records.")
+                if r.provider_receipt is None:
+                    raise ValueError("All records in EMPIRICAL_MODEL benchmark result must have valid provider receipts.")
 
 
 def create_deterministic_knowledge_task(
@@ -495,13 +517,8 @@ class BenchmarkRunner:
         self,
         adapter: ModelAdapter,
         task: BenchmarkTask,
-        evidence_modality: Optional[EvidenceModality] = None,
     ) -> TaskRunRecord:
         """Runs task with naked model (no context compilation, no deficit loop, no repair)."""
-        modality = evidence_modality or getattr(adapter, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
-        if adapter.provider_name == "mock" and modality == EvidenceModality.EMPIRICAL_MODEL:
-            raise ValueError("Mock runs cannot be labeled empirical.")
-
         start = time.perf_counter()
         req = ModelRequest(
             task_id=task.task_id,
@@ -515,7 +532,7 @@ class BenchmarkRunner:
         if not task.is_qualified or task.evaluator is None:
             eval_res = CandidateEvaluation(
                 candidate_id="none",
-                payload=resp.candidate_payload,
+                payload=resp.candidate_payload if resp else None,
                 is_valid=False,
                 score=0.0,
                 failure_classification="VERIFIER_DEFICIT",
@@ -524,9 +541,19 @@ class BenchmarkRunner:
             )
             qualification = EvidenceQualification.UNQUALIFIED
         else:
-            raw_eval = task.evaluator(resp.candidate_payload)
+            raw_eval = task.evaluator(resp.candidate_payload) if (resp and resp.is_success) else None
             qualification = EvidenceQualification.QUALIFIED
-            if isinstance(raw_eval, CandidateEvaluation):
+            if raw_eval is None:
+                eval_res = CandidateEvaluation(
+                    candidate_id="none",
+                    payload=resp.candidate_payload if resp else None,
+                    is_valid=False,
+                    score=0.0,
+                    failure_classification="EXECUTION_FAILURE",
+                    failure_signature="SIG_MODEL_EXECUTION_FAILED",
+                    execution_trace=f"Model execution failed: {resp.error_message if resp else 'No response'}",
+                )
+            elif isinstance(raw_eval, CandidateEvaluation):
                 eval_res = raw_eval
             elif isinstance(raw_eval, bool):
                 eval_res = CandidateEvaluation(
@@ -547,12 +574,26 @@ class BenchmarkRunner:
                     execution_trace=f"Unknown evaluation result format: {type(raw_eval)}",
                 )
 
+        receipt = resp.provider_receipt if (resp and resp.is_success) else None
+        if (
+            receipt is not None
+            and isinstance(receipt, ProviderExecutionReceipt)
+            and receipt.is_valid_for_response(resp, req)
+            and adapter.provider_name != "mock"
+            and receipt.provider_name != "mock"
+        ):
+            modality = EvidenceModality.EMPIRICAL_MODEL
+            verified_receipt = receipt
+        else:
+            modality = EvidenceModality.STRUCTURAL_MOCK
+            verified_receipt = None
+
         supplied_context_digest = hashlib.sha256(b"").hexdigest()
-        candidate_digest = hashlib.sha256(str(resp.candidate_payload).encode("utf-8")).hexdigest()
+        candidate_digest = hashlib.sha256(str(resp.candidate_payload if resp else "").encode("utf-8")).hexdigest()
         trace_digest = hashlib.sha256((eval_res.execution_trace or "").encode("utf-8")).hexdigest()
 
-        is_success = bool(eval_res.is_valid and qualification == EvidenceQualification.QUALIFIED)
-        score = eval_res.score if (qualification == EvidenceQualification.QUALIFIED and eval_res.is_valid) else 0.0
+        is_success = bool(eval_res.is_valid and qualification == EvidenceQualification.QUALIFIED and (resp and resp.is_success))
+        score = eval_res.score if is_success else 0.0
         is_qualified_success = bool(is_success and score > 0.0)
 
         return TaskRunRecord(
@@ -576,9 +617,10 @@ class BenchmarkRunner:
             attempts=1,
             total_model_calls=1,
             latency_seconds=duration,
-            tokens_consumed=resp.tokens_consumed or 200,
+            tokens_consumed=(resp.tokens_consumed if resp and resp.tokens_consumed else 200),
             deficits_resolved=0,
             failure_signatures_recorded=[eval_res.failure_signature] if eval_res.failure_signature else [],
+            provider_receipt=verified_receipt,
         )
 
     def run_task_ten_shadows(
@@ -589,15 +631,10 @@ class BenchmarkRunner:
         enable_deficit_protocol: bool = True,
         enable_repair_feedback: bool = True,
         enable_adaptive_search: bool = True,
-        evidence_modality: Optional[EvidenceModality] = None,
     ) -> TaskRunRecord:
         """
         Runs task with Ten Shadows competence substrate (Compiled Context + Deficit Protocol + Search & Repair).
         """
-        modality = evidence_modality or getattr(adapter, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
-        if adapter.provider_name == "mock" and modality == EvidenceModality.EMPIRICAL_MODEL:
-            raise ValueError("Mock runs cannot be labeled empirical.")
-
         start = time.perf_counter()
         context_kwargs: Dict[str, Any] = {}
         if enable_context_compiler:
@@ -672,6 +709,28 @@ class BenchmarkRunner:
         total_calls += search_calls
         duration = time.perf_counter() - start
 
+        # Derive modality mechanically from validated receipt
+        winning_receipt = getattr(best_eval, "provider_receipt", None) or (resp.provider_receipt if (resp and resp.is_success) else None)
+        dummy_response = ModelResponse(
+            task_id=task.task_id,
+            candidate_payload=best_eval.payload,
+            model_identifier=adapter.model_id,
+            provider=adapter.provider_name,
+            raw_response=getattr(best_eval, "raw_response", None) or (resp.raw_response if resp else None),
+        )
+        if (
+            winning_receipt is not None
+            and isinstance(winning_receipt, ProviderExecutionReceipt)
+            and winning_receipt.is_valid_for_response(dummy_response, base_req)
+            and adapter.provider_name != "mock"
+            and winning_receipt.provider_name != "mock"
+        ):
+            modality = EvidenceModality.EMPIRICAL_MODEL
+            verified_receipt = winning_receipt
+        else:
+            modality = EvidenceModality.STRUCTURAL_MOCK
+            verified_receipt = None
+
         supplied_context_digest = hashlib.sha256(str(context_kwargs).encode("utf-8")).hexdigest()
         candidate_digest = hashlib.sha256(str(best_eval.payload).encode("utf-8")).hexdigest()
         trace_digest = hashlib.sha256((best_eval.execution_trace or "").encode("utf-8")).hexdigest()
@@ -706,6 +765,7 @@ class BenchmarkRunner:
             failure_signatures_recorded=[
                 e.failure_signature for e in all_evals if e.failure_signature
             ],
+            provider_receipt=verified_receipt,
         )
 
     def run_comparative_benchmark(
@@ -713,7 +773,6 @@ class BenchmarkRunner:
         model_a: ModelAdapter,
         model_b: ModelAdapter,
         corpus: Optional[List[BenchmarkTask]] = None,
-        evidence_modality: Optional[EvidenceModality] = None,
     ) -> BenchmarkResult:
         """
         Executes full comparative benchmark between Model A (e.g. Strong) and Model B (e.g. Weak).
@@ -722,10 +781,6 @@ class BenchmarkRunner:
         """
         tasks = corpus or create_canonical_benchmark_corpus()
         records: List[TaskRunRecord] = []
-
-        modality = evidence_modality or getattr(model_a, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
-        if (model_a.provider_name == "mock" or model_b.provider_name == "mock") and modality == EvidenceModality.EMPIRICAL_MODEL:
-            raise ValueError("Mock runs cannot be labeled empirical.")
 
         qualified_tasks = [t for t in tasks if t.is_qualified]
         unqualified_tasks = [t for t in tasks if not t.is_qualified]
@@ -743,12 +798,12 @@ class BenchmarkRunner:
         latency_b: List[float] = []
 
         for task in tasks:
-            rec_na = self.run_task_naked(model_a, task, evidence_modality=modality)
-            rec_nb = self.run_task_naked(model_b, task, evidence_modality=modality)
+            rec_na = self.run_task_naked(model_a, task)
+            rec_nb = self.run_task_naked(model_b, task)
             records.extend([rec_na, rec_nb])
 
-            rec_tsa = self.run_task_ten_shadows(model_a, task, evidence_modality=modality)
-            rec_tsb = self.run_task_ten_shadows(model_b, task, evidence_modality=modality)
+            rec_tsa = self.run_task_ten_shadows(model_a, task)
+            rec_tsb = self.run_task_ten_shadows(model_b, task)
             records.extend([rec_tsa, rec_tsb])
 
             # ONLY qualified tasks enter elasticity calculations!
@@ -762,6 +817,12 @@ class BenchmarkRunner:
                 attempts_b.append(rec_tsb.attempts)
                 latency_a.append(rec_tsa.latency_seconds)
                 latency_b.append(rec_tsb.latency_seconds)
+
+        # Modality derived across records:
+        if records and all(r.evidence_modality == EvidenceModality.EMPIRICAL_MODEL for r in records):
+            modality = EvidenceModality.EMPIRICAL_MODEL
+        else:
+            modality = EvidenceModality.STRUCTURAL_MOCK
 
         if not qualified_tasks:
             return BenchmarkResult(

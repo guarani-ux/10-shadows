@@ -19,6 +19,7 @@ from loop_engine.model.boundary import (
     ModelAdapter,
     ModelRequest,
     ModelResponse,
+    ProviderExecutionReceipt,
 )
 from loop_engine.model.context_compiler import ContextCompiler, CompiledContext
 
@@ -48,6 +49,8 @@ class CandidateEvaluation(BaseModel):
     execution_trace: Optional[str] = None
     negative_constraint: Optional[str] = None
     observed_outputs: Optional[List[Any]] = None
+    raw_response: Optional[Dict[str, Any]] = None
+    provider_receipt: Optional[ProviderExecutionReceipt] = None
 
 
 class SearchEngine:
@@ -186,7 +189,12 @@ class SearchEngine:
                     candidates.extend(response.structured_alternatives)
 
                 # Evaluate all candidates against physical evaluator
-                evaluated_batch = [self.evaluator(c) for c in candidates]
+                evaluated_batch = []
+                for c in candidates:
+                    eval_c = self.evaluator(c)
+                    eval_c.raw_response = response.raw_response
+                    eval_c.provider_receipt = response.provider_receipt
+                    evaluated_batch.append(eval_c)
                 all_evals.extend(evaluated_batch)
 
                 # Pick the highest scoring valid candidate
@@ -213,6 +221,8 @@ class SearchEngine:
                 model_calls += 1
 
                 eval_result = self.evaluator(response.candidate_payload)
+                eval_result.raw_response = response.raw_response
+                eval_result.provider_receipt = response.provider_receipt
                 all_evals.append(eval_result)
 
                 if eval_result.is_valid:

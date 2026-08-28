@@ -26,12 +26,20 @@ from loop_engine.dispatcher.protocol import (
 from loop_engine.dispatcher.providers.base import WorkerProviderAdapter
 from loop_engine.dispatcher.providers.deterministic_provider import DeterministicWorkerAdapter
 from loop_engine.dispatcher.providers.gemini_provider import GeminiWorkerAdapter
+from loop_engine.dispatcher.providers.shadow_provider import ShadowDomainWorkerAdapter
 from loop_engine.harness.git_worktree import assert_not_authoritative_source
 
 
 PROVIDER_REGISTRY: Dict[str, Type[WorkerProviderAdapter]] = {
     "deterministic": DeterministicWorkerAdapter,
     "gemini": GeminiWorkerAdapter,
+    "shadow": ShadowDomainWorkerAdapter,
+    "forge": ShadowDomainWorkerAdapter,
+    "alchemist": ShadowDomainWorkerAdapter,
+    "svris": ShadowDomainWorkerAdapter,
+    "scribe": ShadowDomainWorkerAdapter,
+    "herald": ShadowDomainWorkerAdapter,
+    "gamemaster": ShadowDomainWorkerAdapter,
 }
 
 
@@ -91,7 +99,11 @@ def dispatch_worker(auth: WorkerAuthorization) -> WorkerExecutionResult:
         )
 
     # 4. Resolve Provider Adapter
-    provider_cls = PROVIDER_REGISTRY.get(auth.requested_provider.lower())
+    req_prov = auth.requested_provider.lower()
+    if req_prov.startswith("shadow:"):
+        provider_cls = ShadowDomainWorkerAdapter
+    else:
+        provider_cls = PROVIDER_REGISTRY.get(req_prov)
     if not provider_cls:
         now = datetime.now(timezone.utc).isoformat()
         return WorkerExecutionResult(

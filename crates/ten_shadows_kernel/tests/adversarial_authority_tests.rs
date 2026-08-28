@@ -916,3 +916,61 @@ fn test_15_repair_loop_multi_attempt_retention() {
     assert!(report.is_execution_valid);
     assert!(report.is_production_valid);
 }
+
+#[test]
+fn test_16_shadow_domain_forge_dispatch() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("shadow_forge");
+    let db_dir = create_test_dir("db_sh_f");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("Synthesize Forge module", &disposable_repo, None);
+    let run_id = run.run_id.clone();
+    let task_id = run.task_id.clone();
+    let obj_hash = run.objective_hash.clone();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_sh_f");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let run_auth = run_ws.authorize_worker("forge_domain_builder");
+
+    // Dispatch to shadow:forge domain adapter
+    let run_cand = run_auth.dispatch_and_produce_candidate("shadow:forge", "forge", None).unwrap();
+    match run_cand.candidate_classification.as_ref().unwrap() {
+        CandidateClassification::Governed(g) => {
+            assert_ne!(&g.lineage.candidate_sha, &baseline_sha);
+            assert_eq!(g.lineage.mutations_count, 1);
+        }
+        _ => panic!("Candidate must be classified as Governed"),
+    }
+
+    let mock_ver = IndependentVerificationRecord {
+        verifier_id: "svris_sh_01".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        builder_id: "forge_domain_builder".into(),
+        modality: EvidenceModality::DeterministicTest,
+        purpose: EvidencePurpose::BehavioralVerification,
+        test_digest: "test_sh_f".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("PASSED".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(mock_ver);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    assert_eq!(receipt.final_status, RunStatus::VerifiedSuccess);
+    assert_eq!(receipt.worker_invocations[0].provider, "shadow_forge");
+    assert_eq!(receipt.worker_invocations[0].model, "SHADOW_FORGE_ENGINE_v3");
+    assert_eq!(receipt.worker_invocations[0].status, "SUCCESS");
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(report.is_production_valid);
+}

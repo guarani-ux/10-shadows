@@ -244,3 +244,104 @@ def test_deterministic_repair_loop(disposable_workspace):
     res2 = dispatch_worker(auth2)
     assert "src/repaired_module.py" in res2.files_changed
     assert not (ws_path / "tests" / "test_deliberate_fail.py").exists()
+
+
+def test_shadow_domain_worker_dispatch(disposable_workspace):
+    """Verifies that internal Shadow domain adapters (Forge, Alchemist, SVRIS) execute cleanly via dispatcher."""
+    ws_path, baseline_sha = disposable_workspace
+    now = datetime.now(timezone.utc).isoformat()
+
+    # 1. Test Forge Domain Dispatch
+    token_forge = compute_authorization_token(
+        run_id="run_forge_dom",
+        task_id="task_forge_dom",
+        invocation_id="inv_forge_dom_1",
+        objective_hash="hash_forge_dom",
+        baseline_sha=baseline_sha,
+        governed_workspace_path=str(ws_path),
+        attempt_number=1,
+    )
+    auth_forge = WorkerAuthorization(
+        run_id="run_forge_dom",
+        task_id="task_forge_dom",
+        invocation_id="inv_forge_dom_1",
+        worker_id="forge_domain_builder",
+        objective="Synthesize domain module",
+        objective_hash="hash_forge_dom",
+        baseline_sha=baseline_sha,
+        governed_workspace_path=str(ws_path),
+        governed_workspace_identity="ws_forge_dom",
+        requested_provider="shadow:forge",
+        requested_model="forge",
+        filesystem_boundary=str(ws_path),
+        authorized_at=now,
+        authorization_token=token_forge,
+    )
+    res_forge = dispatch_worker(auth_forge)
+    assert res_forge.exit_status == "SUCCESS"
+    assert res_forge.resolved_provider == "shadow_forge"
+    assert (ws_path / "forge_generated_module.py").exists()
+    assert res_forge.workspace_after_sha != baseline_sha
+
+    # 2. Test Alchemist Domain Dispatch
+    token_alch = compute_authorization_token(
+        run_id="run_alch_dom",
+        task_id="task_alch_dom",
+        invocation_id="inv_alch_dom_1",
+        objective_hash="hash_alch_dom",
+        baseline_sha=res_forge.workspace_after_sha,
+        governed_workspace_path=str(ws_path),
+        attempt_number=1,
+    )
+    auth_alch = WorkerAuthorization(
+        run_id="run_alch_dom",
+        task_id="task_alch_dom",
+        invocation_id="inv_alch_dom_1",
+        worker_id="alchemist_domain_healer",
+        objective="Heal crash trace",
+        objective_hash="hash_alch_dom",
+        baseline_sha=res_forge.workspace_after_sha,
+        governed_workspace_path=str(ws_path),
+        governed_workspace_identity="ws_alch_dom",
+        requested_provider="shadow:alchemist",
+        requested_model="alchemist",
+        failure_evidence="AssertionError: Test failed at line 10",
+        filesystem_boundary=str(ws_path),
+        authorized_at=now,
+        authorization_token=token_alch,
+    )
+    res_alch = dispatch_worker(auth_alch)
+    assert res_alch.exit_status == "SUCCESS"
+    assert res_alch.resolved_provider == "shadow_alchemist"
+    assert (ws_path / "alchemist_repair_manifest.json").exists()
+
+    # 3. Test SVRIS Domain Dispatch
+    token_svris = compute_authorization_token(
+        run_id="run_svris_dom",
+        task_id="task_svris_dom",
+        invocation_id="inv_svris_dom_1",
+        objective_hash="hash_svris_dom",
+        baseline_sha=res_alch.workspace_after_sha,
+        governed_workspace_path=str(ws_path),
+        attempt_number=1,
+    )
+    auth_svris = WorkerAuthorization(
+        run_id="run_svris_dom",
+        task_id="task_svris_dom",
+        invocation_id="inv_svris_dom_1",
+        worker_id="svris_domain_auditor",
+        objective="Perform semantic audit",
+        objective_hash="hash_svris_dom",
+        baseline_sha=res_alch.workspace_after_sha,
+        governed_workspace_path=str(ws_path),
+        governed_workspace_identity="ws_svris_dom",
+        requested_provider="shadow:svris",
+        requested_model="svris",
+        filesystem_boundary=str(ws_path),
+        authorized_at=now,
+        authorization_token=token_svris,
+    )
+    res_svris = dispatch_worker(auth_svris)
+    assert res_svris.exit_status == "SUCCESS"
+    assert res_svris.resolved_provider == "shadow_svris"
+    assert (ws_path / "svris_audit_report.json").exists()

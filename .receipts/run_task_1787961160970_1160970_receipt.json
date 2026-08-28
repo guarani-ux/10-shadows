@@ -1,0 +1,88 @@
+{
+  "receipt_version": "3.0.0",
+  "kernel_version": "TEN_SHADOWS_TRUSTED_KERNEL_RUST_v3",
+  "run_id": "run_task_1787961160970_1160970",
+  "task_id": "task_1787961160970",
+  "objective": "Add deterministic feature and verify",
+  "objective_hash": "086f05ced3ac58b0b616845e08468c6998c44e255e8128cd01690bc8f17c2812",
+  "target_path": "\\\\?\\C:\\Users\\flowe\\AppData\\Local\\Temp\\test_repo_6394648aa7fb47fba9c43013e1e92094",
+  "starting_head": "35ee95782b589a5e4c10a2f3c4de67ea10338450",
+  "final_head": "3a1a27cc6c4ec7594d94e348e81c5e5fa59309db",
+  "candidate_classification": {
+    "kind": "Governed",
+    "details": {
+      "lineage": {
+        "parent_baseline_sha": "35ee95782b589a5e4c10a2f3c4de67ea10338450",
+        "workspace_id": "\\\\?\\C:\\Users\\flowe\\AppData\\Local\\Temp\\10_shadows_worktrees\\wt_run_task_1787961160970_1160970",
+        "worker_invocation_id": "inv_task_1787961160970_1",
+        "mutations_count": 1,
+        "candidate_sha": "3a1a27cc6c4ec7594d94e348e81c5e5fa59309db",
+        "created_at": "2026-08-28T23:52:42.569Z"
+      }
+    }
+  },
+  "routing_strategy": "ADVERSARIAL_AUDIT",
+  "routing_decision_digest": "5582780b51e56570d88b90b5aad071c470ac7abeea8a212a187710b07493156f",
+  "capabilities_selected": [
+    "STATIC_INSPECTION",
+    "ADVERSARIAL_FALSIFICATION",
+    "CONTRACT_VERIFICATION"
+  ],
+  "attempts": [],
+  "worker_invocations": [
+    {
+      "invocation_id": "inv_task_1787961160970_1",
+      "worker_id": "forge_builder_task_1787961160970",
+      "provider": "deterministic_test_harness",
+      "model": "deterministic-v1",
+      "role": "BUILDER",
+      "modality": "STRUCTURAL",
+      "input_digest": "086f05ced3ac58b0b616845e08468c6998c44e255e8128cd01690bc8f17c2812",
+      "output_digest": "21162dddaace62e822bf104ff905533a5786770d698c59a22e8b35f636a53762",
+      "started_at": "2026-08-28T23:52:42.177134+00:00",
+      "ended_at": "2026-08-28T23:52:42.482652+00:00",
+      "duration_seconds": 0.306,
+      "status": "SUCCESS",
+      "provider_receipt": null
+    }
+  ],
+  "artifacts_produced": [],
+  "verification": {
+    "verifier_id": "svris_independent_verifier_task_1787961160970",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "forge_builder_task_1787961160970",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "74972b3f98257f4a21db8465efc23b269ac76a9f49a6dad5edc2fccb9a3bfda3",
+    "tests_collected": 1,
+    "tests_passed": 0,
+    "tests_failed": 1,
+    "exit_code": 4,
+    "duration_seconds": 3.264,
+    "falsification_attempted": true,
+    "verified_status": "FAIL",
+    "execution_trace": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\flowe\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\ncachedir: .pytest_cache\r\nrootdir: C:\\Users\\flowe\\AppData\\Local\\Temp\\10_shadows_worktrees\\wt_run_task_1787961160970_1160970\r\nplugins: anyio-4.12.1, ddtrace-4.7.1, Faker-40.15.0, langsmith-0.7.36, logfire-4.32.1, cov-7.1.0, typeguard-4.4.3\r\ncollecting ... collected 0 items\r\n\r\n============================ no tests ran in 0.02s ============================\r\n\nERROR: file or directory not found: tests/\r\n\r\n",
+    "timestamp": "2026-08-28T23:52:45.833Z"
+  },
+  "promotion": {
+    "head": "3a1a27cc6c4ec7594d94e348e81c5e5fa59309db",
+    "rejection_reason": null,
+    "status": "REJECTED"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": true,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": true,
+    "claim_candidate_produced_under_custody": true,
+    "claim_independently_verified": false,
+    "claim_promoted": false,
+    "claim_target_behaviorally_tested": false,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "FAILED",
+  "created_at": "2026-08-28T23:52:40.971Z",
+  "sealed_at": "2026-08-28T23:52:45.833Z",
+  "receipt_signature": "90c3c3c79f16e759cd3c02dd34065f4ea82769ea878b25316435a1c31649ff4b"
+}

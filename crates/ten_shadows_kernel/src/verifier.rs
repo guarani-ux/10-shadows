@@ -24,7 +24,11 @@ impl SubprocessVerifier {
         let (cmd_bin, args) = if let Some(cmd_parts) = custom_cmd {
             (cmd_parts[0].clone(), cmd_parts[1..].to_vec())
         } else {
-            ("pytest".to_string(), vec!["tests/".to_string(), "-v".to_string(), "--tb=short".to_string()])
+            let mut args = vec!["-v".to_string(), "--tb=short".to_string()];
+            if target_path.join("tests").exists() {
+                args.insert(0, "tests/".to_string());
+            }
+            ("pytest".to_string(), args)
         };
 
         let output_res = Command::new(&cmd_bin)

@@ -1,48 +1,69 @@
+#!/usr/bin/env python3
 """
 start_ten_shadows.py
-Unified Human-Facing Launcher and Mandatory Execution Authority for Ten Shadows.
+Unified Human-Facing Launcher & Execution Authority Entrypoint for 10 SHADOWS.
 
-Supported Usage:
-    # Run an objective against a target codebase:
-    python start_ten_shadows.py run --target "C:\\10 SHADOWS\\sandbox\\job_hunter" --objective "Harden persistence and determinism"
-
-    # Interactive run mode:
-    python start_ten_shadows.py run
-
-    # Verify a completed execution receipt or run ID:
-    python start_ten_shadows.py verify-receipt TS-20260828-0001
-    python start_ten_shadows.py verify-receipt .receipts/run_task_123_receipt.json
-
-    # Check status of kernel database:
-    python start_ten_shadows.py status
+Supports:
+- Canonical Rust Trusted Kernel delegation (`ts`)
+- Interactive operator ingress
+- Receipt verification
+- Status inspection
 """
+
 from __future__ import annotations
 
 import argparse
-import json
 import os
+import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Optional
 
-# Ensure 10 SHADOWS root is on sys.path
+# Ensure project root is in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from loop_engine.execution_authority import (
     TenShadowsKernel,
-    is_ten_shadows_execution,
-    verify_execution_receipt,
     RunStatus,
+    verify_execution_receipt,
+    is_ten_shadows_execution,
 )
 from loop_engine.kernel_db import KernelDatabase
 
 
-def handle_run(target_str: Optional[str], objective_str: Optional[str]) -> int:
-    """Executes a fully governed Ten Shadows run."""
+def find_ts_binary() -> Optional[Path]:
+    """Finds the compiled ts kernel binary if present."""
+    possible_paths = [
+        PROJECT_ROOT / "crates" / "ten_shadows_kernel" / "target" / "release" / "ts.exe",
+        PROJECT_ROOT / "crates" / "ten_shadows_kernel" / "target" / "release" / "ts",
+        PROJECT_ROOT / "crates" / "ten_shadows_kernel" / "target" / "debug" / "ts.exe",
+        PROJECT_ROOT / "crates" / "ten_shadows_kernel" / "target" / "debug" / "ts",
+    ]
+    for p in possible_paths:
+        if p.exists() and p.is_file():
+            return p
+    
+    # Check PATH
+    which_ts = shutil.which("ts")
+    if which_ts:
+        return Path(which_ts)
+    return None
+
+
+def handle_run(
+    target_str: Optional[str],
+    objective_str: Optional[str],
+    mutate: bool = False,
+    provider: str = "deterministic",
+    model: str = "deterministic-v1",
+    strategy: Optional[str] = None,
+) -> int:
+    """Executes a fully governed Ten Shadows run via canonical trusted kernel."""
     print("========================================================", flush=True)
-    print("                 TEN SHADOWS KERNEL EXECUTION           ", flush=True)
+    print("       TEN SHADOWS CANONICAL KERNEL EXECUTION           ", flush=True)
     print("========================================================", flush=True)
 
     # 1. Gather target and objective
@@ -70,15 +91,40 @@ def handle_run(target_str: Optional[str], objective_str: Optional[str]) -> int:
         print("[ERROR] Objective cannot be empty.", file=sys.stderr)
         return 1
 
-    print(f"\n[KERNEL] Initializing Ten Shadows run...", flush=True)
+    # 2. Check if canonical Rust binary is available
+    ts_bin = find_ts_binary()
+    if ts_bin:
+        cmd = [
+            str(ts_bin),
+            "run",
+            "--target",
+            str(target_path),
+            "--objective",
+            objective_str,
+            "--provider",
+            provider,
+            "--model",
+            model,
+        ]
+        if mutate:
+            cmd.append("--mutate")
+        if strategy:
+            cmd.extend(["--strategy", strategy])
+
+        proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+        return proc.returncode
+
+    # 3. Fallback to Python Kernel Implementation
+    print(f"\n[KERNEL] Initializing Ten Shadows Python Kernel...", flush=True)
     print(f"  Target:    {target_path}", flush=True)
     print(f"  Objective: {objective_str[:80]}...", flush=True)
 
-    # 2. Instantiate Kernel and Execute
     kernel = TenShadowsKernel()
     receipt = kernel.run_objective(
         objective=objective_str,
         target_path=target_path,
+        provider_name=provider,
+        model_name=model,
     )
 
     print("\n========================================================", flush=True)
@@ -94,7 +140,6 @@ def handle_run(target_str: Optional[str], objective_str: Optional[str]) -> int:
     print(f"Signature:      {receipt.receipt_signature[:16]}...", flush=True)
     print(f"Receipt File:   .receipts/{receipt.run_id}_receipt.json\n", flush=True)
 
-    # 3. Verify Mechanical Invariant
     is_valid = is_ten_shadows_execution(receipt.run_id, kernel_db=kernel.db)
     print(f"Mechanical Ten Shadows Execution Verified: {is_valid}", flush=True)
 
@@ -107,6 +152,12 @@ def handle_verify(receipt_identifier: str) -> int:
     print("           TEN SHADOWS RECEIPT VERIFICATION            ", flush=True)
     print("========================================================", flush=True)
     print(f"Target: {receipt_identifier}\n", flush=True)
+
+    ts_bin = find_ts_binary()
+    if ts_bin:
+        cmd = [str(ts_bin), "verify-receipt", receipt_identifier]
+        proc = subprocess.run(cmd, cwd=str(PROJECT_ROOT))
+        return proc.returncode
 
     kernel = TenShadowsKernel()
     target_path = Path(receipt_identifier)
@@ -162,6 +213,10 @@ def main() -> int:
     run_parser = subparsers.add_parser("run", help="Execute an objective under Ten Shadows kernel authority")
     run_parser.add_argument("--target", "-t", type=str, help="Target repository or working directory")
     run_parser.add_argument("--objective", "-o", type=str, help="Goal or objective statement")
+    run_parser.add_argument("--mutate", "-m", action="store_true", help="Authorize governed workspace mutations and promotion")
+    run_parser.add_argument("--provider", "-p", type=str, default="deterministic", help="Model/worker provider (deterministic, gemini, shadow:forge, shadow:alchemist, shadow:svris)")
+    run_parser.add_argument("--model", type=str, default="deterministic-v1", help="Requested model ID")
+    run_parser.add_argument("--strategy", "-s", type=str, help="Routing strategy override")
 
     # 'verify-receipt' subcommand
     verify_parser = subparsers.add_parser("verify-receipt", help="Mechanically verify an execution receipt or run ID")
@@ -173,14 +228,26 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "run":
-        return handle_run(target_str=args.target, objective_str=args.objective)
+        return handle_run(
+            target_str=args.target,
+            objective_str=args.objective,
+            mutate=args.mutate,
+            provider=args.provider,
+            model=args.model,
+            strategy=args.strategy,
+        )
     elif args.command == "verify-receipt":
         return handle_verify(args.receipt)
     elif args.command == "status":
         return handle_status()
     else:
-        # Default with no args: launch interactive run
-        return handle_run(target_str=None, objective_str=None)
+        return handle_run(
+            target_str=None,
+            objective_str=None,
+            mutate=False,
+            provider="deterministic",
+            model="deterministic-v1",
+        )
 
 
 if __name__ == "__main__":

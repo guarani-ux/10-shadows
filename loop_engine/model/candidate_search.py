@@ -47,6 +47,7 @@ class CandidateEvaluation(BaseModel):
     failure_signature: Optional[str] = None
     execution_trace: Optional[str] = None
     negative_constraint: Optional[str] = None
+    observed_outputs: Optional[List[Any]] = None
 
 
 class SearchEngine:
@@ -64,36 +65,69 @@ class SearchEngine:
 
     @staticmethod
     def _default_evaluator(candidate: Any) -> CandidateEvaluation:
-        """Default AST/smoke evaluator for candidates."""
+        """Default AST/smoke evaluator for candidates. Compiles and executes code in isolated namespace."""
         cid = f"cand_{hashlib.sha256(str(candidate).encode()).hexdigest()[:8]}"
-        if isinstance(candidate, dict):
-            status = candidate.get("status", "")
-            code = candidate.get("code", "")
-            if status == "SUCCESS" or "def run():" in code and "flawed" not in code and "raise" not in code:
-                return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=True, score=1.0)
-            elif "raise" in code or status == "ADVERSARIAL":
-                return CandidateEvaluation(
-                    candidate_id=cid,
-                    payload=candidate,
-                    is_valid=False,
-                    score=0.0,
-                    failure_classification="CANDIDATE_FAILURE",
-                    failure_signature="SIG_RUNTIME_EXCEPTION",
-                    execution_trace="Candidate raised unhandled exception during execution.",
-                    negative_constraint=f"DO NOT REPEAT: Code containing 'raise RuntimeError'",
-                )
-            else:
-                return CandidateEvaluation(
-                    candidate_id=cid,
-                    payload=candidate,
-                    is_valid=False,
-                    score=0.2,
-                    failure_classification="CANDIDATE_FAILURE",
-                    failure_signature="SIG_INCOMPLETE_IMPLEMENTATION",
-                    execution_trace="Candidate is missing full implementation.",
-                    negative_constraint=f"DO NOT REPEAT: Incomplete stub returning flawed value",
-                )
-        return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=True, score=0.5)
+        if not isinstance(candidate, dict):
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_INVALID_PAYLOAD",
+                execution_trace="Candidate is not a dictionary.",
+            )
+
+        code = candidate.get("code", "")
+        if not code or not isinstance(code, str):
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_NO_CODE",
+                execution_trace="Candidate missing 'code' string.",
+            )
+
+        exec_globals: Dict[str, Any] = {"__builtins__": __builtins__}
+        exec_locals: Dict[str, Any] = {}
+        try:
+            compiled = compile(code, "<candidate_smoke>", "exec")
+            exec(compiled, exec_globals, exec_locals)
+            if "run" in exec_locals and callable(exec_locals["run"]):
+                exec_locals["run"]()
+        except Exception as e:
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_RUNTIME_EXCEPTION",
+                execution_trace=f"Execution exception: {type(e).__name__}: {str(e)}",
+                negative_constraint=f"DO NOT REPEAT: Code containing '{type(e).__name__}'",
+            )
+
+        if "flawed" in code:
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.2,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_INCOMPLETE_IMPLEMENTATION",
+                execution_trace="Candidate contains flawed marker and incomplete implementation.",
+                negative_constraint="DO NOT REPEAT: Incomplete stub returning flawed value",
+            )
+
+        return CandidateEvaluation(
+            candidate_id=cid,
+            payload=candidate,
+            is_valid=True,
+            score=1.0,
+            execution_trace="Candidate passed basic smoke execution.",
+        )
 
     def determine_search_policy(
         self,

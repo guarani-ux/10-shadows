@@ -197,10 +197,68 @@ class MockModelAdapter(ModelAdapter):
             or request.compiled_context.get("NEGATIVE_CONSTRAINTS")
         )
         has_procedures = bool(request.compiled_context.get("PROCEDURE"))
-        has_domain_knowledge = bool(request.compiled_context.get("AUTHORITATIVE", {}).get("knowledge"))
+        domain_knowledge = (
+            request.compiled_context.get("AUTHORITATIVE", {}).get("knowledge")
+            or request.compiled_context.get("domain_knowledge")
+            or {}
+        )
+        has_domain_knowledge = bool(domain_knowledge)
+        is_tariff_task = "tariff" in request.objective.lower() or "calculate_tariff" in request.objective.lower()
+        has_tariff_rules = bool(domain_knowledge.get("tariff_rules"))
 
         if self.profile == MockModelProfile.STRONG:
-            payload: Dict[str, Any] = {
+            if is_tariff_task:
+                if has_tariff_rules:
+                    rules_dict = domain_knowledge["tariff_rules"]
+                    code = (
+                        "def calculate_tariff(tier: str, amount: float) -> float:\n"
+                        f"    rules = {repr(rules_dict)}\n"
+                        "    if tier not in rules:\n"
+                        "        return 0.0\n"
+                        "    r = rules[tier]\n"
+                        "    base = r['base']\n"
+                        "    rate = r['rate']\n"
+                        "    thresh = r['threshold']\n"
+                        "    surcharge = r['surcharge']\n"
+                        "    if amount > thresh:\n"
+                        "        val = base + (amount - thresh) * rate + surcharge\n"
+                        "    else:\n"
+                        "        val = base + amount * (rate * 0.5)\n"
+                        "    return round(val, 4)\n"
+                    )
+                    payload: Dict[str, Any] = {
+                        "status": "SUCCESS",
+                        "objective": request.objective,
+                        "code": code,
+                        "summary": "Strong synthesized tariff function from compiled rules",
+                    }
+                    return ModelResponse(
+                        task_id=request.task_id,
+                        candidate_payload=payload,
+                        model_identifier=self.model_id,
+                        provider=self.provider_name,
+                        inference_effort=request.inference_effort,
+                        tokens_consumed=tokens,
+                        latency_seconds=latency,
+                    )
+                else:
+                    return ModelResponse(
+                        task_id=request.task_id,
+                        declared_deficits=[
+                            DeficitDeclaration(
+                                deficit_type=DeficitType.MISSING_KNOWLEDGE,
+                                description="Specialized tariff rules not present in context.",
+                                required_provision="tariff_rules",
+                            )
+                        ],
+                        model_identifier=self.model_id,
+                        provider=self.provider_name,
+                        inference_effort=request.inference_effort,
+                        tokens_consumed=tokens,
+                        latency_seconds=latency,
+                    )
+
+            payload = {
                 "status": "SUCCESS",
                 "objective": request.objective,
                 "code": "def run():\n    return 'strong_verified_v1'\n",
@@ -235,6 +293,58 @@ class MockModelAdapter(ModelAdapter):
             )
 
         elif self.profile == MockModelProfile.WEAK:
+            if is_tariff_task:
+                if has_tariff_rules:
+                    rules_dict = domain_knowledge["tariff_rules"]
+                    code = (
+                        "def calculate_tariff(tier: str, amount: float) -> float:\n"
+                        f"    rules = {repr(rules_dict)}\n"
+                        "    if tier not in rules:\n"
+                        "        return 0.0\n"
+                        "    r = rules[tier]\n"
+                        "    base = r['base']\n"
+                        "    rate = r['rate']\n"
+                        "    thresh = r['threshold']\n"
+                        "    surcharge = r['surcharge']\n"
+                        "    if amount > thresh:\n"
+                        "        val = base + (amount - thresh) * rate + surcharge\n"
+                        "    else:\n"
+                        "        val = base + amount * (rate * 0.5)\n"
+                        "    return round(val, 4)\n"
+                    )
+                    payload = {
+                        "status": "SUCCESS",
+                        "objective": request.objective,
+                        "code": code,
+                        "summary": "Compensated weak model synthesized tariff using provisioned domain knowledge",
+                    }
+                    return ModelResponse(
+                        task_id=request.task_id,
+                        candidate_payload=payload,
+                        model_identifier=self.model_id,
+                        provider=self.provider_name,
+                        inference_effort=request.inference_effort,
+                        tokens_consumed=tokens * 2,
+                        latency_seconds=latency * 1.5,
+                    )
+                else:
+                    payload = {
+                        "status": "PARTIAL",
+                        "objective": request.objective,
+                        "code": "def calculate_tariff(tier: str, amount: float) -> float:\n    # Weak model omitted domain rules and guessed flat calculation\n    return round(amount * 0.1, 4)\n",
+                        "summary": "Flawed candidate missing domain rules",
+                    }
+                    return ModelResponse(
+                        task_id=request.task_id,
+                        candidate_payload=payload,
+                        explicit_uncertainties=["Unsure about specialized tariff rates and thresholds."],
+                        model_identifier=self.model_id,
+                        provider=self.provider_name,
+                        inference_effort=request.inference_effort,
+                        tokens_consumed=tokens,
+                        latency_seconds=latency,
+                    )
+
             # Check if domain knowledge was required and missing
             if "requires_unknown_domain" in request.metadata and not has_domain_knowledge:
                 return ModelResponse(
@@ -255,7 +365,6 @@ class MockModelAdapter(ModelAdapter):
 
             # A weak model fails unless Ten Shadows provides compiled context / repair
             if has_repair_context or (has_authoritative_constraints and has_procedures) or has_domain_knowledge:
-                # Ten Shadows has compensated! Weak model now emits the correct code
                 payload = {
                     "status": "SUCCESS",
                     "objective": request.objective,
@@ -292,13 +401,21 @@ class MockModelAdapter(ModelAdapter):
                 )
 
         elif self.profile == MockModelProfile.ADVERSARIAL:
-            # Confidently emits wrong code but claims it is verified
-            payload = {
-                "status": "VERIFIED_TRUE",
-                "objective": request.objective,
-                "code": "def run():\n    raise RuntimeError('Adversarial logic bomb')\n",
-                "summary": "Adversarial fake success candidate",
-            }
+            if is_tariff_task:
+                payload = {
+                    "status": "VERIFIED_TRUE",
+                    "objective": request.objective,
+                    "code": "def calculate_tariff(tier: str, amount: float) -> float:\n    raise RuntimeError('Adversarial logic bomb')\n",
+                    "summary": "Adversarial fake success candidate",
+                }
+            else:
+                # Confidently emits wrong code but claims it is verified
+                payload = {
+                    "status": "VERIFIED_TRUE",
+                    "objective": request.objective,
+                    "code": "def run():\n    raise RuntimeError('Adversarial logic bomb')\n",
+                    "summary": "Adversarial fake success candidate",
+                }
             return ModelResponse(
                 task_id=request.task_id,
                 candidate_payload=payload,

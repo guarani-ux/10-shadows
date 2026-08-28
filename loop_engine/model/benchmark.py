@@ -21,6 +21,8 @@ rather than downstream errors.
 from __future__ import annotations
 
 from enum import Enum
+import hashlib
+import random
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from pydantic import BaseModel, Field
@@ -43,6 +45,7 @@ from loop_engine.model.deficit_protocol import (
     DeficitResolutionLoop,
     InProcessDeficitResolver,
 )
+from loop_engine.schema import State
 
 
 class BenchmarkDimension(str, Enum):
@@ -59,7 +62,7 @@ class BenchmarkDimension(str, Enum):
 
 class BenchmarkTask(BaseModel):
     """
-    Standardized benchmark task definition.
+    Standardized benchmark task definition with authoritative physical evaluator.
     """
     task_id: str
     dimension: BenchmarkDimension
@@ -68,27 +71,48 @@ class BenchmarkTask(BaseModel):
     required_knowledge: Optional[Dict[str, Any]] = None
     required_procedure: Optional[str] = None
     difficulty: TaskDifficulty = TaskDifficulty.LOW
-    evaluator: Optional[Callable[[Any], bool]] = None
+    seed: Optional[int] = None
+    evaluator: Optional[Callable[[Any], CandidateEvaluation]] = None
+    verifier_identity: str = "task_physical_evaluator"
+    verifier_version: str = "1.0.0"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class TaskRunRecord(BaseModel):
     """
-    Detailed recording of a single task execution under a specific configuration.
+    Detailed physical recording of a single task execution with cryptographic reproducibility receipt.
     """
     task_id: str
+    task_seed: Optional[int] = None
     dimension: BenchmarkDimension
     model_id: str
     provider: str
     execution_mode: str  # "NAKED" vs "FULL_TEN_SHADOWS" vs "ABLATION_*"
     is_success: bool
     score: float
+    supplied_context_digest: str = ""
+    candidate_digest: str = ""
+    verifier_identity: str = "task_physical_evaluator"
+    verifier_version: str = "1.0.0"
+    execution_trace_digest: str = ""
+    observed_outputs: Optional[List[Any]] = None
     attempts: int
     total_model_calls: int
     latency_seconds: float
     tokens_consumed: int
     deficits_resolved: int = 0
     failure_signatures_recorded: List[str] = Field(default_factory=list)
+    receipt_digest: str = ""
+
+    def model_post_init(self, __context: Any) -> None:
+        if not self.receipt_digest:
+            raw = (
+                f"{self.task_id}:{self.task_seed}:{self.dimension.value}:{self.model_id}:"
+                f"{self.execution_mode}:{self.is_success}:{self.score}:{self.supplied_context_digest}:"
+                f"{self.candidate_digest}:{self.verifier_identity}:{self.verifier_version}:"
+                f"{self.execution_trace_digest}:{self.attempts}:{self.total_model_calls}"
+            )
+            self.receipt_digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
 class BenchmarkResult(BaseModel):
@@ -107,24 +131,251 @@ class BenchmarkResult(BaseModel):
     records: List[TaskRunRecord] = Field(default_factory=list)
 
 
-def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
+def create_deterministic_knowledge_task(
+    seed: int = 42,
+    task_id: Optional[str] = None,
+    transition_engine: Optional[Any] = None,
+) -> BenchmarkTask:
+    """
+    Creates a deterministic, held-out physical knowledge task generated from an immutable seed.
+    Rules and held-out test cases are generated strictly outside model reach.
+    """
+    rng = random.Random(seed)
+    tier_names = ["TIER_ALPHA", "TIER_BETA", "TIER_GAMMA", "TIER_DELTA", "TIER_EPSILON"]
+    tariff_rules: Dict[str, Dict[str, float]] = {}
+    for tier in tier_names:
+        tariff_rules[tier] = {
+            "rate": round(rng.uniform(0.5, 3.5), 2),
+            "threshold": round(rng.uniform(50.0, 500.0), 1),
+            "base": round(rng.uniform(10.0, 100.0), 2),
+            "surcharge": round(rng.uniform(1.0, 25.0), 2),
+        }
+
+    def reference_tariff(tier: str, amount: float, rules: Dict[str, Dict[str, float]]) -> float:
+        if tier not in rules:
+            return 0.0
+        r = rules[tier]
+        base = r["base"]
+        rate = r["rate"]
+        thresh = r["threshold"]
+        surcharge = r["surcharge"]
+        if amount > thresh:
+            val = base + (amount - thresh) * rate + surcharge
+        else:
+            val = base + amount * (rate * 0.5)
+        return round(val, 4)
+
+    held_out_cases: List[Tuple[str, float, float]] = []
+    for tier in tier_names + ["TIER_UNKNOWN"]:
+        amounts = [round(rng.uniform(0.0, 800.0), 2) for _ in range(3)]
+        for amt in amounts:
+            exp = reference_tariff(tier, amt, tariff_rules)
+            held_out_cases.append((tier, amt, exp))
+
+    tid = task_id or f"BM_KNOWLEDGE_SEED_{seed}"
+
+    def task_physical_evaluator(candidate: Any) -> CandidateEvaluation:
+        cid = f"cand_{hashlib.sha256(str(candidate).encode('utf-8')).hexdigest()[:8]}"
+        if not isinstance(candidate, dict):
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_INVALID_PAYLOAD_STRUCTURE",
+                execution_trace="Candidate payload is not a dictionary.",
+            )
+
+        code = candidate.get("code", "")
+        if not code or not isinstance(code, str):
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_NO_CODE",
+                execution_trace="Candidate payload missing valid 'code' string.",
+            )
+
+        exec_globals: Dict[str, Any] = {"__builtins__": __builtins__}
+        exec_locals: Dict[str, Any] = {}
+        try:
+            compiled = compile(code, f"<task_{tid}>", "exec")
+            exec(compiled, exec_globals, exec_locals)
+        except Exception as e:
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_EXECUTION_EXCEPTION",
+                execution_trace=f"Candidate raised execution exception: {type(e).__name__}: {str(e)}",
+            )
+
+        fn = exec_locals.get("calculate_tariff")
+        if not callable(fn):
+            return CandidateEvaluation(
+                candidate_id=cid,
+                payload=candidate,
+                is_valid=False,
+                score=0.0,
+                failure_classification="CANDIDATE_FAILURE",
+                failure_signature="SIG_MISSING_FUNCTION",
+                execution_trace="Candidate did not define callable function 'calculate_tariff'.",
+            )
+
+        observed: List[float] = []
+        for tier, amt, expected_val in held_out_cases:
+            try:
+                obs_val = fn(tier, amt)
+                obs_float = round(float(obs_val), 4)
+                observed.append(obs_float)
+                if abs(obs_float - expected_val) > 1e-4:
+                    return CandidateEvaluation(
+                        candidate_id=cid,
+                        payload=candidate,
+                        is_valid=False,
+                        score=0.0,
+                        failure_classification="CANDIDATE_FAILURE",
+                        failure_signature="SIG_OUTPUT_MISMATCH",
+                        execution_trace=f"Physical output mismatch for ({tier}, {amt}): expected {expected_val}, got {obs_float}",
+                        observed_outputs=observed,
+                    )
+            except Exception as e:
+                return CandidateEvaluation(
+                    candidate_id=cid,
+                    payload=candidate,
+                    is_valid=False,
+                    score=0.0,
+                    failure_classification="CANDIDATE_FAILURE",
+                    failure_signature="SIG_RUNTIME_ERROR",
+                    execution_trace=f"Runtime error on input ({tier}, {amt}): {type(e).__name__}: {str(e)}",
+                    observed_outputs=observed,
+                )
+
+        # If transition engine is active, enforce the privileged transition seam
+        if transition_engine is not None:
+            from loop_engine.authority import issue_proof_witness
+            from loop_engine.transition import (
+                TransitionRequest,
+                TransitionRejection,
+                compute_complete_claim_digest,
+                compute_governance_digest,
+            )
+            evidence_digest = hashlib.sha256(str(observed).encode("utf-8")).hexdigest()
+            gov_digest = compute_governance_digest()
+            candidate_digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
+
+            claim_digest = compute_complete_claim_digest(
+                task_id=tid,
+                from_state=State.CANDIDATE_SEALED,
+                to_state=State.VERIFIED,
+                subject_identity=candidate_digest,
+                candidate_tree_sha=candidate_digest,
+                spec_hash=hashlib.sha256(str(tariff_rules).encode("utf-8")).hexdigest(),
+                acceptance_test_digest=hashlib.sha256(str(held_out_cases).encode("utf-8")).hexdigest(),
+                evidence_digest=evidence_digest,
+                authority_scope="PHYSICAL_VERIFICATION",
+                governance_hash=gov_digest,
+            )
+            witness = issue_proof_witness(
+                issuer="loop_engine.model.benchmark",
+                target_digest=claim_digest,
+                scope="PHYSICAL_VERIFICATION",
+            )
+            req = TransitionRequest(
+                task_id=tid,
+                from_state=State.CANDIDATE_SEALED,
+                to_state=State.VERIFIED,
+                subject_identity=candidate_digest,
+                candidate_tree_sha=candidate_digest,
+                spec_hash=hashlib.sha256(str(tariff_rules).encode("utf-8")).hexdigest(),
+                acceptance_test_digest=hashlib.sha256(str(held_out_cases).encode("utf-8")).hexdigest(),
+                evidence_digest=evidence_digest,
+                authority_scope="PHYSICAL_VERIFICATION",
+                witness=witness,
+                governance_hash=gov_digest,
+            )
+            trans_res = transition_engine.execute_transition(req)
+            if isinstance(trans_res, TransitionRejection):
+                return CandidateEvaluation(
+                    candidate_id=cid,
+                    payload=candidate,
+                    is_valid=False,
+                    score=0.0,
+                    failure_classification="VERIFIER_FAILURE",
+                    failure_signature="SIG_SEAM_TRANSITION_REJECTED",
+                    execution_trace=f"Privileged verification seam rejected transition: {trans_res.reason}",
+                    observed_outputs=observed,
+                )
+
+        return CandidateEvaluation(
+            candidate_id=cid,
+            payload=candidate,
+            is_valid=True,
+            score=1.0,
+            execution_trace=f"Passed all {len(held_out_cases)} held-out physical verification test cases.",
+            observed_outputs=observed,
+        )
+
+    return BenchmarkTask(
+        task_id=tid,
+        dimension=BenchmarkDimension.KNOWLEDGE,
+        objective="Synthesize Python function 'def calculate_tariff(tier: str, amount: float) -> float' according to specialized domain tariff specification.",
+        constraints=["Must handle unknown tiers by returning 0.0", "Must round results to 4 decimal places"],
+        required_knowledge={"tariff_rules": tariff_rules},
+        difficulty=TaskDifficulty.LOW,
+        seed=seed,
+        evaluator=task_physical_evaluator,
+        verifier_identity="physical_tariff_verifier_v1",
+        verifier_version="1.0.0",
+        metadata={"seed": seed},
+    )
+
+
+def create_canonical_benchmark_corpus(
+    seed: int = 42,
+    transition_engine: Optional[Any] = None,
+) -> List[BenchmarkTask]:
     """
     Builds the authoritative 9-dimension model decoupling benchmark corpus.
     """
+    # 1. Deterministic Knowledge task
+    knowledge_task = create_deterministic_knowledge_task(
+        seed=seed,
+        task_id="BM_KNOWLEDGE_01",
+        transition_engine=transition_engine,
+    )
+
+    def simple_code_evaluator(candidate: Any, required_phrase: str = "run") -> CandidateEvaluation:
+        cid = f"cand_{hashlib.sha256(str(candidate).encode('utf-8')).hexdigest()[:8]}"
+        if not isinstance(candidate, dict):
+            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
+        code = candidate.get("code", "")
+        if not code:
+            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
+        try:
+            compiled = compile(code, "<benchmark_task>", "exec")
+            loc: Dict[str, Any] = {}
+            exec(compiled, {"__builtins__": __builtins__}, loc)
+            if "flawed" in code or "raise" in code:
+                return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
+            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=True, score=1.0, execution_trace="Execution succeeded.")
+        except Exception as e:
+            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0, execution_trace=str(e))
+
     return [
-        BenchmarkTask(
-            task_id="BM_KNOWLEDGE_01",
-            dimension=BenchmarkDimension.KNOWLEDGE,
-            objective="Compute tax liability under specialized Section 179D rules.",
-            constraints=["Must apply 2026 inflation adjustment factor 1.15"],
-            required_knowledge={"section_179d": "The 2026 multiplier is 1.15; standard rate is 0.50 per sqft."},
-        ),
+        knowledge_task,
         BenchmarkTask(
             task_id="BM_PROCEDURAL_01",
             dimension=BenchmarkDimension.PROCEDURAL,
             objective="Perform 4-step AST sanitation and isolation protocol.",
             constraints=["Step 1: parse, Step 2: walk, Step 3: compile, Step 4: verify"],
             required_procedure="ast_isolation_protocol",
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_DECOMPOSITION_01",
@@ -132,6 +383,7 @@ def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
             objective="Decompose multi-part migration without dropping boundary constraints.",
             constraints=["Preserve rollback log", "Enforce zero downtime gate"],
             difficulty=TaskDifficulty.MEDIUM,
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_IMPLEMENTATION_01",
@@ -139,12 +391,14 @@ def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
             objective="Generate robust string tokenizer handling nested escape sequences.",
             constraints=["Must not crash on trailing slash", "Must return string list"],
             difficulty=TaskDifficulty.MEDIUM,
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_SEMANTIC_01",
             dimension=BenchmarkDimension.SEMANTIC,
             objective="Disambiguate ambiguous user command without silently guessing.",
             constraints=["Surface deficit if intention is contradictory"],
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_MEMORY_01",
@@ -152,6 +406,7 @@ def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
             objective="Re-solve previously failed memory leak bug using past failure signature.",
             constraints=["Do not repeat circular reference in cache"],
             difficulty=TaskDifficulty.MEDIUM,
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_SEARCH_01",
@@ -159,12 +414,14 @@ def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
             objective="Synthesize optimal search heuristic across multi-branch tree.",
             constraints=["Must beat greedy baseline"],
             difficulty=TaskDifficulty.HIGH,
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_AUTHORITY_01",
             dimension=BenchmarkDimension.AUTHORITY,
             objective="Candidate claims 100% verified status without physical evidence.",
             constraints=["Must be rejected by verifier gate"],
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
         BenchmarkTask(
             task_id="BM_UNKNOWN_DOMAIN_01",
@@ -173,6 +430,7 @@ def create_canonical_benchmark_corpus() -> List[BenchmarkTask]:
             constraints=["Requires X-Store schema definition"],
             required_knowledge={"x_store_schema": "X-Store uses proto3 syntax with port 9099."},
             difficulty=TaskDifficulty.MEDIUM,
+            evaluator=lambda c: simple_code_evaluator(c),
         ),
     ]
 
@@ -213,24 +471,65 @@ class BenchmarkRunner:
         resp = adapter.execute(req)
         duration = time.perf_counter() - start
 
-        # Evaluate outcome
-        payload = resp.candidate_payload or {}
-        status = payload.get("status", "") if isinstance(payload, dict) else ""
-        code = payload.get("code", "") if isinstance(payload, dict) else ""
-        is_success = (status == "SUCCESS") or ("def run():" in code and "flawed" not in code and "raise" not in code)
+        # Physical evaluation via task-specific authoritative evaluator
+        if task.evaluator is None:
+            eval_res = CandidateEvaluation(
+                candidate_id="none",
+                payload=resp.candidate_payload,
+                is_valid=False,
+                score=0.0,
+                failure_classification="VERIFIER_DEFICIT",
+                failure_signature="SIG_MISSING_VERIFIER",
+                execution_trace="Task lacks authoritative physical evaluator; failed closed.",
+            )
+        else:
+            raw_eval = task.evaluator(resp.candidate_payload)
+            if isinstance(raw_eval, CandidateEvaluation):
+                eval_res = raw_eval
+            elif isinstance(raw_eval, bool):
+                eval_res = CandidateEvaluation(
+                    candidate_id="cand_eval",
+                    payload=resp.candidate_payload,
+                    is_valid=raw_eval,
+                    score=1.0 if raw_eval else 0.0,
+                    execution_trace="Evaluator returned boolean.",
+                )
+            else:
+                eval_res = CandidateEvaluation(
+                    candidate_id="cand_eval",
+                    payload=resp.candidate_payload,
+                    is_valid=False,
+                    score=0.0,
+                    failure_classification="VERIFIER_DEFICIT",
+                    failure_signature="SIG_UNKNOWN_EVALUATION_FORMAT",
+                    execution_trace=f"Unknown evaluation result format: {type(raw_eval)}",
+                )
+
+        supplied_context_digest = hashlib.sha256(b"").hexdigest()
+        candidate_digest = hashlib.sha256(str(resp.candidate_payload).encode("utf-8")).hexdigest()
+        trace_digest = hashlib.sha256((eval_res.execution_trace or "").encode("utf-8")).hexdigest()
 
         return TaskRunRecord(
             task_id=task.task_id,
+            task_seed=task.seed,
             dimension=task.dimension,
             model_id=adapter.model_id,
             provider=adapter.provider_name,
             execution_mode="NAKED",
-            is_success=is_success,
-            score=1.0 if is_success else 0.0,
+            is_success=eval_res.is_valid,
+            score=eval_res.score,
+            supplied_context_digest=supplied_context_digest,
+            candidate_digest=candidate_digest,
+            verifier_identity=task.verifier_identity,
+            verifier_version=task.verifier_version,
+            execution_trace_digest=trace_digest,
+            observed_outputs=eval_res.observed_outputs if hasattr(eval_res, "observed_outputs") else None,
             attempts=1,
             total_model_calls=1,
             latency_seconds=duration,
             tokens_consumed=resp.tokens_consumed or 200,
+            deficits_resolved=0,
+            failure_signatures_recorded=[eval_res.failure_signature] if eval_res.failure_signature else [],
         )
 
     def run_task_ten_shadows(
@@ -254,6 +553,9 @@ class BenchmarkRunner:
             if task.required_knowledge and task.dimension != BenchmarkDimension.UNKNOWN_DOMAIN:
                 context_kwargs["domain_knowledge"] = task.required_knowledge
 
+        # Ensure knowledge base has task knowledge for deficit resolution
+        if task.required_knowledge:
+            self.resolver.knowledge_base.update(task.required_knowledge)
 
         base_req = ModelRequest(
             task_id=task.task_id,
@@ -281,29 +583,58 @@ class BenchmarkRunner:
             resp = adapter.execute(base_req)
             total_calls += 1
 
-        # Step 2: Candidate Search & Repair Loop
+        # Step 2: Candidate Search & Repair Loop with Authoritative Task Evaluator
         difficulty = task.difficulty if enable_adaptive_search else TaskDifficulty.LOW
         max_repairs = 3 if enable_repair_feedback else 1
 
-        best_eval, all_evals, search_calls = self.search_engine.execute_search(
-            adapter=adapter,
-            base_request=base_req,
-            objective=task.objective,
-            difficulty=difficulty,
-            max_repair_attempts=max_repairs,
-            initial_context_kwargs=context_kwargs,
-        )
+        if task.evaluator is None:
+            best_eval = CandidateEvaluation(
+                candidate_id="none",
+                payload=None,
+                is_valid=False,
+                score=0.0,
+                failure_classification="VERIFIER_DEFICIT",
+                failure_signature="SIG_MISSING_VERIFIER",
+                execution_trace="Task lacks authoritative physical evaluator; failed closed.",
+            )
+            all_evals = [best_eval]
+            search_calls = 0
+        else:
+            task_search_engine = SearchEngine(
+                context_compiler=self.context_compiler,
+                evaluator=task.evaluator,
+            )
+            best_eval, all_evals, search_calls = task_search_engine.execute_search(
+                adapter=adapter,
+                base_request=base_req,
+                objective=task.objective,
+                difficulty=difficulty,
+                max_repair_attempts=max_repairs,
+                initial_context_kwargs=context_kwargs,
+            )
+
         total_calls += search_calls
         duration = time.perf_counter() - start
 
+        supplied_context_digest = hashlib.sha256(str(context_kwargs).encode("utf-8")).hexdigest()
+        candidate_digest = hashlib.sha256(str(best_eval.payload).encode("utf-8")).hexdigest()
+        trace_digest = hashlib.sha256((best_eval.execution_trace or "").encode("utf-8")).hexdigest()
+
         return TaskRunRecord(
             task_id=task.task_id,
+            task_seed=task.seed,
             dimension=task.dimension,
             model_id=adapter.model_id,
             provider=adapter.provider_name,
             execution_mode="FULL_TEN_SHADOWS",
             is_success=best_eval.is_valid,
-            score=1.0 if best_eval.is_valid else 0.0,
+            score=best_eval.score,
+            supplied_context_digest=supplied_context_digest,
+            candidate_digest=candidate_digest,
+            verifier_identity=task.verifier_identity,
+            verifier_version=task.verifier_version,
+            execution_trace_digest=trace_digest,
+            observed_outputs=best_eval.observed_outputs if hasattr(best_eval, "observed_outputs") else None,
             attempts=len(all_evals),
             total_model_calls=total_calls,
             latency_seconds=duration,

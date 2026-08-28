@@ -5,6 +5,7 @@ pub mod db;
 pub mod evidence;
 pub mod predicate;
 pub mod receipt;
+pub mod repository;
 pub mod state_machine;
 pub mod time_utils;
 pub mod verifier;
@@ -18,6 +19,7 @@ pub use receipt::{
     ProviderExecutionReceipt, RoutingStrategy, RunStatus, TenShadowsReceipt,
     WorkerInvocationRecord, WorkerRole,
 };
+pub use repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 pub use state_machine::{Created, KernelRun, Promoted};
 pub use time_utils::current_timestamp_rfc3339;
 pub use verifier::SubprocessVerifier;

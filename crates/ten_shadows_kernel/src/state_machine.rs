@@ -8,9 +8,11 @@ use crate::receipt::{
     DisaggregatedEpistemicClaims, ExecutionAttemptRecord, IndependentVerificationRecord,
     RoutingStrategy, RunStatus, TenShadowsReceipt, WorkerInvocationRecord,
 };
+use crate::repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 use crate::time_utils::current_timestamp_rfc3339;
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
+use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
@@ -40,6 +42,7 @@ pub struct KernelRun<State> {
     pub routing_digest: String,
     pub starting_head: Option<String>,
     pub workspace_path: Option<PathBuf>,
+    pub governed_workspace: Option<GovernedWorkspace>,
     pub authorized_worker_id: Option<String>,
     pub worker_invocations: Vec<WorkerInvocationRecord>,
     pub candidate_classification: Option<CandidateClassification>,
@@ -78,6 +81,7 @@ impl KernelRun<Created> {
             routing_digest,
             starting_head: None,
             workspace_path: None,
+            governed_workspace: None,
             authorized_worker_id: None,
             worker_invocations: Vec::new(),
             candidate_classification: None,
@@ -150,6 +154,7 @@ impl KernelRun<Created> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: None,
+            governed_workspace: None,
             authorized_worker_id: None,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
@@ -163,11 +168,48 @@ impl KernelRun<Created> {
 }
 
 impl KernelRun<BaselineCaptured> {
-    pub fn prepare_workspace(
+    /// Creates a run-owned, isolated ephemeral GovernedWorkspace from baseline SHA.
+    pub fn prepare_governed_workspace(
+        self,
+        worktrees_dir: Option<&Path>,
+    ) -> Result<KernelRun<WorkspaceReady>, RepositoryRoleError> {
+        let baseline_sha = self.starting_head.as_ref().ok_or_else(|| {
+            RepositoryRoleError::InvalidGitRepository("Baseline commit SHA missing for governed workspace".into())
+        })?;
+
+        let source = AuthoritativeSource::new(&self.target_path)?;
+        let ws = GovernedWorkspace::create_ephemeral(&self.run_id, &source, baseline_sha, worktrees_dir)?;
+        let ws_path = ws.workspace_root.clone();
+
+        Ok(KernelRun {
+            run_id: self.run_id,
+            task_id: self.task_id,
+            objective: self.objective,
+            objective_hash: self.objective_hash,
+            target_path: self.target_path,
+            strategy: self.strategy,
+            capabilities: self.capabilities,
+            routing_digest: self.routing_digest,
+            starting_head: self.starting_head,
+            workspace_path: Some(ws_path),
+            governed_workspace: Some(ws),
+            authorized_worker_id: None,
+            worker_invocations: self.worker_invocations,
+            candidate_classification: None,
+            attempts: self.attempts,
+            verification: None,
+            final_head: None,
+            created_at: self.created_at,
+            state_marker: std::marker::PhantomData,
+        })
+    }
+
+    /// Sets up a read-only audit workspace for an external target.
+    pub fn prepare_audit_workspace(
         mut self,
-        workspace_path: &Path,
+        target_path: &Path,
     ) -> KernelRun<WorkspaceReady> {
-        self.workspace_path = Some(workspace_path.to_path_buf());
+        self.workspace_path = Some(target_path.to_path_buf());
         KernelRun {
             run_id: self.run_id,
             task_id: self.task_id,
@@ -179,6 +221,7 @@ impl KernelRun<BaselineCaptured> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: None,
             authorized_worker_id: None,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
@@ -208,6 +251,7 @@ impl KernelRun<WorkspaceReady> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
@@ -254,6 +298,7 @@ impl KernelRun<WorkerAuthorized> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
@@ -287,6 +332,7 @@ impl KernelRun<WorkerAuthorized> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
@@ -316,6 +362,7 @@ impl KernelRun<CandidateProduced> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
@@ -330,7 +377,7 @@ impl KernelRun<CandidateProduced> {
 
 impl KernelRun<Verified> {
     pub fn promote_and_seal(
-        self,
+        mut self,
     ) -> (KernelRun<Promoted>, TenShadowsReceipt) {
         let is_verified = self.verification.as_ref().map(|v| v.verified_status == "PASS" && v.exit_code == 0).unwrap_or(false);
         let is_governed = self.candidate_classification.as_ref().map(|c| c.is_governed()).unwrap_or(false);
@@ -339,7 +386,46 @@ impl KernelRun<Verified> {
             w.modality == EvidenceModality::Empirical && w.provider_receipt.is_some()
         });
 
-        let final_status = if is_verified {
+        // Invariant: Divergence check before promotion on authoritative source
+        let mut promotion_succeeded = false;
+        let mut rejection_reason = None;
+
+        if is_verified && is_governed {
+            if let Some(ref ws) = self.governed_workspace {
+                let current_source_head = AuthoritativeSource::new(&self.target_path)
+                    .ok()
+                    .and_then(|s| s.capture_head());
+
+                if let (Some(ref cur), Some(ref start)) = (current_source_head.as_ref(), self.starting_head.as_ref()) {
+                    if cur != start {
+                        rejection_reason = Some(format!(
+                            "Authoritative source diverged before promotion (expected '{}', found '{}').",
+                            start, cur
+                        ));
+                    } else {
+                        // Atomic promotion: Merge branch back to source
+                        let merge_out = Command::new("git")
+                            .args(["merge", "--ff-only", &ws.branch_name])
+                            .current_dir(&self.target_path)
+                            .output();
+
+                        match merge_out {
+                            Ok(o) if o.status.success() => {
+                                promotion_succeeded = true;
+                            }
+                            _ => {
+                                rejection_reason = Some("Git fast-forward merge failed during promotion.".into());
+                            }
+                        }
+                    }
+                }
+            } else {
+                // Non-worktree governed run
+                promotion_succeeded = true;
+            }
+        }
+
+        let final_status = if is_verified && (promotion_succeeded || !is_governed) {
             RunStatus::VerifiedSuccess
         } else {
             RunStatus::Failed
@@ -353,7 +439,7 @@ impl KernelRun<Verified> {
             claim_candidate_mutated: is_governed,
             claim_candidate_produced_under_custody: is_governed,
             claim_independently_verified: is_verified,
-            claim_promoted: is_verified,
+            claim_promoted: promotion_succeeded,
             claim_target_behaviorally_tested: is_verified,
             claim_semantic_objective_satisfied: is_verified && self.verification.as_ref().map(|v| v.verifier_type == VerificationType::IndependentSemanticFalsification).unwrap_or(false),
         };
@@ -384,8 +470,9 @@ impl KernelRun<Verified> {
             artifacts_produced: Vec::new(),
             verification: self.verification.clone(),
             promotion: Some(serde_json::json!({
-                "status": if is_verified { "PROMOTED" } else { "REJECTED" },
+                "status": if promotion_succeeded { "PROMOTED" } else { "REJECTED" },
                 "head": self.final_head,
+                "rejection_reason": rejection_reason,
             })),
             epistemic_claims: claims,
             final_status,
@@ -395,6 +482,11 @@ impl KernelRun<Verified> {
         };
 
         receipt.receipt_signature = receipt.compute_signature();
+
+        // Destroy governed workspace after promotion
+        if let Some(ws) = self.governed_workspace.take() {
+            ws.destroy();
+        }
 
         let promoted_run = KernelRun {
             run_id: self.run_id,
@@ -407,6 +499,7 @@ impl KernelRun<Verified> {
             routing_digest: self.routing_digest,
             starting_head: self.starting_head,
             workspace_path: self.workspace_path,
+            governed_workspace: None,
             authorized_worker_id: self.authorized_worker_id,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,

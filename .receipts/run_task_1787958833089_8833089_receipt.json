@@ -1,0 +1,66 @@
+{
+  "receipt_version": "3.0.0",
+  "kernel_version": "TEN_SHADOWS_TRUSTED_KERNEL_RUST_v3",
+  "run_id": "run_task_1787958833089_8833089",
+  "task_id": "task_1787958833089",
+  "objective": "Perform read-only security audit of Ten Shadows kernel",
+  "objective_hash": "befa57239258aee0da265156a0e5e40de68042bfad8d2a3a448e1bb83d9b88f8",
+  "target_path": "\\\\?\\C:\\10 SHADOWS",
+  "starting_head": "aab694f84a5cdb92c477bcd0745b3000b92f11cb",
+  "final_head": "aab694f84a5cdb92c477bcd0745b3000b92f11cb",
+  "candidate_classification": {
+    "kind": "External",
+    "details": {
+      "candidate_sha": "aab694f84a5cdb92c477bcd0745b3000b92f11cb",
+      "source_note": "Baseline audit execution (zero mutations)"
+    }
+  },
+  "routing_strategy": "ADVERSARIAL_AUDIT",
+  "routing_decision_digest": "9177ef03ce1ab4f101749b44790ff6c680e8b4ba54d04d1a73652ddae321a12d",
+  "capabilities_selected": [
+    "STATIC_INSPECTION",
+    "ADVERSARIAL_FALSIFICATION",
+    "CONTRACT_VERIFICATION"
+  ],
+  "attempts": [],
+  "worker_invocations": [],
+  "artifacts_produced": [],
+  "verification": {
+    "verifier_id": "svris_independent_verifier_task_1787958833089",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "svris_auditor_task_1787958833089",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "92b3d33d48853e222e6564cd73e31331e378f77d3d8d8174ce0b300a59999aff",
+    "tests_collected": 273,
+    "tests_passed": 273,
+    "tests_failed": 0,
+    "exit_code": 0,
+    "duration_seconds": 69.696,
+    "falsification_attempted": true,
+    "verified_status": "PASS",
+    "execution_trace": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\flowe\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\ncachedir: .pytest_cache\r\nrootdir: C:\\10 SHADOWS\r\nconfigfile: pytest.ini\r\nplugins: anyio-4.12.1, ddtrace-4.7.1, Faker-40.15.0, langsmith-0.7.36, logfire-4.32.1, cov-7.1.0, typeguard-4.4.3\r\ncollecting ... collected 273 items\r\n\r\ntests/test_adversarial_plan_auditor.py::test_production_path_defect_produces_block PASSED [  0%]\r\ntests/test_adversarial_plan_auditor.py::test_subprocess_env_empty_rejected PASSED [  0%]\r\ntests/test_adversarial_plan_auditor.py::test_non_python_plan_marks_python_checks_na PASSED [  1%]\r\ntests/test_adversarial_plan_auditor.py::test_vacuous_test_assertions_rejected PASSED [  1%]\r\ntests/test_adversarial_plan_auditor.py::test_route_critical_mocks_cannot_pass PASSED [  1%]\r\ntests/test_adversarial_plan_auditor.py::test_promotion_lacking_recovery_blocked PASSED [  2%]\r\ntests/test_adversarial_plan_auditor.py::test_sound_bounded_plan_receives_pass_with_limitations PASSED [  2%]\r\ntests/test_adversarial_plan_auditor.py::test_zero_vulnerability_claim_never_emitted PASSED [  2%]\r\ntests/test_adversarial_plan_auditor.py::test_empty_and_incomplete_plan_rejected PASSED [  3%]\r\ntests/test_ast_guard.py::TestASTGuardCleanCode::test_clean_python_code_passes PASSED [  3%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::test_banned_eval_call_blocked PASSED [  4%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::test_banned_exec_call_blocked PASSED [  4%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::test_banned_compile_call_blocked PASSED [  4%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::test_banned_dunder_import_call_blocked PASSED [  5%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::test_banned_globals_manipulation_blocked PASSED [  5%]\r\ntests/test_ast_guard.py::TestASTGuardAdversarialPayloads::t",
+    "timestamp": "2026-08-28T23:15:02.846Z"
+  },
+  "promotion": {
+    "head": "aab694f84a5cdb92c477bcd0745b3000b92f11cb",
+    "rejection_reason": null,
+    "status": "REJECTED"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": false,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": false,
+    "claim_candidate_produced_under_custody": false,
+    "claim_independently_verified": true,
+    "claim_promoted": false,
+    "claim_target_behaviorally_tested": true,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "VERIFIED_SUCCESS",
+  "created_at": "2026-08-28T23:13:53.090Z",
+  "sealed_at": "2026-08-28T23:15:02.846Z",
+  "receipt_signature": "127ef111201371e013792ce9cccbf80776aa762169221a0d2807a91c805043c2"
+}

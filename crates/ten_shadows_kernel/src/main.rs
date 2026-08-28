@@ -31,7 +31,7 @@ fn resolve_git_head(target: &Path) -> Option<String> {
 
 fn print_usage() {
     println!("Usage:");
-    println!("  ts run --target <path> --objective <objective> [--task-id <id>]");
+    println!("  ts run --target <path> --objective <objective> [--task-id <id>] [--mutate]");
     println!("  ts verify-receipt <receipt_json>");
     println!("  ts verify-production <receipt_json>");
     println!("  ts status");
@@ -55,6 +55,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut objective = String::new();
             let mut target = PathBuf::from(".");
             let mut task_id = None;
+            let mut is_mutation_run = false;
 
             let mut i = 2;
             while i < args.len() {
@@ -70,6 +71,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "--task-id" if i + 1 < args.len() => {
                         task_id = Some(args[i + 1].clone());
                         i += 2;
+                    }
+                    "--mutate" => {
+                        is_mutation_run = true;
+                        i += 1;
                     }
                     _ => {
                         i += 1;
@@ -110,46 +115,59 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let run_baseline = run_created.capture_baseline(starting_head.clone());
 
             // Step 4: Workspace Preparation (Typestate: WorkspaceReady)
-            let run_ws = run_baseline.prepare_workspace(&target_canonical);
-
-            // Step 5: Authorize Worker (Typestate: WorkerAuthorized)
-            let builder_id = format!("forge_builder_{}", task_id_str);
-            let run_auth = run_ws.authorize_worker(&builder_id);
-
-            // Step 6: Record Candidate (Typestate: CandidateProduced)
-            let current_head = resolve_git_head(&target_canonical);
-            let is_mutated = current_head != starting_head;
-            
-            let worker_rec = WorkerInvocationRecord {
-                invocation_id: format!("inv_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
-                worker_id: builder_id.clone(),
-                provider: "gemini".into(),
-                model: "gemini-2.5-flash".into(),
-                role: WorkerRole::Builder,
-                modality: EvidenceModality::Structural,
-                input_digest: obj_hash.clone(),
-                output_digest: format!("{:x}", sha2::Sha256::digest(b"artifacts_staged")),
-                started_at: current_timestamp_rfc3339(),
-                ended_at: current_timestamp_rfc3339(),
-                duration_seconds: 0.001,
-                status: "SUCCESS".into(),
-                provider_receipt: None,
+            let (run_ws, eval_path) = if is_mutation_run && starting_head.is_some() {
+                println!("[KERNEL] Spawning isolated GovernedWorkspace from baseline {}...", starting_head.as_ref().unwrap());
+                let ws_run = run_baseline.prepare_governed_workspace(None)?;
+                let p = ws_run.workspace_path.clone().unwrap();
+                (ws_run, p)
+            } else {
+                println!("[KERNEL] Mounting read-only audit workspace for target {}...", target_canonical.display());
+                let ws_run = run_baseline.prepare_audit_workspace(&target_canonical);
+                (ws_run, target_canonical.clone())
             };
 
+            // Step 5: Authorize Worker (Typestate: WorkerAuthorized)
+            let worker_id = if is_mutation_run {
+                format!("forge_builder_{}", task_id_str)
+            } else {
+                format!("svris_auditor_{}", task_id_str)
+            };
+            let run_auth = run_ws.authorize_worker(&worker_id);
+
+            // Step 6: Record Candidate (Typestate: CandidateProduced)
+            let current_head = resolve_git_head(&eval_path);
+            let is_mutated = current_head != starting_head;
+            
             let cand_sha = current_head.clone().unwrap_or_else(|| "UNTRACKED_WORKSPACE".into());
             
-            let run_cand = if is_mutated {
+            let run_cand = if is_mutated && is_mutation_run {
+                let worker_rec = WorkerInvocationRecord {
+                    invocation_id: format!("inv_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
+                    worker_id: worker_id.clone(),
+                    provider: "ten_shadows_governed_worker".into(),
+                    model: "structural_compiler".into(),
+                    role: WorkerRole::Builder,
+                    modality: EvidenceModality::Structural,
+                    input_digest: obj_hash.clone(),
+                    output_digest: format!("{:x}", sha2::Sha256::digest(b"artifacts_staged")),
+                    started_at: current_timestamp_rfc3339(),
+                    ended_at: current_timestamp_rfc3339(),
+                    duration_seconds: 0.001,
+                    status: "SUCCESS".into(),
+                    provider_receipt: None,
+                };
                 run_auth.record_governed_candidate(&cand_sha, worker_rec, 1)
             } else {
+                // Non-mutated audit run
                 run_auth.record_external_candidate(&cand_sha, "Baseline audit execution (zero mutations)")
             };
 
             // Step 7: Independent Verification Subprocess (Typestate: Verified)
-            println!("\n[KERNEL] Executing Independent Verification Subprocess...");
+            println!("\n[KERNEL] Executing Independent Verification Subprocess on {}...", eval_path.display());
             let verification_rec = SubprocessVerifier::execute(
-                &target_canonical,
+                &eval_path,
                 &task_id_str,
-                &builder_id,
+                &worker_id,
                 None,
                 VerificationType::IndependentBehavioralOracle,
             );

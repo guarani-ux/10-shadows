@@ -1,0 +1,42 @@
+# 10 SHADOWS — Canonical Governance Configuration
+# Authoritative Declarative Policy for Bounded Autonomous Execution
+
+version: "1.0.0"
+
+governor:
+  strike_ceiling: 3
+  execution_timeout_seconds: 45.0
+  rate_limit_refill_rate: 10.0
+  rate_limit_burst_capacity: 50.0
+
+verifier:
+  banned_shadow_modules:
+    - "pytest.py"
+    - "pytest.pyc"
+    - "_pytest"
+    - "sitecustomize.py"
+    - "usercustomize.py"
+    - "unittest.py"
+    - "subprocess.py"
+    - "os.py"
+    - "sys.py"
+
+environment:
+  allowed_env_vars:
+    - "SYSTEMROOT"
+    - "PATH"
+    - "PATHEXT"
+    - "USERPROFILE"
+    - "TMP"
+    - "TEMP"
+    - "HOME"
+    - "LANG"
+    - "LC_ALL"
+    - "HOMEDRIVE"
+    - "HOMEPATH"
+    - "APPDATA"
+    - "LOCALAPPDATA"
+    - "COMSPEC"
+    - "WINDIR"
+
+fail_closed: true

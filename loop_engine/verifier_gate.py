@@ -30,17 +30,27 @@ from loop_engine.schema import (
     compute_tree_hash,
 )
 
-BANNED_SHADOW_MODULES = [
-    "pytest.py",
-    "pytest.pyc",
-    "_pytest",
-    "sitecustomize.py",
-    "usercustomize.py",
-    "unittest.py",
-    "subprocess.py",
-    "os.py",
-    "sys.py",
-]
+from loop_engine.governance import load_canonical_governance
+
+def get_banned_shadow_modules() -> List[str]:
+    """Retrieves authoritative banned module list from canonical governance.yaml."""
+    try:
+        return load_canonical_governance().verifier.banned_shadow_modules
+    except Exception:
+        return [
+            "pytest.py",
+            "pytest.pyc",
+            "_pytest",
+            "sitecustomize.py",
+            "usercustomize.py",
+            "unittest.py",
+            "subprocess.py",
+            "os.py",
+            "sys.py",
+        ]
+
+BANNED_SHADOW_MODULES: List[str] = get_banned_shadow_modules()
+
 
 
 class VerificationResult(tuple):

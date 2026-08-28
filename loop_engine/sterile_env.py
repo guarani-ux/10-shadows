@@ -12,24 +12,34 @@ from pathlib import Path
 import re
 from typing import Dict, List, Optional
 
+from loop_engine.governance import load_canonical_governance
+
+def get_allowed_env_vars() -> List[str]:
+    """Retrieves authoritative allowlist from canonical governance.yaml."""
+    try:
+        return load_canonical_governance().environment.allowed_env_vars
+    except Exception:
+        return [
+            "SYSTEMROOT",
+            "PATH",
+            "PATHEXT",
+            "USERPROFILE",
+            "TMP",
+            "TEMP",
+            "HOME",
+            "LANG",
+            "LC_ALL",
+            "HOMEDRIVE",
+            "HOMEPATH",
+            "APPDATA",
+            "LOCALAPPDATA",
+            "COMSPEC",
+            "WINDIR",
+        ]
+
 # Canonical allowlist of OS variables permitted to cross subprocess boundaries
-ALLOWED_ENV_VARS: List[str] = [
-    "SYSTEMROOT",
-    "PATH",
-    "PATHEXT",
-    "USERPROFILE",
-    "TMP",
-    "TEMP",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-    "HOMEDRIVE",
-    "HOMEPATH",
-    "APPDATA",
-    "LOCALAPPDATA",
-    "COMSPEC",
-    "WINDIR",
-]
+ALLOWED_ENV_VARS: List[str] = get_allowed_env_vars()
+
 
 # Sensitive keyword pattern to scrub even if accidentally matched
 SECRET_PATTERN = re.compile(

@@ -375,9 +375,13 @@ class PhysicalVerifierGate:
 
             evidence_digest = compute_test_digest(out_str)
             gov_digest = compute_governance_digest()
+
+            cur_state = self.kernel_db.get_proposal_state(manifest.task_id) or State.CANDIDATE_SEALED
+            from_state = cur_state if cur_state in (State.CANDIDATE_SEALED, State.VERIFYING) else State.CANDIDATE_SEALED
+
             claim_digest = compute_complete_claim_digest(
                 task_id=manifest.task_id,
-                from_state=State.CANDIDATE_SEALED,
+                from_state=from_state,
                 to_state=State.VERIFIED,
                 subject_identity=manifest.candidate_commit_sha,
                 candidate_tree_sha=manifest.candidate_tree_sha,
@@ -394,7 +398,7 @@ class PhysicalVerifierGate:
             )
             transition_req = TransitionRequest(
                 task_id=manifest.task_id,
-                from_state=State.CANDIDATE_SEALED,
+                from_state=from_state,
                 to_state=State.VERIFIED,
                 subject_identity=manifest.candidate_commit_sha,
                 candidate_tree_sha=manifest.candidate_tree_sha,
@@ -405,6 +409,7 @@ class PhysicalVerifierGate:
                 witness=witness,
                 governance_hash=gov_digest,
             )
+
             trans_result = self.transition_engine.execute_transition(transition_req)
             if isinstance(trans_result, TransitionRejection):
                 receipt = VerificationReceipt(

@@ -219,3 +219,36 @@ class PromotionCoordinator:
             text=True,
         )
         return res.returncode == 0
+
+    def reconcile_interrupted_promotions(self) -> None:
+        """
+        Idempotently reconciles interrupted or crashed promotions across the repository.
+        If a proposal is in PROMOTION_PENDING:
+        - If candidate_commit_sha is already an ancestor of target_branch HEAD -> advance to POST_PROMOTION_VERIFIED
+        - If not merged -> rollback to VERIFIED
+        """
+        pending = self.kernel_db.get_pending_promotions()
+        for prop in pending:
+            task_id = prop["task_id"]
+            cand_sha = prop["candidate_commit_sha"]
+
+            target_head_res = subprocess.run(
+                ["git", "rev-parse", self.target_branch],
+                cwd=self.repo_dir,
+                capture_output=True,
+                text=True,
+            )
+            if target_head_res.returncode != 0:
+                continue
+            target_head = target_head_res.stdout.strip()
+
+            is_ancestor = subprocess.run(
+                ["git", "merge-base", "--is-ancestor", cand_sha, target_head],
+                cwd=self.repo_dir,
+            ).returncode == 0
+
+            if is_ancestor:
+                self.kernel_db._raw_transition_proposal_state(task_id, State.PROMOTION_PENDING, State.POST_PROMOTION_VERIFIED)
+            else:
+                self.kernel_db._raw_transition_proposal_state(task_id, State.PROMOTION_PENDING, State.VERIFIED)
+

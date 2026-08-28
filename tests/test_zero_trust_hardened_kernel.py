@@ -33,7 +33,9 @@ from loop_engine.kernel_db import (
     IllegalStateTransitionError,
     ReceiptNotFoundError,
     ReceiptMismatchError,
+    PrivilegedStateMutationProhibitedError,
 )
+
 from loop_engine.schema import (
     State,
     FailureClassification,

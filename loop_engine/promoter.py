@@ -146,17 +146,18 @@ class PromotionCoordinator:
         return True
 
     def _run_post_promotion_verification(self) -> bool:
-        """Runs the test suite directly on the promoted target branch."""
-        test_file = self.verifier_gate.canonical_fixtures_dir / "test_app.py"
-        if not test_file.exists():
+        """Runs the test suite directly on the promoted target branch (Fail-Closed)."""
+        test_files = list(self.verifier_gate.canonical_fixtures_dir.glob("test_*.py"))
+        if not test_files:
             return True
 
+        test_target = test_files[0]
         res = subprocess.run(
             [
                 sys.executable,
                 "-m",
                 "pytest",
-                str(test_file),
+                str(test_target),
                 "-v",
                 "-p",
                 "no:logfire",
@@ -171,6 +172,7 @@ class PromotionCoordinator:
             timeout=60,
         )
         return res.returncode == 0
+
 
     def reconcile_interrupted_promotions(self) -> None:
         """

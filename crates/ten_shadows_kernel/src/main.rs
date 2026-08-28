@@ -1,16 +1,14 @@
 //! main.rs — CLI entrypoint `ts` for 10 SHADOWS Trusted Kernel.
 
-use sha2::Digest;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use ten_shadows_kernel::db::KernelDb;
-use ten_shadows_kernel::evidence::{EvidenceModality, VerificationType};
+use ten_shadows_kernel::evidence::VerificationType;
 use ten_shadows_kernel::predicate::evaluate_receipt;
-use ten_shadows_kernel::receipt::{TenShadowsReceipt, WorkerInvocationRecord, WorkerRole};
+use ten_shadows_kernel::receipt::TenShadowsReceipt;
 use ten_shadows_kernel::state_machine::KernelRun;
-use ten_shadows_kernel::time_utils::current_timestamp_rfc3339;
 use ten_shadows_kernel::verifier::SubprocessVerifier;
 
 fn resolve_git_head(target: &Path) -> Option<String> {
@@ -31,7 +29,7 @@ fn resolve_git_head(target: &Path) -> Option<String> {
 
 fn print_usage() {
     println!("Usage:");
-    println!("  ts run --target <path> --objective <objective> [--task-id <id>] [--mutate]");
+    println!("  ts run --target <path> --objective <objective> [--task-id <id>] [--mutate] [--provider <gemini|deterministic>] [--model <model>]");
     println!("  ts verify-receipt <receipt_json>");
     println!("  ts verify-production <receipt_json>");
     println!("  ts status");
@@ -56,6 +54,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut target = PathBuf::from(".");
             let mut task_id = None;
             let mut is_mutation_run = false;
+            let mut requested_provider = "gemini".to_string();
+            let mut requested_model = "gemini-3.7-flash".to_string();
 
             let mut i = 2;
             while i < args.len() {
@@ -70,6 +70,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     }
                     "--task-id" if i + 1 < args.len() => {
                         task_id = Some(args[i + 1].clone());
+                        i += 2;
+                    }
+                    "--provider" | "-p" if i + 1 < args.len() => {
+                        requested_provider = args[i + 1].clone();
+                        i += 2;
+                    }
+                    "--model" | "-m" if i + 1 < args.len() => {
+                        requested_model = args[i + 1].clone();
                         i += 2;
                     }
                     "--mutate" => {
@@ -101,11 +109,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let obj_hash = run_created.objective_hash.clone();
 
             println!("\n[KERNEL] Run Ingress Accepted:");
-            println!("  Run ID:         {}", run_id);
-            println!("  Task ID:        {}", task_id_str);
-            println!("  Objective Hash: {}", obj_hash);
-            println!("  Strategy:       {:?}", run_created.strategy);
-            println!("  Capabilities:   {:?}", run_created.capabilities);
+            println!("  Run ID:             {}", run_id);
+            println!("  Task ID:            {}", task_id_str);
+            println!("  Objective Hash:     {}", obj_hash);
+            println!("  Strategy:           {:?}", run_created.strategy);
+            println!("  Capabilities:       {:?}", run_created.capabilities);
+            println!("  Requested Provider: {}", requested_provider);
+            println!("  Requested Model:    {}", requested_model);
 
             // Step 2: Record Run Creation in Journal DB
             let start_commit_str = starting_head.clone().unwrap_or_else(|| "UNKNOWN_NON_GIT".into());
@@ -134,31 +144,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             };
             let run_auth = run_ws.authorize_worker(&worker_id);
 
-            // Step 6: Record Candidate (Typestate: CandidateProduced)
-            let current_head = resolve_git_head(&eval_path);
-            let is_mutated = current_head != starting_head;
-            
-            let cand_sha = current_head.clone().unwrap_or_else(|| "UNTRACKED_WORKSPACE".into());
-            
-            let run_cand = if is_mutated && is_mutation_run {
-                let worker_rec = WorkerInvocationRecord {
-                    invocation_id: format!("inv_{}", std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis()),
-                    worker_id: worker_id.clone(),
-                    provider: "ten_shadows_governed_worker".into(),
-                    model: "structural_compiler".into(),
-                    role: WorkerRole::Builder,
-                    modality: EvidenceModality::Structural,
-                    input_digest: obj_hash.clone(),
-                    output_digest: format!("{:x}", sha2::Sha256::digest(b"artifacts_staged")),
-                    started_at: current_timestamp_rfc3339(),
-                    ended_at: current_timestamp_rfc3339(),
-                    duration_seconds: 0.001,
-                    status: "SUCCESS".into(),
-                    provider_receipt: None,
-                };
-                run_auth.record_governed_candidate(&cand_sha, worker_rec, 1)
+            // Step 6: Dispatch Worker & Record Candidate (Typestate: CandidateProduced)
+            let run_cand = if is_mutation_run {
+                println!("[KERNEL] Dispatching Worker '{}' via Language-Neutral Dispatcher...", worker_id);
+                println!("  Target Provider: {}", requested_provider);
+                println!("  Target Model:    {}", requested_model);
+                run_auth.dispatch_and_produce_candidate(&requested_provider, &requested_model, None)?
             } else {
-                // Non-mutated audit run
+                let current_head = resolve_git_head(&eval_path);
+                let cand_sha = current_head.clone().unwrap_or_else(|| "UNTRACKED_WORKSPACE".into());
                 run_auth.record_external_candidate(&cand_sha, "Baseline audit execution (zero mutations)")
             };
 
@@ -172,10 +166,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 VerificationType::IndependentBehavioralOracle,
             );
 
-            println!("  Verifier ID:    {}", verification_rec.verifier_id);
-            println!("  Tests Passed:   {}/{}", verification_rec.tests_passed, verification_rec.tests_collected);
-            println!("  Exit Code:      {}", verification_rec.exit_code);
-            println!("  Status:         {}", verification_rec.verified_status);
+            println!("  Verifier ID:        {}", verification_rec.verifier_id);
+            println!("  Tests Passed:       {}/{}", verification_rec.tests_passed, verification_rec.tests_collected);
+            println!("  Exit Code:          {}", verification_rec.exit_code);
+            println!("  Status:             {}", verification_rec.verified_status);
 
             let run_verified = run_cand.record_verification(verification_rec);
 

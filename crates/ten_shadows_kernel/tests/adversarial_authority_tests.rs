@@ -1,4 +1,4 @@
-//! adversarial_authority_tests.rs — 12 Complete Adversarial Authority & Custody Tests for Ten Shadows Kernel.
+//! adversarial_authority_tests.rs — Comprehensive Adversarial Authority, Custody & Dispatcher Tests.
 
 use std::fs;
 use std::path::PathBuf;
@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use ten_shadows_kernel::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
 use ten_shadows_kernel::current_timestamp_rfc3339;
 use ten_shadows_kernel::db::KernelDb;
+use ten_shadows_kernel::dispatcher::{WorkerAuthorization, WorkerDispatcher};
 use ten_shadows_kernel::evidence::{
     assert_evidence_monotonicity, EvidenceModality, EvidencePurpose, SubstrateLawError,
     VerificationType,
@@ -284,7 +285,7 @@ fn test_05_evidence_upgrade_law_4_violation() {
     assert!(valid_downgrade.is_ok());
 }
 
-/// TEST 6: Valid Governed Execution & Production in Disposable Repo must pass all predicates.
+/// TEST 6: Valid Governed Execution & Production via Dispatcher in Disposable Repo.
 #[test]
 fn test_06_valid_governed_production_success() {
     let (disposable_repo, baseline_sha) = create_disposable_git_repo("gov_prod");
@@ -306,7 +307,7 @@ fn test_06_valid_governed_production_success() {
 
     let run_auth = run_ws.authorize_worker("builder_forge_01");
 
-    // Worker modifies file inside the governed workspace
+    // Worker modifies file inside the governed workspace via deterministic dispatcher
     let feature_file = ws_path.join("feature.py");
     fs::write(&feature_file, "def feature(): return 42").unwrap();
     Command::new("git").args(["add", "feature.py"]).current_dir(&ws_path).output().unwrap();
@@ -318,8 +319,8 @@ fn test_06_valid_governed_production_success() {
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
         worker_id: "builder_forge_01".into(),
-        provider: "ten_shadows_governed_worker".into(),
-        model: "structural_compiler".into(),
+        provider: "deterministic_test_harness".into(),
+        model: "deterministic-v1".into(),
         role: WorkerRole::Builder,
         modality: EvidenceModality::Structural,
         input_digest: obj_hash.clone(),
@@ -691,14 +692,12 @@ fn test_11_authoritative_source_as_workspace_rejected() {
     let (repo, baseline_sha) = create_disposable_git_repo("auth_source_guard");
     let source = AuthoritativeSource::new(&repo).unwrap();
 
-    // Attempting to create worktree with workspace path == source path must fail
     let res = GovernedWorkspace::create_ephemeral(
         "run_guard_11",
         &source,
         &baseline_sha,
         Some(&repo.parent().unwrap().to_path_buf()),
     );
-    // Even if path is nearby, workspace must be isolated
     assert!(res.is_ok() || matches!(res, Err(RepositoryRoleError::AuthoritativeSourceMutationForbidden(_))));
 }
 
@@ -733,8 +732,8 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
         worker_id: "builder_forge_div".into(),
-        provider: "ten_shadows_governed_worker".into(),
-        model: "structural_compiler".into(),
+        provider: "deterministic_test_harness".into(),
+        model: "deterministic-v1".into(),
         role: WorkerRole::Builder,
         modality: EvidenceModality::Structural,
         input_digest: obj_hash.clone(),
@@ -781,4 +780,139 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(!report.is_production_valid, "Diverged authoritative target must fail production validity");
+}
+
+/// TEST 13: Worker Token Tampering is mechanically rejected.
+#[test]
+fn test_13_worker_token_tamper_rejected() {
+    let (repo, baseline_sha) = create_disposable_git_repo("tamper_token");
+    let mut auth = WorkerAuthorization::new(
+        "run_13",
+        "task_13",
+        "inv_13",
+        "builder_13",
+        "Builder",
+        "Tamper test",
+        "hash_13",
+        &baseline_sha,
+        &repo,
+        "deterministic",
+        "deterministic-v1",
+        1,
+        None,
+        "2026-08-28T00:00:00Z",
+    );
+    assert!(auth.verify_token());
+
+    // Tamper with objective_hash
+    auth.objective_hash = "tampered_objective_hash_13".into();
+    assert!(!auth.verify_token(), "Tampered authorization must fail verify_token()");
+}
+
+/// TEST 14: End-to-End Worker Dispatch via Rust Dispatcher Module.
+#[test]
+fn test_14_worker_dispatch_through_python_dispatcher() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("e2e_dispatch");
+    let auth = WorkerAuthorization::new(
+        "run_e2e_14",
+        "task_e2e_14",
+        "inv_e2e_14",
+        "builder_e2e_14",
+        "Builder",
+        "Implement e2e feature",
+        "hash_e2e_14",
+        &baseline_sha,
+        &disposable_repo,
+        "deterministic",
+        "deterministic-v1",
+        1,
+        None,
+        "2026-08-28T00:00:00Z",
+    );
+
+    let result = WorkerDispatcher::dispatch(&auth, None).unwrap();
+    assert_eq!(result.exit_status, "SUCCESS");
+    assert_eq!(result.resolved_provider, "deterministic_test_harness");
+    assert_ne!(result.workspace_after_sha, baseline_sha);
+}
+
+/// TEST 15: Multi-Attempt Repair Loop preserves failed attempts and history.
+#[test]
+fn test_15_repair_loop_multi_attempt_retention() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("repair_loop");
+    let db_dir = create_test_dir("db_rep");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("fail_attempt_1 and repair", &disposable_repo, None);
+    let run_id = run.run_id.clone();
+    let task_id = run.task_id.clone();
+    let obj_hash = run.objective_hash.clone();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_rep");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let ws_path = run_ws.workspace_path.clone().unwrap();
+
+    // Attempt 1: Worker produces deliberate failing test
+    let run_auth1 = run_ws.authorize_worker("repair_builder");
+    let run_cand1 = run_auth1.dispatch_and_produce_candidate("deterministic", "deterministic-v1", None).unwrap();
+
+    let failing_ver = IndependentVerificationRecord {
+        verifier_id: "svris_rep_01".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        builder_id: "repair_builder".into(),
+        modality: EvidenceModality::DeterministicTest,
+        purpose: EvidencePurpose::BehavioralVerification,
+        test_digest: "t_fail".into(),
+        tests_collected: 1,
+        tests_passed: 0,
+        tests_failed: 1,
+        exit_code: 1,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "FAIL".into(),
+        execution_trace: Some("assert False".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver1 = run_cand1.record_verification(failing_ver);
+
+    // Trigger repair transition
+    let run_auth2 = run_ver1.retry_repair("Test failed with assert False");
+    assert_eq!(run_auth2.current_attempt, 2);
+    assert_eq!(run_auth2.attempts.len(), 1);
+    assert_eq!(run_auth2.attempts[0].rejection_reason, Some("Test failed with assert False".into()));
+
+    // Attempt 2: Worker repairs the failure
+    let run_cand2 = run_auth2.dispatch_and_produce_candidate("deterministic", "deterministic-v1", None).unwrap();
+    
+    let passing_ver = IndependentVerificationRecord {
+        verifier_id: "svris_rep_02".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        builder_id: "repair_builder".into(),
+        modality: EvidenceModality::DeterministicTest,
+        purpose: EvidencePurpose::BehavioralVerification,
+        test_digest: "t_pass".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("1 passed".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver2 = run_cand2.record_verification(passing_ver);
+    let (_promoted, receipt) = run_ver2.promote_and_seal();
+
+    assert_eq!(receipt.final_status, RunStatus::VerifiedSuccess);
+    assert_eq!(receipt.attempts.len(), 1);
+    assert_eq!(receipt.epistemic_claims.claim_promoted, true);
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(report.is_production_valid);
 }

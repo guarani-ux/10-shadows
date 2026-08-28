@@ -3,10 +3,11 @@
 //! Enforces that illegal lifecycle transitions are mathematically unrepresentable.
 
 use crate::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
+use crate::dispatcher::{WorkerAuthorization, WorkerDispatcher};
 use crate::evidence::{EvidenceModality, VerificationType};
 use crate::receipt::{
     DisaggregatedEpistemicClaims, ExecutionAttemptRecord, IndependentVerificationRecord,
-    RoutingStrategy, RunStatus, TenShadowsReceipt, WorkerInvocationRecord,
+    ProviderExecutionReceipt, RoutingStrategy, RunStatus, TenShadowsReceipt, WorkerInvocationRecord, WorkerRole,
 };
 use crate::repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 use crate::time_utils::current_timestamp_rfc3339;
@@ -44,6 +45,8 @@ pub struct KernelRun<State> {
     pub workspace_path: Option<PathBuf>,
     pub governed_workspace: Option<GovernedWorkspace>,
     pub authorized_worker_id: Option<String>,
+    pub current_attempt: usize,
+    pub last_failure_evidence: Option<String>,
     pub worker_invocations: Vec<WorkerInvocationRecord>,
     pub candidate_classification: Option<CandidateClassification>,
     pub attempts: Vec<ExecutionAttemptRecord>,
@@ -83,6 +86,8 @@ impl KernelRun<Created> {
             workspace_path: None,
             governed_workspace: None,
             authorized_worker_id: None,
+            current_attempt: 1,
+            last_failure_evidence: None,
             worker_invocations: Vec::new(),
             candidate_classification: None,
             attempts: Vec::new(),
@@ -156,6 +161,8 @@ impl KernelRun<Created> {
             workspace_path: None,
             governed_workspace: None,
             authorized_worker_id: None,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
             attempts: self.attempts,
@@ -194,6 +201,8 @@ impl KernelRun<BaselineCaptured> {
             workspace_path: Some(ws_path),
             governed_workspace: Some(ws),
             authorized_worker_id: None,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
             attempts: self.attempts,
@@ -223,6 +232,8 @@ impl KernelRun<BaselineCaptured> {
             workspace_path: self.workspace_path,
             governed_workspace: None,
             authorized_worker_id: None,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
             attempts: self.attempts,
@@ -253,6 +264,8 @@ impl KernelRun<WorkspaceReady> {
             workspace_path: self.workspace_path,
             governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: None,
             attempts: self.attempts,
@@ -265,6 +278,78 @@ impl KernelRun<WorkspaceReady> {
 }
 
 impl KernelRun<WorkerAuthorized> {
+    /// Dispatches the authorized worker through the language-neutral WorkerDispatcher.
+    pub fn dispatch_and_produce_candidate(
+        mut self,
+        requested_provider: &str,
+        requested_model: &str,
+        python_executable: Option<&str>,
+    ) -> Result<KernelRun<CandidateProduced>, Box<dyn std::error::Error>> {
+        let ws_path = self.workspace_path.as_ref().ok_or("Workspace path missing")?;
+        let worker_id = self.authorized_worker_id.as_deref().unwrap_or("worker_default");
+        let invocation_id = format!("inv_{}_{}", self.task_id, self.current_attempt);
+        let baseline = self.starting_head.as_deref().unwrap_or("UNKNOWN_BASELINE");
+        let authorized_at = current_timestamp_rfc3339();
+
+        let auth = WorkerAuthorization::new(
+            &self.run_id,
+            &self.task_id,
+            &invocation_id,
+            worker_id,
+            "Builder",
+            &self.objective,
+            &self.objective_hash,
+            baseline,
+            ws_path,
+            requested_provider,
+            requested_model,
+            self.current_attempt,
+            self.last_failure_evidence.clone(),
+            &authorized_at,
+        );
+
+        let dispatch_res = WorkerDispatcher::dispatch(&auth, python_executable)?;
+
+        let modality = match dispatch_res.modality.as_str() {
+            "Empirical" => EvidenceModality::Empirical,
+            "Simulated" => EvidenceModality::Simulated,
+            "DeterministicTest" => EvidenceModality::DeterministicTest,
+            _ => EvidenceModality::Structural,
+        };
+
+        let prov_receipt = dispatch_res.provider_receipt.and_then(|pr| {
+            serde_json::from_value::<ProviderExecutionReceipt>(pr).ok()
+        });
+
+        let worker_rec = WorkerInvocationRecord {
+            invocation_id: dispatch_res.invocation_id.clone(),
+            worker_id: dispatch_res.worker_id.clone(),
+            provider: dispatch_res.resolved_provider.clone(),
+            model: dispatch_res.resolved_model.clone(),
+            role: WorkerRole::Builder,
+            modality,
+            input_digest: self.objective_hash.clone(),
+            output_digest: dispatch_res.output_digest.clone(),
+            started_at: dispatch_res.started_at,
+            ended_at: dispatch_res.ended_at,
+            duration_seconds: dispatch_res.duration_seconds,
+            status: dispatch_res.exit_status.clone(),
+            provider_receipt: prov_receipt,
+        };
+
+        let candidate_sha = dispatch_res.workspace_after_sha.clone();
+        let is_mutated = candidate_sha != baseline && dispatch_res.exit_status == "SUCCESS";
+
+        let run_cand = if is_mutated && self.governed_workspace.is_some() {
+            self.record_governed_candidate(&candidate_sha, worker_rec, dispatch_res.files_changed.len())
+        } else {
+            self.worker_invocations.push(worker_rec);
+            self.record_external_candidate(&candidate_sha, "Worker execution produced zero valid governed mutations")
+        };
+
+        Ok(run_cand)
+    }
+
     pub fn record_governed_candidate(
         mut self,
         candidate_sha: &str,
@@ -300,6 +385,8 @@ impl KernelRun<WorkerAuthorized> {
             workspace_path: self.workspace_path,
             governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
             attempts: self.attempts,
@@ -334,6 +421,8 @@ impl KernelRun<WorkerAuthorized> {
             workspace_path: self.workspace_path,
             governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
             attempts: self.attempts,
@@ -364,6 +453,8 @@ impl KernelRun<CandidateProduced> {
             workspace_path: self.workspace_path,
             governed_workspace: self.governed_workspace,
             authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
             attempts: self.attempts,
@@ -376,6 +467,52 @@ impl KernelRun<CandidateProduced> {
 }
 
 impl KernelRun<Verified> {
+    /// Governed repair transition: records failed attempt and transitions back to WorkerAuthorized.
+    pub fn retry_repair(
+        mut self,
+        failure_evidence: &str,
+    ) -> KernelRun<WorkerAuthorized> {
+        let attempt_rec = ExecutionAttemptRecord {
+            attempt_number: self.current_attempt,
+            started_at: self.created_at.clone(),
+            ended_at: current_timestamp_rfc3339(),
+            duration_seconds: 0.1,
+            worker_invocations: self.worker_invocations.clone(),
+            artifacts_staged: Vec::new(),
+            verification: self.verification.clone(),
+            promotion_decision: "REJECTED_NEEDS_REPAIR".into(),
+            status: "FAILED_ATTEMPT".into(),
+            rejection_reason: Some(failure_evidence.to_string()),
+        };
+        self.attempts.push(attempt_rec);
+        self.current_attempt += 1;
+        self.last_failure_evidence = Some(failure_evidence.to_string());
+
+        KernelRun {
+            run_id: self.run_id,
+            task_id: self.task_id,
+            objective: self.objective,
+            objective_hash: self.objective_hash,
+            target_path: self.target_path,
+            strategy: self.strategy,
+            capabilities: self.capabilities,
+            routing_digest: self.routing_digest,
+            starting_head: self.starting_head,
+            workspace_path: self.workspace_path,
+            governed_workspace: self.governed_workspace,
+            authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
+            worker_invocations: self.worker_invocations,
+            candidate_classification: None,
+            attempts: self.attempts,
+            verification: None,
+            final_head: None,
+            created_at: self.created_at,
+            state_marker: std::marker::PhantomData,
+        }
+    }
+
     pub fn promote_and_seal(
         mut self,
     ) -> (KernelRun<Promoted>, TenShadowsReceipt) {
@@ -501,6 +638,8 @@ impl KernelRun<Verified> {
             workspace_path: self.workspace_path,
             governed_workspace: None,
             authorized_worker_id: self.authorized_worker_id,
+            current_attempt: self.current_attempt,
+            last_failure_evidence: self.last_failure_evidence,
             worker_invocations: self.worker_invocations,
             candidate_classification: self.candidate_classification,
             attempts: self.attempts,

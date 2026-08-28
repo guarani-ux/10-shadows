@@ -1,0 +1,66 @@
+{
+  "receipt_version": "3.0.0",
+  "kernel_version": "TEN_SHADOWS_TRUSTED_KERNEL_RUST_v3",
+  "run_id": "run_task_1787959403182_9403182",
+  "task_id": "task_1787959403182",
+  "objective": "Determine what prevents this application from fulfilling its intended objective as reliably and usefully as possible. Implement and verify the improvements. The application should take job postings, compare them against a master resume and work-history database, determine whether each opportunity is worth applying to, generate truthful tailored resumes and cover letters, track applications, and learn from previous applications. Deliver a working tested system rather than a development plan.",
+  "objective_hash": "9b62e43e349004aef0523f7a767413eb91ded2217c8bafbe2a21acff90188926",
+  "target_path": "\\\\?\\C:\\10 SHADOWS\\sandbox\\job_hunter",
+  "starting_head": "b6417a555430607710a1407aef9ee04080768589",
+  "final_head": "b6417a555430607710a1407aef9ee04080768589",
+  "candidate_classification": {
+    "kind": "External",
+    "details": {
+      "candidate_sha": "b6417a555430607710a1407aef9ee04080768589",
+      "source_note": "Baseline audit execution (zero mutations)"
+    }
+  },
+  "routing_strategy": "ADVERSARIAL_AUDIT",
+  "routing_decision_digest": "0241a4f167538598ebfa8e6517e96dac79ebbe83beec2697a571dcca0835d319",
+  "capabilities_selected": [
+    "STATIC_INSPECTION",
+    "ADVERSARIAL_FALSIFICATION",
+    "CONTRACT_VERIFICATION"
+  ],
+  "attempts": [],
+  "worker_invocations": [],
+  "artifacts_produced": [],
+  "verification": {
+    "verifier_id": "svris_independent_verifier_task_1787959403182",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "forge_builder_task_1787959403182",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "b321c3b32e0eb2be5c77f3b471d361531d0af7212dd4be23bda2d7fa54b270ec",
+    "tests_collected": 83,
+    "tests_passed": 83,
+    "tests_failed": 0,
+    "exit_code": 0,
+    "duration_seconds": 6.224,
+    "falsification_attempted": true,
+    "verified_status": "PASS",
+    "execution_trace": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\flowe\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\ncachedir: .pytest_cache\r\nrootdir: C:\\Users\\flowe\\AppData\\Local\\Temp\\10_shadows_worktrees\\wt_run_task_1787959403182_9403182\r\nconfigfile: pytest.ini\r\nplugins: anyio-4.12.1, ddtrace-4.7.1, Faker-40.15.0, langsmith-0.7.36, logfire-4.32.1, cov-7.1.0, typeguard-4.4.3\r\ncollecting ... collected 83 items\r\n\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[100-FitRecommendation.STRONG_FIT] PASSED [  1%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[80-FitRecommendation.STRONG_FIT] PASSED [  2%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[79-FitRecommendation.GOOD_FIT] PASSED [  3%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[60-FitRecommendation.GOOD_FIT] PASSED [  4%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[59-FitRecommendation.MARGINAL_FIT] PASSED [  6%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[40-FitRecommendation.MARGINAL_FIT] PASSED [  7%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[39-FitRecommendation.POOR_FIT] PASSED [  8%]\r\ntests/test_fit_scorer.py::TestRecommendationMapping::test_score_boundaries[0-FitRecommendation.POOR_FIT] PASSED [  9%]\r\ntests/test_fit_scorer.py::TestStripFences::test_strips_json_fence PASSED [ 10%]\r\ntests/test_fit_scorer.py::TestStripFences::test_strips_bare_fence PASSED [ 12%]\r\ntests/test_fit_scorer.py::TestStripFences::test_no_fence_passthrough PASSED [ 13%]\r\ntests/test_fit_scorer.py::TestFitScorer::test_analyze_returns_fit_result PASSED [ 14%]\r\ntests/test_fit_scorer.py::TestFitScorer::test_strong_fit_score PASSED    [ 15%]\r\ntests/test_fit_scorer.py::TestFitScorer::test_poor_fit_score PASSED      [ 16%]\r\ntests/test_f",
+    "timestamp": "2026-08-28T23:23:29.605Z"
+  },
+  "promotion": {
+    "head": "b6417a555430607710a1407aef9ee04080768589",
+    "rejection_reason": null,
+    "status": "REJECTED"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": false,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": false,
+    "claim_candidate_produced_under_custody": false,
+    "claim_independently_verified": true,
+    "claim_promoted": false,
+    "claim_target_behaviorally_tested": true,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "VERIFIED_SUCCESS",
+  "created_at": "2026-08-28T23:23:23.182Z",
+  "sealed_at": "2026-08-28T23:23:29.605Z",
+  "receipt_signature": "3d8ffb95e3867e783f4f5953a8d63491a5be838941c3b18a4b43e1ca2176c8d5"
+}

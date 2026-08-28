@@ -2,6 +2,7 @@
 
 pub mod candidate;
 pub mod db;
+pub mod dispatcher;
 pub mod evidence;
 pub mod predicate;
 pub mod receipt;
@@ -12,6 +13,7 @@ pub mod verifier;
 
 pub use candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
 pub use db::KernelDb;
+pub use dispatcher::{DispatchError, ProviderUsage, WorkerAuthorization, WorkerDispatcher, WorkerExecutionResult};
 pub use evidence::{assert_evidence_monotonicity, EvidenceModality, EvidencePurpose, SubstrateLawError, VerificationType};
 pub use predicate::{evaluate_receipt, VerificationReport};
 pub use receipt::{

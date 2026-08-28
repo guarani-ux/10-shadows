@@ -48,8 +48,9 @@ from loop_engine.schema import (
 from loop_engine.verifier_gate import PhysicalVerifierGate
 from loop_engine.promoter import PromotionCoordinator
 from loop_engine.quarantine import QuarantineManager, PathTraversalEscapeError
-from zero_trust_engine.governor import GovernorEngine
+from loop_engine.governor import GovernorEngine
 from zero_trust_engine.auditor import PlanAuditor, AuditResult
+
 
 
 @pytest.fixture

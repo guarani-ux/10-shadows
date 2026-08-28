@@ -16,6 +16,8 @@ from loop_engine.preflight import (
     SpecTamperError,
 )
 from loop_engine.kernel_db import KernelDatabase
+from loop_engine.schema import FailureClassification
+
 
 
 class StrikeCeilingExceededError(Exception):
@@ -292,3 +294,160 @@ class Governor(StepGovernor):
         elif res.status == "ABORTED":
             d["strikes_exhausted"] = res.strikes_used
         return d
+
+
+class RetryGovernor:
+    """
+    Deterministic retry governor enforcing strict attempt bounds.
+
+    Invariants:
+    1. max_attempts > 0 (strictly positive integer).
+    2. 0 <= attempts_used <= max_attempts (clamped bound).
+    3. remaining_attempts() == max(0, max_attempts - attempts_used) >= 0.
+    4. can_retry() is True if and only if attempts_used < max_attempts.
+    5. Zero courtesy retries: When attempts_used == max_attempts, can_retry() is False.
+    6. Calling record_failure() at capacity clamps attempts_used to max_attempts.
+    """
+
+    def __init__(self, max_attempts: int, attempts_used: int = 0) -> None:
+        if not isinstance(max_attempts, int) or isinstance(max_attempts, bool):
+            raise TypeError("max_attempts must be an integer.")
+        if not isinstance(attempts_used, int) or isinstance(attempts_used, bool):
+            raise TypeError("attempts_used must be an integer.")
+        if max_attempts <= 0:
+            raise ValueError(f"max_attempts must be strictly positive (> 0), got {max_attempts}.")
+        if attempts_used < 0:
+            raise ValueError(f"attempts_used must be non-negative (>= 0), got {attempts_used}.")
+        if attempts_used > max_attempts:
+            raise ValueError(
+                f"attempts_used ({attempts_used}) cannot exceed max_attempts ({max_attempts})."
+            )
+
+        self._max_attempts: int = max_attempts
+        self._attempts_used: int = attempts_used
+
+    @property
+    def max_attempts(self) -> int:
+        """Returns the maximum allowed attempts."""
+        return self._max_attempts
+
+    @property
+    def attempts_used(self) -> int:
+        """Returns the number of attempts used so far."""
+        return self._attempts_used
+
+    def can_retry(self) -> bool:
+        """
+        Returns True only when another attempt is permitted (remaining_attempts > 0).
+        Explicitly rejects any courtesy retries when attempts_used >= max_attempts.
+        """
+        return self._attempts_used < self._max_attempts
+
+    def record_failure(self) -> None:
+        """
+        Increment attempts used by exactly 1.
+        If attempt limit has already been reached, clamps attempts_used to max_attempts.
+        """
+        if self._attempts_used < self._max_attempts:
+            self._attempts_used += 1
+
+    def remaining_attempts(self) -> int:
+        """
+        Returns the number of remaining attempts before exhaustion.
+        Always returns an integer >= 0.
+        """
+        return max(0, self._max_attempts - self._attempts_used)
+
+    def reset(self) -> None:
+        """Resets the attempts used counter to 0."""
+        self._attempts_used = 0
+
+    def __repr__(self) -> str:
+        return f"RetryGovernor(max_attempts={self._max_attempts}, attempts_used={self._attempts_used})"
+
+
+
+class TokenBucketRateLimiter:
+    """
+    Thread-safe Token Bucket Rate Limiter.
+    Operates using monotonic timestamps and atomic token consumption.
+    """
+
+    def __init__(self, capacity: float, refill_rate: float):
+        import threading
+        if capacity <= 0:
+            raise ValueError("Capacity must be strictly positive.")
+        if refill_rate <= 0:
+            raise ValueError("Refill rate must be strictly positive.")
+
+        self.capacity = float(capacity)
+        self.refill_rate = float(refill_rate)
+        self.tokens = float(capacity)
+        self.last_refill_time = time.monotonic()
+        self._lock = threading.Lock()
+
+    def _refill(self) -> None:
+        """Refill tokens based on elapsed monotonic time."""
+        now = time.monotonic()
+        elapsed = now - self.last_refill_time
+        if elapsed > 0:
+            added_tokens = elapsed * self.refill_rate
+            self.tokens = min(self.capacity, self.tokens + added_tokens)
+            self.last_refill_time = now
+
+    def allow(self, tokens: float = 1.0) -> bool:
+        """
+        Attempts to consume tokens from the bucket.
+        Returns True if tokens were consumed, False if rate limited.
+        """
+        if tokens <= 0:
+            return True
+
+        with self._lock:
+            self._refill()
+            if self.tokens >= tokens:
+                self.tokens -= tokens
+                return True
+            return False
+
+    def get_available_tokens(self) -> float:
+        """Returns the current number of available tokens in the bucket."""
+        with self._lock:
+            self._refill()
+            return self.tokens
+
+
+class GovernorEngine:
+    """
+    Database-backed 3-Strike Governor with failure discrimination and anti-oscillation tracking.
+    """
+
+    def __init__(self, db: KernelDatabase, max_strikes: int = 3):
+        self.db = db
+        self.max_strikes = max_strikes
+
+    def evaluate_failure(self, task_id: str, classification: FailureClassification, signature: str) -> bool:
+        """
+        Evaluates failure. Increments strikes ONLY on implementation and regression bugs.
+        Detects repetitive oscillation.
+        Returns True if a strike was recorded, False otherwise.
+        """
+        if classification not in (FailureClassification.CANDIDATE_FAILURE, FailureClassification.REGRESSION_FAILURE):
+            return False
+
+        # Anti-oscillation detection
+        existing_signatures = self.db.get_failure_signatures(task_id)
+        if signature in existing_signatures:
+            # Duplicate failure signature detected - force immediate terminal strike
+            self.db.record_strike(task_id, classification, f"OSCILLATION_DETECTED:{signature}")
+            return True
+
+        self.db.record_strike(task_id, classification, signature)
+        return True
+
+    def get_strike_count(self, task_id: str) -> int:
+        return self.db.get_strikes(task_id)
+
+    def is_aborted(self, task_id: str) -> bool:
+        return self.get_strike_count(task_id) >= self.max_strikes
+

@@ -20,7 +20,7 @@ import sys
 from pathlib import Path
 import pytest
 
-from zero_trust_engine.schema import (
+from loop_engine.schema import (
     State,
     FailureClassification,
     ProposalManifest,
@@ -30,11 +30,12 @@ from zero_trust_engine.schema import (
     compute_env_fingerprint,
     compute_failure_signature,
 )
-from zero_trust_engine.db import StateDatabase
-from zero_trust_engine.governor import GovernorEngine
-from zero_trust_engine.verifier_gate import PhysicalVerifierGate
-from zero_trust_engine.promoter import PromotionCoordinator
-from zero_trust_engine.quarantine import QuarantineManager
+from loop_engine.kernel_db import KernelDatabase as StateDatabase
+from loop_engine.governor import GovernorEngine
+from loop_engine.verifier_gate import PhysicalVerifierGate
+from loop_engine.promoter import PromotionCoordinator
+from loop_engine.quarantine import QuarantineManager
+
 
 
 @pytest.fixture

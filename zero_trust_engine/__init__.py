@@ -1,43 +1,24 @@
 """
-Zero-Trust Autonomous Engine Package.
-Enforces 6-state promotion lifecycle, 8-point cryptographic binding,
-sterile verification isolation, 3-strike failure discrimination, and crash recovery.
+zero_trust_engine
+Adversarial Plan Auditing Rule Engine for 10 SHADOWS.
+Enforces structural completeness, risk checks, and anti-overclaiming invariants.
 """
 
-from zero_trust_engine.schema import (
-    State,
-    FailureClassification,
-    EnvironmentFingerprint,
-    ProposalManifest,
-    VerificationReceipt,
-    QuarantineRecord,
-    compute_spec_hash,
-    compute_tree_hash,
-    compute_test_digest,
-    compute_env_fingerprint,
-    compute_failure_signature,
+from zero_trust_engine.auditor import (
+    PlanAuditor,
+    AuditResult,
+    AuditReport,
+    Severity,
+    Finding,
+    FindingStatus,
 )
-from zero_trust_engine.db import StateDatabase
-from zero_trust_engine.governor import GovernorEngine
-from zero_trust_engine.verifier_gate import PhysicalVerifierGate
-from zero_trust_engine.promoter import PromotionCoordinator
-from zero_trust_engine.quarantine import QuarantineManager
 
 __all__ = [
-    "State",
-    "FailureClassification",
-    "EnvironmentFingerprint",
-    "ProposalManifest",
-    "VerificationReceipt",
-    "QuarantineRecord",
-    "compute_spec_hash",
-    "compute_tree_hash",
-    "compute_test_digest",
-    "compute_env_fingerprint",
-    "compute_failure_signature",
-    "StateDatabase",
-    "GovernorEngine",
-    "PhysicalVerifierGate",
-    "PromotionCoordinator",
-    "QuarantineManager",
+    "PlanAuditor",
+    "AuditResult",
+    "AuditReport",
+    "Severity",
+    "Finding",
+    "FindingStatus",
 ]
+

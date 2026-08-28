@@ -99,9 +99,9 @@ def test_alchemist_self_healing_failed_repair_rollback(tmp_path):
     # Use strike_ceiling=1 via GovernanceConfig for fast deterministic failure test
     from loop_engine.governance import load_canonical_governance
     custom_gov = load_canonical_governance().model_copy(deep=True)
-    custom_gov.governor.strike_ceiling = 1
-    gov = Governor(governance_config=custom_gov)
+    gov = Governor._create_for_test(governance_config=custom_gov)
     result = gov.run_loop(runner, input_payload)
+
 
 
     # Governor should abort

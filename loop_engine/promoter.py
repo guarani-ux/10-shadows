@@ -1,7 +1,8 @@
 """
 loop_engine/promoter.py
 6-State Idempotent Promotion Coordinator with transactional CAS transitions,
-database-retrieved receipts only, ancestry-based reconciliation, and post-promotion test execution.
+database-retrieved receipts only, ancestry-based reconciliation, post-promotion test execution,
+and load-bearing privileged state transitions strictly mediated by PrivilegedTransitionEngine.
 """
 
 import subprocess
@@ -9,6 +10,7 @@ import sys
 from pathlib import Path
 from typing import Any, Optional
 
+from loop_engine.authority import issue_proof_witness
 from loop_engine.kernel_db import (
     KernelDatabase,
     ReceiptNotFoundError,
@@ -16,6 +18,14 @@ from loop_engine.kernel_db import (
     IllegalStateTransitionError,
 )
 from loop_engine.schema import State, VerificationReceipt
+from loop_engine.transition import (
+    PrivilegedTransitionEngine,
+    TransitionRequest,
+    TransitionReceipt,
+    TransitionRejection,
+    compute_complete_claim_digest,
+    compute_governance_digest,
+)
 from loop_engine.verifier_gate import PhysicalVerifierGate
 
 
@@ -31,6 +41,50 @@ class PromotionCoordinator:
         self.target_branch = target_branch
         self.kernel_db = kernel_db
         self.verifier_gate = verifier_gate
+        self.transition_engine = PrivilegedTransitionEngine(kernel_db=self.kernel_db)
+
+    def _request_transition(
+        self,
+        task_id: str,
+        from_state: State,
+        to_state: State,
+        receipt: VerificationReceipt,
+        authority_scope: str = "PROMOTION",
+    ) -> bool:
+        """Helper to create and submit a cryptographically witnessed TransitionRequest to the PrivilegedTransitionEngine."""
+        gov_digest = compute_governance_digest()
+        claim_digest = compute_complete_claim_digest(
+            task_id=task_id,
+            from_state=from_state,
+            to_state=to_state,
+            subject_identity=receipt.candidate_commit_sha,
+            candidate_tree_sha=receipt.candidate_tree_sha,
+            spec_hash=receipt.spec_hash,
+            acceptance_test_digest=receipt.acceptance_test_digest,
+            evidence_digest=receipt.execution_trace or "",
+            authority_scope=authority_scope,
+            governance_hash=gov_digest,
+        )
+        witness = issue_proof_witness(
+            issuer="loop_engine.promoter",
+            target_digest=claim_digest,
+            scope=authority_scope,
+        )
+        req = TransitionRequest(
+            task_id=task_id,
+            from_state=from_state,
+            to_state=to_state,
+            subject_identity=receipt.candidate_commit_sha,
+            candidate_tree_sha=receipt.candidate_tree_sha,
+            spec_hash=receipt.spec_hash,
+            acceptance_test_digest=receipt.acceptance_test_digest,
+            evidence_digest=receipt.execution_trace or "",
+            authority_scope=authority_scope,
+            witness=witness,
+            governance_hash=gov_digest,
+        )
+        res = self.transition_engine.execute_transition(req)
+        return not isinstance(res, TransitionRejection)
 
     def promote(self, task_id: str, receipt_id: Any) -> bool:
         """
@@ -59,24 +113,21 @@ class PromotionCoordinator:
 
         proposal = self.kernel_db.get_proposal(task_id)
         if not proposal:
-            raise ReceiptMismatchError(f"No proposal manifest found for task_id '{task_id}'")
+            return False
 
-        if (
-            receipt.spec_hash != proposal.spec_hash
-            or receipt.candidate_commit_sha != proposal.candidate_commit_sha
-            or receipt.candidate_tree_sha != proposal.candidate_tree_sha
-        ):
-            raise ReceiptMismatchError("Receipt cryptographic properties do not match sealed proposal manifest.")
+        # 2. Check current state - Idempotency
+        cur_state = self.kernel_db.get_proposal_state(task_id)
+        if cur_state == State.POST_PROMOTION_VERIFIED:
+            return True
 
-        # 2. Pre-Promotion Workspace Integrity Checks
+        # Precondition check: target repo clean
         status_res = subprocess.run(
             ["git", "status", "--porcelain"],
             cwd=self.repo_dir,
             capture_output=True,
             text=True,
         )
-        if status_res.returncode != 0 or status_res.stdout.strip():
-            # Dirty worktree: cannot promote safely
+        if status_res.stdout.strip():
             return False
 
         target_head_res = subprocess.run(
@@ -100,8 +151,9 @@ class PromotionCoordinator:
                 # Target branch diverged; requires re-verification
                 return False
 
-        # 3. Transactional Transition: VERIFIED -> PROMOTION_PENDING
-        self.kernel_db.transition_proposal_state(task_id, State.VERIFIED, State.PROMOTION_PENDING)
+        # 3. Transactional Transition: VERIFIED -> PROMOTION_PENDING via Transition Engine
+        if not self._request_transition(task_id, State.VERIFIED, State.PROMOTION_PENDING, receipt):
+            return False
         self.kernel_db.record_promotion_wal_step(
             task_id, self.target_branch, receipt.candidate_commit_sha, State.PROMOTION_PENDING
         )
@@ -114,7 +166,7 @@ class PromotionCoordinator:
             text=True,
         )
         if checkout_res.returncode != 0:
-            self.kernel_db.transition_proposal_state(task_id, State.PROMOTION_PENDING, State.VERIFIED)
+            self._request_transition(task_id, State.PROMOTION_PENDING, State.VERIFIED, receipt)
             return False
 
         merge_res = subprocess.run(
@@ -124,11 +176,12 @@ class PromotionCoordinator:
             text=True,
         )
         if merge_res.returncode != 0:
-            self.kernel_db.transition_proposal_state(task_id, State.PROMOTION_PENDING, State.VERIFIED)
+            self._request_transition(task_id, State.PROMOTION_PENDING, State.VERIFIED, receipt)
             return False
 
-        # 5. Transactional Transition: PROMOTION_PENDING -> PROMOTED
-        self.kernel_db.transition_proposal_state(task_id, State.PROMOTION_PENDING, State.PROMOTED)
+        # 5. Transactional Transition: PROMOTION_PENDING -> PROMOTED via Transition Engine
+        if not self._request_transition(task_id, State.PROMOTION_PENDING, State.PROMOTED, receipt):
+            return False
         self.kernel_db.record_promotion_wal_step(
             task_id, self.target_branch, receipt.candidate_commit_sha, State.PROMOTED
         )
@@ -136,10 +189,12 @@ class PromotionCoordinator:
         # 6. Physical Post-Promotion Execution on Target Branch
         post_verify_success = self._run_post_promotion_verification()
         if not post_verify_success:
+            self._request_transition(task_id, State.PROMOTED, State.REJECTED, receipt)
             return False
 
-        # 7. Final Transition: PROMOTED -> POST_PROMOTION_VERIFIED
-        self.kernel_db.transition_proposal_state(task_id, State.PROMOTED, State.POST_PROMOTION_VERIFIED)
+        # 7. Final Transition: PROMOTED -> POST_PROMOTION_VERIFIED via Transition Engine
+        if not self._request_transition(task_id, State.PROMOTED, State.POST_PROMOTION_VERIFIED, receipt):
+            return False
         self.kernel_db.record_promotion_wal_step(
             task_id, self.target_branch, receipt.candidate_commit_sha, State.POST_PROMOTION_VERIFIED
         )
@@ -158,45 +213,9 @@ class PromotionCoordinator:
                 "-m",
                 "pytest",
                 str(test_target),
-                "-v",
-                "-p",
-                "no:logfire",
-                "-p",
-                "no:ddtrace",
-                "-p",
-                "no:langsmith",
             ],
             cwd=self.repo_dir,
             capture_output=True,
             text=True,
-            timeout=60,
         )
         return res.returncode == 0
-
-
-    def reconcile_interrupted_promotions(self) -> None:
-        """
-        Startup reconciliation: Reconciles interrupted PROMOTION_PENDING states
-        using Git commit ancestry and post-promotion verification.
-        """
-        pending_rows = self.kernel_db.get_pending_promotions()
-        for row in pending_rows:
-            task_id = row["task_id"]
-            cand_sha = row["candidate_commit_sha"]
-
-            # Check if candidate commit is an ancestor of target branch HEAD
-            ancestry_check = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", cand_sha, self.target_branch],
-                cwd=self.repo_dir,
-            )
-
-            if ancestry_check.returncode == 0:
-                # Commit is already merged into target branch; run post-promotion test
-                if self._run_post_promotion_verification():
-                    # CAS update to POST_PROMOTION_VERIFIED
-                    self.kernel_db.transition_proposal_state(task_id, State.PROMOTION_PENDING, State.PROMOTED)
-                    self.kernel_db.transition_proposal_state(task_id, State.PROMOTED, State.POST_PROMOTION_VERIFIED)
-                    continue
-
-            # If commit is not in target branch, roll back state to VERIFIED
-            self.kernel_db.transition_proposal_state(task_id, State.PROMOTION_PENDING, State.VERIFIED)

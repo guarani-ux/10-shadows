@@ -103,5 +103,13 @@ __all__ = [
     "build_sterile_environment",
     "scan_ast",
     "scan_python_worktree",
+    "GovernanceConfig",
+    "GovernanceConfigurationError",
+    "load_canonical_governance",
+    "PrivilegedTransitionEngine",
+    "TransitionRequest",
+    "TransitionReceipt",
+    "TransitionRejection",
 ]
+
 

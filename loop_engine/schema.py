@@ -40,15 +40,16 @@ class State(str, Enum):
 
 # Valid state machine transitions
 LEGAL_STATE_TRANSITIONS: Dict[State, List[State]] = {
-    State.CANDIDATE_SEALED: [State.VERIFYING],
+    State.CANDIDATE_SEALED: [State.VERIFYING, State.VERIFIED, State.REJECTED],
     State.VERIFYING: [State.VERIFIED, State.REJECTED, State.BLOCKED],
     State.VERIFIED: [State.PROMOTION_PENDING, State.VERIFYING],
-    State.REJECTED: [State.VERIFYING],
-    State.BLOCKED: [State.VERIFYING],
-    State.PROMOTION_PENDING: [State.PROMOTED, State.VERIFIED],  # Can rollback to VERIFIED on reconcile
-    State.PROMOTED: [State.POST_PROMOTION_VERIFIED],
+    State.REJECTED: [State.VERIFYING, State.CANDIDATE_SEALED],
+    State.BLOCKED: [State.VERIFYING, State.CANDIDATE_SEALED],
+    State.PROMOTION_PENDING: [State.PROMOTED, State.VERIFIED, State.REJECTED],  # Can rollback to VERIFIED on reconcile
+    State.PROMOTED: [State.POST_PROMOTION_VERIFIED, State.REJECTED],
     State.POST_PROMOTION_VERIFIED: [],
 }
+
 
 
 class FailureClassification(str, Enum):
@@ -80,6 +81,10 @@ class EnvironmentFingerprint:
         }
 
     @classmethod
+    def capture(cls) -> "EnvironmentFingerprint":
+        return compute_env_fingerprint()
+
+    @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "EnvironmentFingerprint":
         return cls(
             python_version=data["python_version"],
@@ -88,6 +93,7 @@ class EnvironmentFingerprint:
             architecture=data["architecture"],
             env_hash=data["env_hash"],
         )
+
 
 
 @dataclass

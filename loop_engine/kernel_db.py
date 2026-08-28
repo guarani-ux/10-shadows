@@ -48,7 +48,21 @@ class ReceiptMismatchError(Exception):
     pass
 
 
+PRIVILEGED_STATES = {
+    State.VERIFIED,
+    State.PROMOTION_PENDING,
+    State.PROMOTED,
+    State.POST_PROMOTION_VERIFIED,
+}
+
+
+class PrivilegedStateMutationProhibitedError(Exception):
+    """Raised when an unauthenticated caller attempts direct privileged state mutation in KernelDatabase."""
+    pass
+
+
 class KernelDatabase:
+
     """
     Unified Single-Database Transactional Boundary for 10 SHADOWS.
     """
@@ -341,15 +355,23 @@ class KernelDatabase:
             )
 
     def get_proposal_state(self, task_id: str) -> Optional[State]:
+
         with self.get_connection() as conn:
             row = conn.execute("SELECT state FROM proposals WHERE task_id = ?", (task_id,)).fetchone()
             return State(row["state"]) if row else None
 
-    def transition_proposal_state(self, task_id: str, from_state: State, to_state: State) -> None:
-        """
-        Executes transactional compare-and-swap (CAS) state transition.
-        Validates state machine legality and ensures atomic state progression.
-        """
+    def _execute_privileged_state_transition(
+        self, auth_token: str, task_id: str, from_state: State, to_state: State
+    ) -> None:
+        """Internal custody transition method callable exclusively by PrivilegedTransitionEngine."""
+        from loop_engine.transition import _INTERNAL_TRANSITION_TOKEN
+        if auth_token != _INTERNAL_TRANSITION_TOKEN:
+            raise PrivilegedStateMutationProhibitedError(
+                "Invalid authority token: direct privileged state mutation is prohibited."
+            )
+        self._raw_transition_proposal_state(task_id, from_state, to_state)
+
+    def _raw_transition_proposal_state(self, task_id: str, from_state: State, to_state: State) -> None:
         allowed = LEGAL_STATE_TRANSITIONS.get(from_state, [])
         if to_state not in allowed:
             raise IllegalStateTransitionError(
@@ -363,12 +385,23 @@ class KernelDatabase:
                 (to_state.value, now, task_id, from_state.value),
             )
             if cursor.rowcount == 0:
-                # Check current state for diagnostic
                 cur_row = conn.execute("SELECT state FROM proposals WHERE task_id = ?", (task_id,)).fetchone()
                 cur_state = cur_row["state"] if cur_row else "NON_EXISTENT"
                 raise IllegalStateTransitionError(
                     f"CAS transition failed for task '{task_id}': expected state '{from_state.value}', but found '{cur_state}'"
                 )
+
+    def transition_proposal_state(self, task_id: str, from_state: State, to_state: State) -> None:
+        """
+        Public transition method. Privileged states (VERIFIED, PROMOTION_PENDING, PROMOTED,
+        POST_PROMOTION_VERIFIED) are restricted and cannot be mutated directly through this API.
+        """
+        if to_state in PRIVILEGED_STATES:
+            raise PrivilegedStateMutationProhibitedError(
+                f"Direct database mutation to privileged state '{to_state.value}' is prohibited. "
+                "Privileged state transitions must be executed through PrivilegedTransitionEngine."
+            )
+        self._raw_transition_proposal_state(task_id, from_state, to_state)
 
     def update_state(self, task_id: str, to_state: State) -> None:
         """Convenience method for updating proposal state via transition_proposal_state."""
@@ -376,6 +409,7 @@ class KernelDatabase:
         if cur_state is None:
             raise IllegalStateTransitionError(f"Proposal '{task_id}' does not exist.")
         self.transition_proposal_state(task_id, cur_state, to_state)
+
 
     def record_receipt(self, receipt: VerificationReceipt) -> int:
         """Alias for record_verified_receipt."""

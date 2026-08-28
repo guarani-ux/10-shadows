@@ -79,24 +79,40 @@ class StepGovernor:
     def __init__(
         self,
         kernel_db: Optional[KernelDatabase] = None,
-        governance_config: Optional[GovernanceConfig] = None,
         max_error_lines: int = 25,
         **kwargs: Any,
     ):
-        if "max_strikes" in kwargs or "max_attempts" in kwargs:
-            override_key = "max_strikes" if "max_strikes" in kwargs else "max_attempts"
+        if "max_strikes" in kwargs or "max_attempts" in kwargs or "governance_config" in kwargs:
+            override_key = list(kwargs.keys())[0]
             raise GovernanceOverrideProhibitedError(
-                f"Manual strike override '{override_key}={kwargs[override_key]}' is prohibited. "
+                f"Manual strike/governance override '{override_key}={kwargs[override_key]}' is prohibited. "
                 "The strike ceiling is exclusively governed by canonical governance.yaml."
             )
         if kwargs:
             raise TypeError(f"StepGovernor.__init__() got unexpected keyword argument(s): {list(kwargs.keys())}")
 
-        self.governance = governance_config or load_canonical_governance()
+        self.governance = load_canonical_governance()
         self.max_strikes = self.governance.governor.strike_ceiling
         self.execution_timeout_seconds = self.governance.governor.execution_timeout_seconds
         self.max_error_lines = max_error_lines
         self.kernel_db = kernel_db or KernelDatabase()
+
+    @classmethod
+    def _create_for_test(
+        cls,
+        kernel_db: Optional[KernelDatabase] = None,
+        governance_config: Optional[GovernanceConfig] = None,
+        max_error_lines: int = 25,
+    ) -> "StepGovernor":
+        """Explicit isolated factory for unit testing custom governance scenarios."""
+        inst = cls.__new__(cls)
+        inst.governance = governance_config or load_canonical_governance()
+        inst.max_strikes = inst.governance.governor.strike_ceiling
+        inst.execution_timeout_seconds = inst.governance.governor.execution_timeout_seconds
+        inst.max_error_lines = max_error_lines
+        inst.kernel_db = kernel_db or KernelDatabase()
+        return inst
+
 
 
     def compact_error_trace(self, raw_error: str) -> str:

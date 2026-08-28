@@ -108,6 +108,17 @@ class PhysicalVerifierGate:
             else:
                 self.kernel_db = KernelDatabase()
 
+        from loop_engine.transition import (
+            PrivilegedTransitionEngine,
+            TransitionRequest,
+            TransitionReceipt as EngineReceipt,
+            TransitionRejection,
+            compute_complete_claim_digest,
+            compute_governance_digest,
+        )
+        self.transition_engine = PrivilegedTransitionEngine(kernel_db=self.kernel_db)
+
+
     def verify_candidate(
         self,
         manifest: ProposalManifest,
@@ -352,25 +363,85 @@ class PhysicalVerifierGate:
             receipt.receipt_id = receipt_id
             return VerificationResult(receipt_id, receipt)
 
-        # Gate 8: Outcome Classification
+        # Gate 8: Outcome Classification & Privileged State Transition
         if returncode == 0:
-            receipt = VerificationReceipt(
-                receipt_id=None,
-                task_id=manifest.task_id,
-                spec_hash=manifest.spec_hash,
-                base_commit_sha=manifest.base_commit_sha,
-                candidate_commit_sha=manifest.candidate_commit_sha,
-                candidate_tree_sha=manifest.candidate_tree_sha,
-                physical_tree_hash=physical_git_tree,
-                verifier_version=self.verifier_version,
-                acceptance_test_digest=manifest.acceptance_test_digest,
-                env_fingerprint=env_fp,
-                status=State.VERIFIED,
-                failure_classification=None,
-                failure_signature=None,
-                execution_trace=out_str,
-                timestamp=now,
+            from loop_engine.authority import issue_proof_witness
+            from loop_engine.transition import (
+                TransitionRequest,
+                TransitionRejection,
+                compute_complete_claim_digest,
+                compute_governance_digest,
             )
+
+            evidence_digest = compute_test_digest(out_str)
+            gov_digest = compute_governance_digest()
+            claim_digest = compute_complete_claim_digest(
+                task_id=manifest.task_id,
+                from_state=State.CANDIDATE_SEALED,
+                to_state=State.VERIFIED,
+                subject_identity=manifest.candidate_commit_sha,
+                candidate_tree_sha=manifest.candidate_tree_sha,
+                spec_hash=manifest.spec_hash,
+                acceptance_test_digest=manifest.acceptance_test_digest,
+                evidence_digest=evidence_digest,
+                authority_scope="PHYSICAL_VERIFICATION",
+                governance_hash=gov_digest,
+            )
+            witness = issue_proof_witness(
+                issuer="loop_engine.verifier_gate",
+                target_digest=claim_digest,
+                scope="PHYSICAL_VERIFICATION",
+            )
+            transition_req = TransitionRequest(
+                task_id=manifest.task_id,
+                from_state=State.CANDIDATE_SEALED,
+                to_state=State.VERIFIED,
+                subject_identity=manifest.candidate_commit_sha,
+                candidate_tree_sha=manifest.candidate_tree_sha,
+                spec_hash=manifest.spec_hash,
+                acceptance_test_digest=manifest.acceptance_test_digest,
+                evidence_digest=evidence_digest,
+                authority_scope="PHYSICAL_VERIFICATION",
+                witness=witness,
+                governance_hash=gov_digest,
+            )
+            trans_result = self.transition_engine.execute_transition(transition_req)
+            if isinstance(trans_result, TransitionRejection):
+                receipt = VerificationReceipt(
+                    receipt_id=None,
+                    task_id=manifest.task_id,
+                    spec_hash=manifest.spec_hash,
+                    base_commit_sha=manifest.base_commit_sha,
+                    candidate_commit_sha=manifest.candidate_commit_sha,
+                    candidate_tree_sha=manifest.candidate_tree_sha,
+                    physical_tree_hash=physical_git_tree,
+                    verifier_version=self.verifier_version,
+                    acceptance_test_digest=manifest.acceptance_test_digest,
+                    env_fingerprint=env_fp,
+                    status=State.REJECTED,
+                    failure_classification=FailureClassification.VERIFIER_FAILURE,
+                    failure_signature=compute_failure_signature(trans_result.reason),
+                    execution_trace=trans_result.reason,
+                    timestamp=now,
+                )
+            else:
+                receipt = VerificationReceipt(
+                    receipt_id=None,
+                    task_id=manifest.task_id,
+                    spec_hash=manifest.spec_hash,
+                    base_commit_sha=manifest.base_commit_sha,
+                    candidate_commit_sha=manifest.candidate_commit_sha,
+                    candidate_tree_sha=manifest.candidate_tree_sha,
+                    physical_tree_hash=physical_git_tree,
+                    verifier_version=self.verifier_version,
+                    acceptance_test_digest=manifest.acceptance_test_digest,
+                    env_fingerprint=env_fp,
+                    status=State.VERIFIED,
+                    failure_classification=None,
+                    failure_signature=None,
+                    execution_trace=out_str,
+                    timestamp=now,
+                )
         else:
             receipt = VerificationReceipt(
                 receipt_id=None,
@@ -393,3 +464,4 @@ class PhysicalVerifierGate:
         receipt_id = self.kernel_db.record_verified_receipt(receipt)
         receipt.receipt_id = receipt_id
         return VerificationResult(receipt_id, receipt)
+

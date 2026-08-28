@@ -118,7 +118,7 @@ class TestSovereignGovernanceBehavior:
         )
         config = load_canonical_governance(config_path=custom_yaml, force_reload=True)
         db = KernelDatabase(db_path=tmp_path / "kernel.db")
-        governor = StepGovernor(kernel_db=db, governance_config=config)
+        governor = StepGovernor._create_for_test(kernel_db=db, governance_config=config)
 
         result = governor.run_step(
             loop=FailingLoop(),
@@ -145,7 +145,8 @@ class TestSovereignGovernanceBehavior:
         )
         config = load_canonical_governance(config_path=custom_yaml, force_reload=True)
         db = KernelDatabase(db_path=tmp_path / "kernel.db")
-        governor = StepGovernor(kernel_db=db, governance_config=config)
+        governor = StepGovernor._create_for_test(kernel_db=db, governance_config=config)
+
 
         result = governor.run_step(
             loop=FailingLoop(),
@@ -157,8 +158,9 @@ class TestSovereignGovernanceBehavior:
 
     def test_caller_override_attack_prohibited(self, tmp_path: Path):
         db = KernelDatabase(db_path=tmp_path / "kernel.db")
-        with pytest.raises(GovernanceOverrideProhibitedError, match="Manual strike override 'max_strikes=999' is prohibited"):
+        with pytest.raises(GovernanceOverrideProhibitedError, match="Manual strike/governance override 'max_strikes=999' is prohibited"):
             StepGovernor(kernel_db=db, max_strikes=999)
+
 
     def test_missing_governance_construction_fails_closed(self, tmp_path: Path, monkeypatch):
         import loop_engine.governance as gov_mod

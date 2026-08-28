@@ -14,7 +14,11 @@ import tempfile
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
+from loop_engine.ast_guard import scan_python_worktree
+from loop_engine.sterile_env import build_sterile_environment
 from loop_engine.kernel_db import KernelDatabase
+
+
 from loop_engine.schema import (
     FailureClassification,
     ProposalManifest,
@@ -131,6 +135,34 @@ class PhysicalVerifierGate:
                 receipt.receipt_id = receipt_id
                 return VerificationResult(receipt_id, receipt)
 
+        # Gate 1.5: AST Static Anti-Cheat Inspection
+        ast_findings = scan_python_worktree(candidate_worktree)
+        if ast_findings:
+            first_finding = ast_findings[0]
+            trace_summary = "\n".join(f.render() for f in ast_findings[:10])
+            receipt = VerificationReceipt(
+                receipt_id=None,
+                task_id=manifest.task_id,
+                spec_hash=manifest.spec_hash,
+                base_commit_sha=manifest.base_commit_sha,
+                candidate_commit_sha=manifest.candidate_commit_sha,
+                candidate_tree_sha=manifest.candidate_tree_sha,
+                physical_tree_hash="",
+                verifier_version=self.verifier_version,
+                acceptance_test_digest=manifest.acceptance_test_digest,
+                env_fingerprint=env_fp,
+                status=State.BLOCKED,
+                failure_classification=FailureClassification.GOVERNOR_FAILURE,
+                failure_signature=compute_failure_signature(
+                    f"AST Anti-Cheat violation in {first_finding.filename}: {first_finding.rule_id}"
+                ),
+                execution_trace=f"AST Anti-Cheat scan detected prohibited constructs:\n{trace_summary}",
+                timestamp=now,
+            )
+            receipt_id = self.kernel_db.record_verified_receipt(receipt)
+            receipt.receipt_id = receipt_id
+            return VerificationResult(receipt_id, receipt)
+
         # Gate 2: Physical Git Tree Hash & Clean Worktree Integrity
         git_tree_res = subprocess.run(
             ["git", "rev-parse", "HEAD^{tree}"],
@@ -221,20 +253,8 @@ class PhysicalVerifierGate:
                 return VerificationResult(receipt_id, receipt)
 
         # Gate 5: Sterile Subprocess Pytest Execution
-        clean_env = {
-            "PATH": os.environ.get("PATH", ""),
-            "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
-            "TEMP": os.environ.get("TEMP", ""),
-            "TMP": os.environ.get("TMP", ""),
-            "USERPROFILE": os.environ.get("USERPROFILE", ""),
-            "APPDATA": os.environ.get("APPDATA", ""),
-            "LOCALAPPDATA": os.environ.get("LOCALAPPDATA", ""),
-            "HOMEDRIVE": os.environ.get("HOMEDRIVE", ""),
-            "HOMEPATH": os.environ.get("HOMEPATH", ""),
-            "PYTHONPATH": str(candidate_worktree),
-            "PYTHONDONTWRITEBYTECODE": "1",
-            "PYTHONNOUSERSITE": "1",
-        }
+        clean_env = build_sterile_environment(worktree_path=candidate_worktree)
+
 
         test_target = self.canonical_fixtures_dir / test_file_relative
         if not test_target.exists():

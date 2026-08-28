@@ -30,18 +30,7 @@ RECEIPT_FILE = CHANNEL_DIR / "receipt.json"
 ARCHIVE_DIR = CHANNEL_DIR / "archive"
 RECEIPTS_LEDGER_DIR = PROJECT_ROOT / ".receipts"
 
-# Strict allowlist of environment variables permitted in subprocesses
-ALLOWED_ENV_VARS = [
-    "SYSTEMROOT",
-    "PATH",
-    "PATHEXT",
-    "USERPROFILE",
-    "TMP",
-    "TEMP",
-    "HOME",
-    "LANG",
-    "LC_ALL",
-]
+from loop_engine.sterile_env import ALLOWED_ENV_VARS, build_sterile_environment
 
 
 def ensure_directories():
@@ -54,23 +43,6 @@ def ensure_directories():
 # Backward compatibility alias
 ensure_channel_dirs = ensure_directories
 
-
-def build_sterile_environment() -> Dict[str, str]:
-    """
-    Constructs a sterile, ring-fenced environment containing only allowlisted
-    OS variables and PYTHONPATH anchored to PROJECT_ROOT, stripping all host secrets.
-    """
-    clean_env: Dict[str, str] = {}
-    for var in ALLOWED_ENV_VARS:
-        if var in os.environ:
-            clean_env[var] = os.environ[var]
-        # Check lowercase variants on Unix
-        elif var.lower() in os.environ:
-            clean_env[var.lower()] = os.environ[var.lower()]
-
-    clean_env["PYTHONPATH"] = str(PROJECT_ROOT)
-    clean_env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return clean_env
 
 
 def compute_sha256(content: str) -> str:

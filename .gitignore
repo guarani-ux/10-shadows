@@ -20,3 +20,8 @@ sandbox/
 venv/
 .venv/
 env/
+
+# Ephemeral Test Receipts & Worktree Logs
+.receipts/test_*
+.receipts/*_tmp*
+

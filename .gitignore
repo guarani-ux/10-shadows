@@ -8,6 +8,10 @@ __pycache__/
 .coverage
 htmlcov/
 
+# Rust build artifacts
+target/
+**/target/
+
 # Staging & Ephemeral Worktrees
 scratch/
 sandbox/
@@ -15,6 +19,7 @@ sandbox/
 *.bak
 *.sqlite
 *.db
+.kernel_db/
 
 # Virtual Environments
 venv/
@@ -24,4 +29,3 @@ env/
 # Ephemeral Test Receipts & Worktree Logs
 .receipts/test_*
 .receipts/*_tmp*
-

@@ -24,12 +24,13 @@ from enum import Enum
 import hashlib
 import random
 import time
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
 from pydantic import BaseModel, Field
 
 from loop_engine.model.boundary import (
     DeficitDeclaration,
     DeficitType,
+    EvidenceModality,
     InferenceEffort,
     ModelAdapter,
     ModelRequest,
@@ -60,9 +61,15 @@ class BenchmarkDimension(str, Enum):
     UNKNOWN_DOMAIN = "UNKNOWN_DOMAIN"
 
 
+class EvidenceQualification(str, Enum):
+    QUALIFIED = "QUALIFIED"
+    UNQUALIFIED = "UNQUALIFIED"
+
+
 class BenchmarkTask(BaseModel):
     """
     Standardized benchmark task definition with authoritative physical evaluator.
+    Tasks without independent task-specific behavioral verifiers must be marked UNQUALIFIED.
     """
     task_id: str
     dimension: BenchmarkDimension
@@ -75,7 +82,16 @@ class BenchmarkTask(BaseModel):
     evaluator: Optional[Callable[[Any], CandidateEvaluation]] = None
     verifier_identity: str = "task_physical_evaluator"
     verifier_version: str = "1.0.0"
+    qualification: EvidenceQualification = EvidenceQualification.QUALIFIED
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.evaluator is None:
+            self.qualification = EvidenceQualification.UNQUALIFIED
+
+    @property
+    def is_qualified(self) -> bool:
+        return self.qualification == EvidenceQualification.QUALIFIED and self.evaluator is not None
 
 
 class TaskRunRecord(BaseModel):
@@ -90,6 +106,9 @@ class TaskRunRecord(BaseModel):
     execution_mode: str  # "NAKED" vs "FULL_TEN_SHADOWS" vs "ABLATION_*"
     is_success: bool
     score: float
+    evidence_modality: EvidenceModality = EvidenceModality.STRUCTURAL_MOCK
+    qualification: EvidenceQualification = EvidenceQualification.QUALIFIED
+    is_qualified_success: bool = False
     supplied_context_digest: str = ""
     candidate_digest: str = ""
     verifier_identity: str = "task_physical_evaluator"
@@ -105,10 +124,22 @@ class TaskRunRecord(BaseModel):
     receipt_digest: str = ""
 
     def model_post_init(self, __context: Any) -> None:
+        # Enforce invariant: Mock runs cannot be labeled empirical
+        if (self.provider == "mock" or "mock" in self.model_id.lower()) and self.evidence_modality == EvidenceModality.EMPIRICAL_MODEL:
+            raise ValueError("Mock runs cannot be labeled empirical.")
+
+        if self.qualification == EvidenceQualification.UNQUALIFIED:
+            self.is_qualified_success = False
+            self.is_success = False
+            self.score = 0.0
+        else:
+            self.is_qualified_success = bool(self.is_success and self.score > 0.0)
+
         if not self.receipt_digest:
             raw = (
                 f"{self.task_id}:{self.task_seed}:{self.dimension.value}:{self.model_id}:"
-                f"{self.execution_mode}:{self.is_success}:{self.score}:{self.supplied_context_digest}:"
+                f"{self.execution_mode}:{self.is_success}:{self.score}:{self.evidence_modality.value}:"
+                f"{self.qualification.value}:{self.is_qualified_success}:{self.supplied_context_digest}:"
                 f"{self.candidate_digest}:{self.verifier_identity}:{self.verifier_version}:"
                 f"{self.execution_trace_digest}:{self.attempts}:{self.total_model_calls}"
             )
@@ -125,10 +156,18 @@ class BenchmarkResult(BaseModel):
     naked_score_b: float
     ten_shadows_score_a: float
     ten_shadows_score_b: float
-    model_elasticity: float
-    attempt_elasticity: float
-    latency_elasticity: float
+    model_elasticity: Union[float, str]
+    attempt_elasticity: Union[float, str]
+    latency_elasticity: Union[float, str]
+    qualified_task_ids: List[str] = Field(default_factory=list)
+    unqualified_task_ids: List[str] = Field(default_factory=list)
+    evidence_modality: EvidenceModality = EvidenceModality.STRUCTURAL_MOCK
     records: List[TaskRunRecord] = Field(default_factory=list)
+
+    def model_post_init(self, __context: Any) -> None:
+        if self.evidence_modality == EvidenceModality.EMPIRICAL_MODEL:
+            if "mock" in self.model_a_id.lower() or "mock" in self.model_b_id.lower():
+                raise ValueError("Mock runs cannot be labeled empirical.")
 
 
 def create_deterministic_knowledge_task(
@@ -342,30 +381,14 @@ def create_canonical_benchmark_corpus(
 ) -> List[BenchmarkTask]:
     """
     Builds the authoritative 9-dimension model decoupling benchmark corpus.
+    Tasks without an independent task-specific behavioral verifier are explicitly marked UNQUALIFIED.
     """
-    # 1. Deterministic Knowledge task
+    # 1. Deterministic Knowledge task (has independent task-specific physical evaluator)
     knowledge_task = create_deterministic_knowledge_task(
         seed=seed,
         task_id="BM_KNOWLEDGE_01",
         transition_engine=transition_engine,
     )
-
-    def simple_code_evaluator(candidate: Any, required_phrase: str = "run") -> CandidateEvaluation:
-        cid = f"cand_{hashlib.sha256(str(candidate).encode('utf-8')).hexdigest()[:8]}"
-        if not isinstance(candidate, dict):
-            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
-        code = candidate.get("code", "")
-        if not code:
-            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
-        try:
-            compiled = compile(code, "<benchmark_task>", "exec")
-            loc: Dict[str, Any] = {}
-            exec(compiled, {"__builtins__": __builtins__}, loc)
-            if "flawed" in code or "raise" in code:
-                return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0)
-            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=True, score=1.0, execution_trace="Execution succeeded.")
-        except Exception as e:
-            return CandidateEvaluation(candidate_id=cid, payload=candidate, is_valid=False, score=0.0, execution_trace=str(e))
 
     return [
         knowledge_task,
@@ -375,7 +398,8 @@ def create_canonical_benchmark_corpus(
             objective="Perform 4-step AST sanitation and isolation protocol.",
             constraints=["Step 1: parse, Step 2: walk, Step 3: compile, Step 4: verify"],
             required_procedure="ast_isolation_protocol",
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_DECOMPOSITION_01",
@@ -383,7 +407,8 @@ def create_canonical_benchmark_corpus(
             objective="Decompose multi-part migration without dropping boundary constraints.",
             constraints=["Preserve rollback log", "Enforce zero downtime gate"],
             difficulty=TaskDifficulty.MEDIUM,
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_IMPLEMENTATION_01",
@@ -391,14 +416,16 @@ def create_canonical_benchmark_corpus(
             objective="Generate robust string tokenizer handling nested escape sequences.",
             constraints=["Must not crash on trailing slash", "Must return string list"],
             difficulty=TaskDifficulty.MEDIUM,
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_SEMANTIC_01",
             dimension=BenchmarkDimension.SEMANTIC,
             objective="Disambiguate ambiguous user command without silently guessing.",
             constraints=["Surface deficit if intention is contradictory"],
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_MEMORY_01",
@@ -406,7 +433,8 @@ def create_canonical_benchmark_corpus(
             objective="Re-solve previously failed memory leak bug using past failure signature.",
             constraints=["Do not repeat circular reference in cache"],
             difficulty=TaskDifficulty.MEDIUM,
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_SEARCH_01",
@@ -414,14 +442,16 @@ def create_canonical_benchmark_corpus(
             objective="Synthesize optimal search heuristic across multi-branch tree.",
             constraints=["Must beat greedy baseline"],
             difficulty=TaskDifficulty.HIGH,
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_AUTHORITY_01",
             dimension=BenchmarkDimension.AUTHORITY,
             objective="Candidate claims 100% verified status without physical evidence.",
             constraints=["Must be rejected by verifier gate"],
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
         BenchmarkTask(
             task_id="BM_UNKNOWN_DOMAIN_01",
@@ -430,7 +460,8 @@ def create_canonical_benchmark_corpus(
             constraints=["Requires X-Store schema definition"],
             required_knowledge={"x_store_schema": "X-Store uses proto3 syntax with port 9099."},
             difficulty=TaskDifficulty.MEDIUM,
-            evaluator=lambda c: simple_code_evaluator(c),
+            evaluator=None,
+            qualification=EvidenceQualification.UNQUALIFIED,
         ),
     ]
 
@@ -460,8 +491,17 @@ class BenchmarkRunner:
         )
         self.search_engine = SearchEngine(context_compiler=self.context_compiler)
 
-    def run_task_naked(self, adapter: ModelAdapter, task: BenchmarkTask) -> TaskRunRecord:
+    def run_task_naked(
+        self,
+        adapter: ModelAdapter,
+        task: BenchmarkTask,
+        evidence_modality: Optional[EvidenceModality] = None,
+    ) -> TaskRunRecord:
         """Runs task with naked model (no context compilation, no deficit loop, no repair)."""
+        modality = evidence_modality or getattr(adapter, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
+        if adapter.provider_name == "mock" and modality == EvidenceModality.EMPIRICAL_MODEL:
+            raise ValueError("Mock runs cannot be labeled empirical.")
+
         start = time.perf_counter()
         req = ModelRequest(
             task_id=task.task_id,
@@ -472,18 +512,20 @@ class BenchmarkRunner:
         duration = time.perf_counter() - start
 
         # Physical evaluation via task-specific authoritative evaluator
-        if task.evaluator is None:
+        if not task.is_qualified or task.evaluator is None:
             eval_res = CandidateEvaluation(
                 candidate_id="none",
                 payload=resp.candidate_payload,
                 is_valid=False,
                 score=0.0,
                 failure_classification="VERIFIER_DEFICIT",
-                failure_signature="SIG_MISSING_VERIFIER",
-                execution_trace="Task lacks authoritative physical evaluator; failed closed.",
+                failure_signature="SIG_UNQUALIFIED_NO_TASK_VERIFIER",
+                execution_trace="Task is UNQUALIFIED: lacks independent task-specific behavioral verifier.",
             )
+            qualification = EvidenceQualification.UNQUALIFIED
         else:
             raw_eval = task.evaluator(resp.candidate_payload)
+            qualification = EvidenceQualification.QUALIFIED
             if isinstance(raw_eval, CandidateEvaluation):
                 eval_res = raw_eval
             elif isinstance(raw_eval, bool):
@@ -509,6 +551,10 @@ class BenchmarkRunner:
         candidate_digest = hashlib.sha256(str(resp.candidate_payload).encode("utf-8")).hexdigest()
         trace_digest = hashlib.sha256((eval_res.execution_trace or "").encode("utf-8")).hexdigest()
 
+        is_success = bool(eval_res.is_valid and qualification == EvidenceQualification.QUALIFIED)
+        score = eval_res.score if (qualification == EvidenceQualification.QUALIFIED and eval_res.is_valid) else 0.0
+        is_qualified_success = bool(is_success and score > 0.0)
+
         return TaskRunRecord(
             task_id=task.task_id,
             task_seed=task.seed,
@@ -516,8 +562,11 @@ class BenchmarkRunner:
             model_id=adapter.model_id,
             provider=adapter.provider_name,
             execution_mode="NAKED",
-            is_success=eval_res.is_valid,
-            score=eval_res.score,
+            is_success=is_success,
+            score=score,
+            evidence_modality=modality,
+            qualification=qualification,
+            is_qualified_success=is_qualified_success,
             supplied_context_digest=supplied_context_digest,
             candidate_digest=candidate_digest,
             verifier_identity=task.verifier_identity,
@@ -540,10 +589,15 @@ class BenchmarkRunner:
         enable_deficit_protocol: bool = True,
         enable_repair_feedback: bool = True,
         enable_adaptive_search: bool = True,
+        evidence_modality: Optional[EvidenceModality] = None,
     ) -> TaskRunRecord:
         """
         Runs task with Ten Shadows competence substrate (Compiled Context + Deficit Protocol + Search & Repair).
         """
+        modality = evidence_modality or getattr(adapter, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
+        if adapter.provider_name == "mock" and modality == EvidenceModality.EMPIRICAL_MODEL:
+            raise ValueError("Mock runs cannot be labeled empirical.")
+
         start = time.perf_counter()
         context_kwargs: Dict[str, Any] = {}
         if enable_context_compiler:
@@ -587,19 +641,21 @@ class BenchmarkRunner:
         difficulty = task.difficulty if enable_adaptive_search else TaskDifficulty.LOW
         max_repairs = 3 if enable_repair_feedback else 1
 
-        if task.evaluator is None:
+        if not task.is_qualified or task.evaluator is None:
             best_eval = CandidateEvaluation(
                 candidate_id="none",
-                payload=None,
+                payload=resp.candidate_payload if resp else None,
                 is_valid=False,
                 score=0.0,
                 failure_classification="VERIFIER_DEFICIT",
-                failure_signature="SIG_MISSING_VERIFIER",
-                execution_trace="Task lacks authoritative physical evaluator; failed closed.",
+                failure_signature="SIG_UNQUALIFIED_NO_TASK_VERIFIER",
+                execution_trace="Task is UNQUALIFIED: lacks independent task-specific behavioral verifier.",
             )
             all_evals = [best_eval]
             search_calls = 0
+            qualification = EvidenceQualification.UNQUALIFIED
         else:
+            qualification = EvidenceQualification.QUALIFIED
             task_search_engine = SearchEngine(
                 context_compiler=self.context_compiler,
                 evaluator=task.evaluator,
@@ -620,6 +676,10 @@ class BenchmarkRunner:
         candidate_digest = hashlib.sha256(str(best_eval.payload).encode("utf-8")).hexdigest()
         trace_digest = hashlib.sha256((best_eval.execution_trace or "").encode("utf-8")).hexdigest()
 
+        is_success = bool(best_eval.is_valid and qualification == EvidenceQualification.QUALIFIED)
+        score = best_eval.score if (qualification == EvidenceQualification.QUALIFIED and best_eval.is_valid) else 0.0
+        is_qualified_success = bool(is_success and score > 0.0)
+
         return TaskRunRecord(
             task_id=task.task_id,
             task_seed=task.seed,
@@ -627,8 +687,11 @@ class BenchmarkRunner:
             model_id=adapter.model_id,
             provider=adapter.provider_name,
             execution_mode="FULL_TEN_SHADOWS",
-            is_success=best_eval.is_valid,
-            score=best_eval.score,
+            is_success=is_success,
+            score=score,
+            evidence_modality=modality,
+            qualification=qualification,
+            is_qualified_success=is_qualified_success,
             supplied_context_digest=supplied_context_digest,
             candidate_digest=candidate_digest,
             verifier_identity=task.verifier_identity,
@@ -650,13 +713,24 @@ class BenchmarkRunner:
         model_a: ModelAdapter,
         model_b: ModelAdapter,
         corpus: Optional[List[BenchmarkTask]] = None,
+        evidence_modality: Optional[EvidenceModality] = None,
     ) -> BenchmarkResult:
         """
         Executes full comparative benchmark between Model A (e.g. Strong) and Model B (e.g. Weak).
-        Computes Model Elasticity = |TS_A - TS_B| / |Naked_A - Naked_B|.
+        Only QUALIFIED tasks enter elasticity numerator and denominator calculations.
+        If zero qualified tasks exist or naked_delta == 0, returns NOT_COMPUTABLE for elasticity.
         """
         tasks = corpus or create_canonical_benchmark_corpus()
         records: List[TaskRunRecord] = []
+
+        modality = evidence_modality or getattr(model_a, "evidence_modality", EvidenceModality.STRUCTURAL_MOCK)
+        if (model_a.provider_name == "mock" or model_b.provider_name == "mock") and modality == EvidenceModality.EMPIRICAL_MODEL:
+            raise ValueError("Mock runs cannot be labeled empirical.")
+
+        qualified_tasks = [t for t in tasks if t.is_qualified]
+        unqualified_tasks = [t for t in tasks if not t.is_qualified]
+        qualified_task_ids = [t.task_id for t in qualified_tasks]
+        unqualified_task_ids = [t.task_id for t in unqualified_tasks]
 
         naked_a_scores: List[float] = []
         naked_b_scores: List[float] = []
@@ -669,54 +743,82 @@ class BenchmarkRunner:
         latency_b: List[float] = []
 
         for task in tasks:
-            # Naked runs
-            rec_na = self.run_task_naked(model_a, task)
-            rec_nb = self.run_task_naked(model_b, task)
+            rec_na = self.run_task_naked(model_a, task, evidence_modality=modality)
+            rec_nb = self.run_task_naked(model_b, task, evidence_modality=modality)
             records.extend([rec_na, rec_nb])
-            naked_a_scores.append(rec_na.score)
-            naked_b_scores.append(rec_nb.score)
 
-            # Ten Shadows runs
-            rec_tsa = self.run_task_ten_shadows(model_a, task)
-            rec_tsb = self.run_task_ten_shadows(model_b, task)
+            rec_tsa = self.run_task_ten_shadows(model_a, task, evidence_modality=modality)
+            rec_tsb = self.run_task_ten_shadows(model_b, task, evidence_modality=modality)
             records.extend([rec_tsa, rec_tsb])
-            ts_a_scores.append(rec_tsa.score)
-            ts_b_scores.append(rec_tsb.score)
 
-            attempts_a.append(rec_tsa.attempts)
-            attempts_b.append(rec_tsb.attempts)
-            latency_a.append(rec_tsa.latency_seconds)
-            latency_b.append(rec_tsb.latency_seconds)
+            # ONLY qualified tasks enter elasticity calculations!
+            if task.is_qualified:
+                naked_a_scores.append(rec_na.score)
+                naked_b_scores.append(rec_nb.score)
+                ts_a_scores.append(rec_tsa.score)
+                ts_b_scores.append(rec_tsb.score)
 
-        mean_na = sum(naked_a_scores) / len(naked_a_scores) if naked_a_scores else 0.0
-        mean_nb = sum(naked_b_scores) / len(naked_b_scores) if naked_b_scores else 0.0
-        mean_tsa = sum(ts_a_scores) / len(ts_a_scores) if ts_a_scores else 0.0
-        mean_tsb = sum(ts_b_scores) / len(ts_b_scores) if ts_b_scores else 0.0
+                attempts_a.append(rec_tsa.attempts)
+                attempts_b.append(rec_tsb.attempts)
+                latency_a.append(rec_tsa.latency_seconds)
+                latency_b.append(rec_tsb.latency_seconds)
+
+        if not qualified_tasks:
+            return BenchmarkResult(
+                model_a_id=model_a.model_id,
+                model_b_id=model_b.model_id,
+                naked_score_a=0.0,
+                naked_score_b=0.0,
+                ten_shadows_score_a=0.0,
+                ten_shadows_score_b=0.0,
+                model_elasticity="NOT_COMPUTABLE",
+                attempt_elasticity="NOT_COMPUTABLE",
+                latency_elasticity="NOT_COMPUTABLE",
+                qualified_task_ids=[],
+                unqualified_task_ids=unqualified_task_ids,
+                evidence_modality=modality,
+                records=records,
+            )
+
+        mean_na = sum(naked_a_scores) / len(naked_a_scores)
+        mean_nb = sum(naked_b_scores) / len(naked_b_scores)
+        mean_tsa = sum(ts_a_scores) / len(ts_a_scores)
+        mean_tsb = sum(ts_b_scores) / len(ts_b_scores)
 
         naked_delta = abs(mean_na - mean_nb)
         ts_delta = abs(mean_tsa - mean_tsb)
 
-        # Model Elasticity: near 0.0 indicates Ten Shadows absorbed model quality variance
-        model_elasticity = (ts_delta / naked_delta) if naked_delta > 1e-6 else 0.0
+        if naked_delta <= 1e-6:
+            model_elasticity: Union[float, str] = "NOT_COMPUTABLE"
+        else:
+            model_elasticity = round(ts_delta / naked_delta, 6)
 
-        # Attempt Elasticity: ratio of extra attempts taken by model B over model A
-        avg_att_a = sum(attempts_a) / len(attempts_a) if attempts_a else 1.0
-        avg_att_b = sum(attempts_b) / len(attempts_b) if attempts_b else 1.0
-        attempt_elasticity = avg_att_b / avg_att_a if avg_att_a > 0 else 1.0
+        avg_att_a = sum(attempts_a) / len(attempts_a) if attempts_a else 0.0
+        avg_att_b = sum(attempts_b) / len(attempts_b) if attempts_b else 0.0
+        if avg_att_a <= 1e-6:
+            attempt_elasticity: Union[float, str] = "NOT_COMPUTABLE"
+        else:
+            attempt_elasticity = round(avg_att_b / avg_att_a, 4)
 
-        avg_lat_a = sum(latency_a) / len(latency_a) if latency_a else 1.0
-        avg_lat_b = sum(latency_b) / len(latency_b) if latency_b else 1.0
-        latency_elasticity = avg_lat_b / avg_lat_a if avg_lat_a > 0 else 1.0
+        avg_lat_a = sum(latency_a) / len(latency_a) if latency_a else 0.0
+        avg_lat_b = sum(latency_b) / len(latency_b) if latency_b else 0.0
+        if avg_lat_a <= 1e-6:
+            latency_elasticity: Union[float, str] = "NOT_COMPUTABLE"
+        else:
+            latency_elasticity = round(avg_lat_b / avg_lat_a, 4)
 
         return BenchmarkResult(
             model_a_id=model_a.model_id,
             model_b_id=model_b.model_id,
-            naked_score_a=mean_na,
-            naked_score_b=mean_nb,
-            ten_shadows_score_a=mean_tsa,
-            ten_shadows_score_b=mean_tsb,
+            naked_score_a=round(mean_na, 4),
+            naked_score_b=round(mean_nb, 4),
+            ten_shadows_score_a=round(mean_tsa, 4),
+            ten_shadows_score_b=round(mean_tsb, 4),
             model_elasticity=model_elasticity,
             attempt_elasticity=attempt_elasticity,
             latency_elasticity=latency_elasticity,
+            qualified_task_ids=qualified_task_ids,
+            unqualified_task_ids=unqualified_task_ids,
+            evidence_modality=modality,
             records=records,
         )

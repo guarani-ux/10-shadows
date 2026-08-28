@@ -6,6 +6,7 @@ Tests for the Canonical Provider-Agnostic Model Boundary (10 SHADOWS).
 from loop_engine.model.boundary import (
     DeficitDeclaration,
     DeficitType,
+    EvidenceModality,
     GeminiModelAdapter,
     InferenceEffort,
     MockModelAdapter,
@@ -99,3 +100,12 @@ def test_gemini_adapter_fails_closed_without_api_key(monkeypatch):
     resp = adapter.execute(req)
     assert resp.is_success is False
     assert "GEMINI_API_KEY not configured" in resp.error_message
+
+
+def test_evidence_modality_separation():
+    mock_adapter = MockModelAdapter()
+    assert mock_adapter.evidence_modality == EvidenceModality.STRUCTURAL_MOCK
+
+    gemini_adapter = GeminiModelAdapter(api_key="test-key")
+    assert gemini_adapter.evidence_modality == EvidenceModality.EMPIRICAL_MODEL
+

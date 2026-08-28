@@ -6,6 +6,7 @@ Canonical Model Boundary & Decoupling Substrate for 10 SHADOWS.
 from loop_engine.model.boundary import (
     DeficitDeclaration,
     DeficitType,
+    EvidenceModality,
     GeminiModelAdapter,
     InferenceEffort,
     MockModelAdapter,
@@ -36,13 +37,16 @@ from loop_engine.model.benchmark import (
     BenchmarkResult,
     BenchmarkRunner,
     BenchmarkTask,
+    EvidenceQualification,
     TaskRunRecord,
     create_canonical_benchmark_corpus,
+    create_deterministic_knowledge_task,
 )
 
 __all__ = [
     "DeficitDeclaration",
     "DeficitType",
+    "EvidenceModality",
     "GeminiModelAdapter",
     "InferenceEffort",
     "MockModelAdapter",
@@ -65,6 +69,8 @@ __all__ = [
     "BenchmarkResult",
     "BenchmarkRunner",
     "BenchmarkTask",
+    "EvidenceQualification",
     "TaskRunRecord",
     "create_canonical_benchmark_corpus",
+    "create_deterministic_knowledge_task",
 ]

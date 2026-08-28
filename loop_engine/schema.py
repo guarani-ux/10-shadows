@@ -14,6 +14,19 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 
+
+from loop_engine.epistemic import (
+    EvidenceOrigin,
+    EpistemicStatus,
+    EpistemicDisposition,
+    EvidenceEnvelope,
+    SemanticLaunderingError,
+    create_envelope,
+    transform_envelope,
+)
+
+
+
 class State(str, Enum):
     CANDIDATE_SEALED = "CANDIDATE_SEALED"
     VERIFYING = "VERIFYING"
@@ -107,7 +120,9 @@ class VerificationReceipt:
     failure_classification: Optional[FailureClassification] = None
     failure_signature: Optional[str] = None
     execution_trace: Optional[str] = None
+    epistemic_disposition: Optional[str] = "SATISFIED"
     timestamp: Optional[float] = None
+
 
 
 @dataclass

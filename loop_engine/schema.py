@@ -45,10 +45,11 @@ LEGAL_STATE_TRANSITIONS: Dict[State, List[State]] = {
     State.VERIFIED: [State.PROMOTION_PENDING, State.VERIFYING],
     State.REJECTED: [State.VERIFYING, State.CANDIDATE_SEALED],
     State.BLOCKED: [State.VERIFYING, State.CANDIDATE_SEALED],
-    State.PROMOTION_PENDING: [State.PROMOTED, State.VERIFIED, State.REJECTED],  # Can rollback to VERIFIED on reconcile
+    State.PROMOTION_PENDING: [State.PROMOTED, State.POST_PROMOTION_VERIFIED, State.VERIFIED, State.REJECTED],  # Can advance on reconcile or rollback to VERIFIED
     State.PROMOTED: [State.POST_PROMOTION_VERIFIED, State.REJECTED],
     State.POST_PROMOTION_VERIFIED: [],
 }
+
 
 
 

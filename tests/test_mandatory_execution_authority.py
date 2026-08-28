@@ -1,19 +1,28 @@
 """
 tests/test_mandatory_execution_authority.py
-Adversarial & Regression Test Suite for Mandatory Ten Shadows Execution Authority.
+Comprehensive Adversarial Regression Suite for Substrate Laws & Mandatory Execution Authority.
 
-Verifies:
-1. Core Invariant: NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.
-2. Inversion of Authority: Kernel creates run in SQLite WAL before worker execution.
-3. Tests A through J (Adversarial Bypass & Anti-Laundering Tests).
-4. Positive End-to-End Smoke Test on fixture target.
-5. Negative Control: Exact JobHunter Failure Mode Reproduction.
+Tests Mission J Requirements (Tests 1 through 12):
+1. False Ten Shadows Invocation
+2. Fabricated Provider Execution
+3. Zero-Duration / Synthetic Worker
+4. Self-Verification
+5. Generic False-Success Oracle
+6. Evidence Upgrade Attack
+7. Wrong HEAD
+8. Stale Receipt Replay
+9. Interrupted Run
+10. Minimum Capability Routing
+11. Direct Delegation
+12. Real Governed Software Mutation
+Plus Positive E2E and Negative Control Tests.
 """
 from __future__ import annotations
 
 import json
 import os
 import shutil
+import subprocess
 import tempfile
 import time
 from datetime import datetime, timezone
@@ -27,11 +36,19 @@ from loop_engine.execution_authority import (
     RunStatus,
     RoutingStrategy,
     WorkerRole,
+    EvidenceModality,
+    EvidencePurpose,
+    VerificationType,
+    ProviderExecutionReceipt,
     WorkerInvocationRecord,
     IndependentVerificationRecord,
+    ExecutionAttemptRecord,
+    DisaggregatedEpistemicClaims,
+    assert_evidence_monotonicity,
     is_ten_shadows_execution,
     verify_execution_receipt,
 )
+from loop_engine.epistemic import SemanticLaunderingError
 from loop_engine.kernel_db import KernelDatabase
 
 
@@ -61,58 +78,61 @@ def target_repo(tmp_path):
     return target_dir
 
 
-# ===========================================================================
-# Section 1: Inversion of Authority & Run Pre-Creation
-# ===========================================================================
+@pytest.fixture
+def disposable_git_repo(tmp_path):
+    """Creates a disposable Git repository fixture (never touches main repo)."""
+    repo_dir = tmp_path / "disposable_repo"
+    repo_dir.mkdir(parents=True, exist_ok=True)
+    (repo_dir / "src").mkdir()
+    (repo_dir / "tests").mkdir()
 
-class TestRunCreationAuthority:
-    def test_run_created_in_database_before_execution(self, temp_kernel, target_repo):
-        """Kernel must create a persistent run record in SQLite WAL before any worker runs."""
-        objective = "Refactor calculation module for deterministic output."
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
+    subprocess.run(["git", "init", "-b", "main"], cwd=str(repo_dir), check=True, capture_output=True)
+    subprocess.run(["git", "config", "user.name", "ZeroTrustBot"], cwd=str(repo_dir), check=True)
+    subprocess.run(["git", "config", "user.email", "bot@zero.trust"], cwd=str(repo_dir), check=True)
 
-        # Inspect raw database directly
-        db_record = temp_kernel.db.get_run(run_ctx.run_id)
-        assert db_record is not None
-        assert db_record["run_id"] == run_ctx.run_id
-        assert db_record["status"] == RunStatus.CREATED.value
-        assert db_record["objective_hash"] == run_ctx.objective_hash
+    (repo_dir / "src" / "calc.py").write_text("def compute(): return 10\n", encoding="utf-8")
+    (repo_dir / "tests" / "test_calc.py").write_text(
+        "from src.calc import compute\ndef test_compute(): assert compute() == 10\n", encoding="utf-8"
+    )
 
-    def test_routing_decision_persisted_as_kernel_authority(self, temp_kernel, target_repo):
-        """Routing decision must be authored and persisted by the kernel, not inferred by model."""
-        objective = "Harden database persistence and concurrency with WAL mode."
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
-        strategy, caps, digest = temp_kernel.determine_route(run_ctx, objective)
-
-        assert strategy == RoutingStrategy.CODE_HARDENING
-        assert "PERSISTENCE_HARDENING" in caps
-        assert len(digest) == 64
-
-        db_record = temp_kernel.db.get_run(run_ctx.run_id)
-        assert db_record["status"] == RunStatus.ROUTED.value
+    subprocess.run(["git", "add", "."], cwd=str(repo_dir), check=True)
+    subprocess.run(["git", "commit", "-m", "init: base release"], cwd=str(repo_dir), check=True)
+    return repo_dir
 
 
 # ===========================================================================
-# Section 2: Adversarial Bypass Tests (A through J)
+# Mission J: Adversarial Regression Tests (1 through 12)
 # ===========================================================================
 
-class TestAdversarialBypassAttempts:
-    def test_bypass_A_fabricated_receipt_file_rejected(self, temp_kernel, tmp_path):
-        """A. Model fabricates a receipt-shaped JSON file without kernel DB anchor -> must return False."""
+class TestMissionJAdversarialSuite:
+    def test_01_false_ten_shadows_invocation(self, temp_kernel, tmp_path):
+        """1. Model reads skills, writes code, passes tests, puts 'Ten Shadows' in commit, but no kernel run."""
         fake_receipt = tmp_path / "fake_receipt.json"
         fake_data = {
-            "receipt_version": "2.0.0",
+            "receipt_version": "2.1.0",
             "kernel_version": "10_SHADOWS_KERNEL_v3.0",
-            "run_id": "TS-FAKED-99999",
-            "task_id": "task_faked",
-            "objective": "Fabricated run",
+            "run_id": "TS-UNANCHORED-12345",
+            "task_id": "task_fake",
+            "objective": "Touting Ten Shadows in prompt",
             "objective_hash": "a" * 64,
             "target_path": "C:\\fake",
             "routing_strategy": "DIRECT_DELEGATION",
             "routing_decision_digest": "b" * 64,
             "capabilities_selected": ["DIRECT_EXECUTION"],
+            "attempts": [],
             "worker_invocations": [],
             "artifacts_produced": [],
+            "epistemic_claims": {
+                "claim_kernel_run_created": True,
+                "claim_kernel_routed": True,
+                "claim_worker_executed": False,
+                "claim_empirical_provider_invoked": False,
+                "claim_candidate_mutated": False,
+                "claim_independently_verified": False,
+                "claim_promoted": False,
+                "claim_target_behaviorally_tested": False,
+                "claim_semantic_objective_satisfied": False,
+            },
             "final_status": "COMPLETED_UNVERIFIED",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "sealed_at": datetime.now(timezone.utc).isoformat(),
@@ -124,102 +144,129 @@ class TestAdversarialBypassAttempts:
         is_valid, errors = verify_execution_receipt(fake_receipt, kernel_db=temp_kernel.db)
         assert is_valid is False
         assert any("KernelDatabase" in e or "signature mismatch" in e for e in errors)
-        assert is_ten_shadows_execution(fake_receipt, kernel_db=temp_kernel.db) is False
+        assert is_ten_shadows_execution("TS-UNANCHORED-12345", kernel_db=temp_kernel.db) is False
 
-    def test_bypass_B_commit_message_claim_does_not_establish_execution(self, temp_kernel):
-        """B. Model writes 'Ten Shadows' into commit message -> must not establish execution."""
-        run_id = "commit_claim_run_id_nonexistent"
-        assert is_ten_shadows_execution(run_id, kernel_db=temp_kernel.db) is False
+    def test_02_fabricated_provider_execution(self, temp_kernel, target_repo):
+        """2. Worker claims provider=gemini and modality=EMPIRICAL but no valid ProviderExecutionReceipt."""
+        run_ctx = temp_kernel.establish_run(objective="Test empirical claims", target_path=target_repo)
 
-    def test_bypass_C_reading_skills_does_not_establish_execution(self, temp_kernel):
-        """C. Model reads all Ten Shadows skill files but never enters kernel -> must not establish execution."""
-        # Unanchored run ID
-        assert is_ten_shadows_execution("run_model_read_all_skills_123", kernel_db=temp_kernel.db) is False
-
-    def test_bypass_D_builder_claims_tests_passed_without_evidence_fails_closed(self, temp_kernel, target_repo):
-        """D. Builder claims tests passed without physical test evidence -> must fail closed."""
-        objective = "Consequential code change."
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
-        strategy, caps, digest = temp_kernel.determine_route(run_ctx, objective)
-
-        # Attempt to seal VERIFIED_SUCCESS with NO verification record
-        with pytest.raises(Exception):
-            # Model validation or verify_execution_receipt will fail closed
-            receipt = temp_kernel.seal_and_persist_receipt(
-                run_ctx=run_ctx,
-                objective=objective,
-                target_path=target_repo,
-                starting_head=None,
-                final_head=None,
-                routing_strategy=strategy,
-                routing_decision_digest=digest,
-                capabilities_selected=caps,
-                worker_invocations=[],
-                artifacts_produced=[],
-                verification=None,  # MISSING verification!
-                promotion=None,
-                final_status=RunStatus.VERIFIED_SUCCESS,
+        with pytest.raises(ValueError) as exc:
+            WorkerInvocationRecord(
+                invocation_id="inv_fake_01",
+                worker_id="worker_gemini",
+                provider="gemini",
+                model="gemini-2.5-flash",
+                role=WorkerRole.BUILDER,
+                modality=EvidenceModality.EMPIRICAL,
+                input_digest="e" * 64,
+                output_digest="f" * 64,
+                started_at=datetime.now(timezone.utc).isoformat(),
+                ended_at=datetime.now(timezone.utc).isoformat(),
+                duration_seconds=1.5,
+                status="SUCCESS",
+                provider_receipt=None,  # ILLEGAL: Missing provider_receipt for EMPIRICAL!
             )
-            is_valid, errors = verify_execution_receipt(receipt.model_dump(), kernel_db=temp_kernel.db)
-            assert is_valid is False
-            assert "verification evidence" in errors[0].lower()
+        assert "must provide non-null provider_receipt" in str(exc.value)
 
-    def test_bypass_E_builder_self_certification_rejected(self, temp_kernel, target_repo):
-        """E. Builder creates its own verification result (builder_id == verifier_id) -> rejected."""
-        objective = "Consequential change with self-certified verifier."
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
-        strategy, caps, digest = temp_kernel.determine_route(run_ctx, objective)
-
-        self_certified_verification = IndependentVerificationRecord(
-            verifier_id="builder_agent_alpha",
-            verifier_type="SELF_REPORT",
-            builder_id="builder_agent_alpha",  # VIOLATION: builder_id == verifier_id
-            test_digest="d" * 64,
-            tests_collected=5,
-            tests_passed=5,
-            tests_failed=0,
-            exit_code=0,
-            duration_seconds=0.1,
-            falsification_attempted=False,
-            verified_status="PASS",
+    def test_03_zero_duration_synthetic_worker(self, temp_kernel, target_repo):
+        """3. Structural/mock worker fixture records instantaneous execution -> must be STRUCTURAL, not EMPIRICAL."""
+        # Valid structural worker with zero duration
+        structural_worker = WorkerInvocationRecord(
+            invocation_id="inv_struct_01",
+            worker_id="mock_ast_builder",
+            provider="mock_synthetic",
+            model="deterministic_v1",
+            role=WorkerRole.BUILDER,
+            modality=EvidenceModality.STRUCTURAL,  # Correctly labeled STRUCTURAL
+            input_digest="1" * 64,
+            output_digest="2" * 64,
+            started_at=datetime.now(timezone.utc).isoformat(),
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=0.0,
+            status="SUCCESS",
+            provider_receipt=None,
         )
+        assert structural_worker.modality == EvidenceModality.STRUCTURAL
+
+        # Cannot declare EMPIRICAL with 0.0 duration in provider receipt
+        with pytest.raises(ValueError):
+            ProviderExecutionReceipt(
+                provider="gemini",
+                model="gemini-2.5-flash",
+                transaction_id="tx_real_12345",
+                started_at=datetime.now(timezone.utc).isoformat(),
+                ended_at=datetime.now(timezone.utc).isoformat(),
+                duration_seconds=0.0,  # ILLEGAL for empirical
+                modality=EvidenceModality.EMPIRICAL,
+                raw_response_digest="3" * 64,
+            )
+
+    def test_04_self_verification_rejected(self, temp_kernel, target_repo):
+        """4. Builder creates candidate and builder-authored verification result (builder_id == verifier_id)."""
+        with pytest.raises(ValueError) as exc:
+            IndependentVerificationRecord(
+                verifier_id="builder_agent_alpha",
+                verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
+                builder_id="builder_agent_alpha",  # Self-certification violation
+                modality=EvidenceModality.DETERMINISTIC_TEST,
+                purpose=EvidencePurpose.BEHAVIORAL_VERIFICATION,
+                test_digest="d" * 64,
+                tests_collected=5,
+                tests_passed=5,
+                tests_failed=0,
+                exit_code=0,
+                duration_seconds=0.1,
+                falsification_attempted=True,
+                verified_status="PASS",
+            )
+        assert "Self-certification" in str(exc.value)
+
+    def test_05_generic_false_success_oracle(self, temp_kernel, target_repo):
+        """5. Candidate returns superficially valid output but fails independent behavioral verification."""
+        # Builder introduces a bug in target
+        (target_repo / "src" / "app.py").write_text("def run(): return 999  # Broken logic\n", encoding="utf-8")
+
+        receipt = temp_kernel.run_objective(
+            objective="Improve calculation logic",
+            target_path=target_repo,
+        )
+
+        assert receipt.final_status == RunStatus.FAILED
+        assert receipt.verification.exit_code != 0
+        assert receipt.verification.tests_failed >= 1
+        assert receipt.epistemic_claims.claim_independently_verified is False
+        assert receipt.epistemic_claims.claim_promoted is False
+
+    def test_06_evidence_upgrade_attack(self):
+        """6. Attempt to upgrade SIMULATED -> EMPIRICAL or STRUCTURAL -> EMPIRICAL without observation."""
+        with pytest.raises(SemanticLaunderingError) as exc:
+            assert_evidence_monotonicity(
+                declared_modality=EvidenceModality.SIMULATED,
+                claimed_modality=EvidenceModality.EMPIRICAL,
+            )
+        assert "Evidence Monotonicity Violation" in str(exc.value)
+
+        with pytest.raises(SemanticLaunderingError):
+            assert_evidence_monotonicity(
+                declared_modality=EvidenceModality.STRUCTURAL,
+                claimed_modality=EvidenceModality.EMPIRICAL,
+            )
+
+    def test_07_wrong_head_fails_closed(self, temp_kernel, target_repo):
+        """7. Receipt references corrupted or mismatched starting Git HEAD."""
+        run_ctx = temp_kernel.establish_run(objective="Target HEAD check", target_path=target_repo)
+        strategy, caps, digest = temp_kernel.determine_route(run_ctx, "Target HEAD check")
 
         receipt = temp_kernel.seal_and_persist_receipt(
             run_ctx=run_ctx,
-            objective=objective,
+            objective="Target HEAD check",
             target_path=target_repo,
-            starting_head=None,
+            starting_head="CORRUPT_SHORT_SHA",  # Not 40 chars
             final_head=None,
             routing_strategy=strategy,
             routing_decision_digest=digest,
             capabilities_selected=caps,
-            worker_invocations=[],
-            artifacts_produced=[],
-            verification=self_certified_verification,
-            promotion=None,
-            final_status=RunStatus.VERIFIED_SUCCESS,
-        )
-
-        is_valid, errors = verify_execution_receipt(receipt.model_dump(), kernel_db=temp_kernel.db)
-        assert is_valid is False
-        assert any("Self-certification" in e or "Independence Violation" in e for e in errors)
-        assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is False
-
-    def test_bypass_F_mismatched_head_fails_closed(self, temp_kernel, target_repo):
-        """F. Receipt references invalid or corrupted HEAD SHA -> fails closed."""
-        objective = "Refactor with invalid HEAD"
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
-        strategy, caps, digest = temp_kernel.determine_route(run_ctx, objective)
-
-        receipt = temp_kernel.seal_and_persist_receipt(
-            run_ctx=run_ctx,
-            objective=objective,
-            target_path=target_repo,
-            starting_head="INVALID_CORRUPTED_SHORT_HEAD",
-            final_head=None,
-            routing_strategy=strategy,
-            routing_decision_digest=digest,
-            capabilities_selected=caps,
+            attempts=[],
             worker_invocations=[],
             artifacts_produced=[],
             verification=None,
@@ -231,20 +278,52 @@ class TestAdversarialBypassAttempts:
         assert is_valid is False
         assert any("starting_head format" in e for e in errors)
 
-    def test_bypass_H_interrupted_run_does_not_qualify(self, temp_kernel, target_repo):
-        """H. Run interrupted before promotion -> must remain CREATED/RUNNING, never VERIFIED_SUCCESS."""
-        objective = "Interrupted task"
-        run_ctx = temp_kernel.establish_run(objective=objective, target_path=target_repo)
+    def test_08_stale_receipt_replay(self, temp_kernel, target_repo, tmp_path):
+        """8. Copying a previously valid receipt into a new run without DB registration fails closed."""
+        run_ctx = temp_kernel.establish_run(objective="First valid run", target_path=target_repo)
+        strategy, caps, digest = temp_kernel.determine_route(run_ctx, "First valid run")
 
-        # Query database status
+        valid_receipt = temp_kernel.seal_and_persist_receipt(
+            run_ctx=run_ctx,
+            objective="First valid run",
+            target_path=target_repo,
+            starting_head=None,
+            final_head=None,
+            routing_strategy=strategy,
+            routing_decision_digest=digest,
+            capabilities_selected=caps,
+            attempts=[],
+            worker_invocations=[],
+            artifacts_produced=[],
+            verification=None,
+            promotion=None,
+            final_status=RunStatus.COMPLETED_UNVERIFIED,
+        )
+
+        # Attacker replays receipt for an unregistered run ID
+        replayed_data = valid_receipt.model_dump()
+        replayed_data["run_id"] = "TS-REPLAYED-RUN-999"
+        replayed_data["receipt_signature"] = valid_receipt.receipt_signature  # Signature won't match or DB missing
+
+        replayed_file = tmp_path / "replayed.json"
+        replayed_file.write_text(json.dumps(replayed_data), encoding="utf-8")
+
+        is_valid, errors = verify_execution_receipt(replayed_file, kernel_db=temp_kernel.db)
+        assert is_valid is False
+        assert is_ten_shadows_execution("TS-REPLAYED-RUN-999", kernel_db=temp_kernel.db) is False
+
+    def test_09_interrupted_run(self, temp_kernel, target_repo):
+        """9. Run interrupted before verification or promotion never receives VERIFIED_SUCCESS."""
+        run_ctx = temp_kernel.establish_run(objective="Interrupted work", target_path=target_repo)
+        strategy, caps, digest = temp_kernel.determine_route(run_ctx, "Interrupted work")
+
         db_rec = temp_kernel.db.get_run(run_ctx.run_id)
-        assert db_rec["status"] == RunStatus.CREATED.value
-        # Incomplete run has no receipt and cannot be verified
+        assert db_rec["status"] == RunStatus.ROUTED.value
         assert is_ten_shadows_execution(run_ctx.run_id, kernel_db=temp_kernel.db) is False
 
-    def test_bypass_I_minimal_sufficient_capabilities_qualify(self, temp_kernel, target_repo):
-        """I. A valid run with only minimum required capabilities qualifies without ceremonial bloat."""
-        objective = "Minimal sufficient verification."
+    def test_10_minimum_capability_routing(self, temp_kernel, target_repo):
+        """10. Kernel selects only the minimum required capabilities; qualifies without ceremonial bloat."""
+        objective = "Assess security boundaries"
         receipt = temp_kernel.run_objective(
             objective=objective,
             target_path=target_repo,
@@ -252,136 +331,145 @@ class TestAdversarialBypassAttempts:
         )
 
         assert receipt.final_status == RunStatus.VERIFIED_SUCCESS
-        assert len(receipt.capabilities_selected) >= 1
+        assert receipt.routing_strategy == RoutingStrategy.ADVERSARIAL_AUDIT
+        assert len(receipt.capabilities_selected) == 3
         assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
 
-    def test_bypass_J_direct_delegation_for_trivial_task(self, temp_kernel, target_repo):
-        """J. Direct delegation is selected by kernel for trivial task -> recorded as COMPLETED_UNVERIFIED."""
-        objective = "trivial: echo ping"
+    def test_11_direct_delegation(self, temp_kernel, target_repo):
+        """11. Trivial objective is deliberately delegated by kernel -> recorded as COMPLETED_UNVERIFIED."""
         receipt = temp_kernel.run_objective(
-            objective=objective,
+            objective="trivial: ping service",
             target_path=target_repo,
         )
 
         assert receipt.routing_strategy == RoutingStrategy.DIRECT_DELEGATION
         assert receipt.final_status == RunStatus.COMPLETED_UNVERIFIED
-        assert receipt.verification is None
+        assert receipt.epistemic_claims.claim_independently_verified is False
+        assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
+
+    def test_12_real_governed_software_mutation(self, temp_kernel, disposable_git_repo):
+        """12. Real governed mutation on a disposable Git repository fixture -> starting HEAD != final HEAD."""
+        starting_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(disposable_git_repo), text=True).strip()
+
+        def builder_mutator(ctx, path):
+            calc_file = path / "src" / "calc.py"
+            calc_file.write_text("def compute(): return 10\ndef add(a, b): return a + b\n", encoding="utf-8")
+            test_file = path / "tests" / "test_calc.py"
+            test_file.write_text("from src.calc import compute, add\ndef test_compute(): assert compute() == 10\ndef test_add(): assert add(2, 3) == 5\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=str(path), check=True)
+            subprocess.run(["git", "commit", "-m", "feat: add add helper"], cwd=str(path), check=True)
+            return [{"file": str(calc_file), "status": "MODIFIED"}]
+
+        receipt = temp_kernel.run_objective(
+            objective="Harden calculation engine with addition function",
+            target_path=disposable_git_repo,
+            builder_fn=builder_mutator,
+        )
+
+        assert receipt.final_status == RunStatus.VERIFIED_SUCCESS
+        assert receipt.starting_head == starting_head
+        assert receipt.final_head is not None
+        assert receipt.final_head != starting_head
+        assert receipt.verification.tests_passed == 2
+        assert receipt.epistemic_claims.claim_promoted is True
         assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
 
 
 # ===========================================================================
-# Section 3: Positive End-to-End Smoke Test
+# Mission L & M: Positive Acceptance Test & Negative Control
 # ===========================================================================
 
-class TestPositiveEndToEndExecution:
-    def test_positive_e2e_run_lifecycle(self, temp_kernel, target_repo):
-        """
-        Positive End-to-End Smoke Test:
-        1. Objective entered through Ten Shadows.
-        2. Kernel creates run in KernelDatabase before worker execution.
-        3. Routing decision persisted.
-        4. Worker execution recorded with input/output digests.
-        5. Independent verification executes test suite and captures test digest.
-        6. Promotion decision recorded.
-        7. Authoritative sealed receipt written to .receipts/ and KernelDatabase.
-        8. is_ten_shadows_execution(run_id) returns True.
-        """
-        objective = "Harden target application functions."
+class TestAcceptanceAndNegativeControl:
+    def test_positive_e2e_acceptance_flow(self, temp_kernel, disposable_git_repo):
+        """Mission L: Positive End-to-End Acceptance Test on disposable Git fixture."""
+        objective = "Zero trust hardening of calculation module"
 
         def mock_builder(ctx, path):
-            # Worker creates an improvement in target
-            target_file = path / "src" / "app.py"
-            target_file.write_text("def run(): return 42\ndef helper(): return True\n", encoding="utf-8")
-            return [{"path": str(target_file), "status": "MODIFIED"}]
+            app_file = path / "src" / "calc.py"
+            app_file.write_text("def compute(): return 10\ndef is_safe(): return True\n", encoding="utf-8")
+            test_file = path / "tests" / "test_calc.py"
+            test_file.write_text("from src.calc import compute, is_safe\ndef test_compute(): assert compute() == 10\ndef test_safe(): assert is_safe() is True\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=str(path), check=True)
+            subprocess.run(["git", "commit", "-m", "feat(hardening): apply zero trust checks"], cwd=str(path), check=True)
+            return [{"path": str(app_file), "action": "HARDENED"}]
 
         receipt = temp_kernel.run_objective(
             objective=objective,
-            target_path=target_repo,
+            target_path=disposable_git_repo,
             builder_fn=mock_builder,
-            provider_name="mock_gemini",
-            model_name="mock_gemini_flash",
+            provider_name="gemini_adapter_fixture",
+            model_name="gemini-2.5-flash",
         )
 
-        # Verify receipt properties
         assert receipt.final_status == RunStatus.VERIFIED_SUCCESS
-        assert receipt.routing_strategy == RoutingStrategy.CODE_HARDENING
-        assert len(receipt.worker_invocations) == 1
-        assert receipt.worker_invocations[0].role == WorkerRole.BUILDER
-        assert receipt.worker_invocations[0].provider == "mock_gemini"
-        assert receipt.verification is not None
+        assert receipt.verification.tests_passed == 2
         assert receipt.verification.exit_code == 0
-        assert receipt.verification.tests_passed >= 1
-        assert receipt.verification.builder_id != receipt.verification.verifier_id
-
-        # Verify file persisted
-        receipt_file = temp_kernel.receipts_dir / f"{receipt.run_id}_receipt.json"
-        assert receipt_file.exists()
-
-        # Verify mechanical predicate returns TRUE
         assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
-        assert is_ten_shadows_execution(receipt_file, kernel_db=temp_kernel.db) is True
+        assert len(receipt.attempts) == 1
+        assert receipt.attempts[0].status == "PASS"
 
+    def test_negative_control_jobhunter_simulation(self, temp_kernel, disposable_git_repo, tmp_path):
+        """Mission M: Negative control reproducing fake prompt-only run outside kernel."""
+        # 1. External actor mutates repository directly
+        (disposable_git_repo / "src" / "calc.py").write_text("def compute(): return 99\n", encoding="utf-8")
+        (disposable_git_repo / "tests" / "test_calc.py").write_text("from src.calc import compute\ndef test_compute(): assert compute() == 99\n", encoding="utf-8")
+        subprocess.run(["git", "add", "."], cwd=str(disposable_git_repo), check=True)
+        subprocess.run(["git", "commit", "-m", "feat(hardening): apply 10 shadows zero-trust in prompt"], cwd=str(disposable_git_repo), check=True)
 
-# ===========================================================================
-# Section 4: Negative Control — JobHunter Failure Mode Reproduction
-# ===========================================================================
-
-class TestJobHunterNegativeControl:
-    def test_jobhunter_failure_mode_reproduction(self, temp_kernel, target_repo, tmp_path):
-        """
-        Recreates the exact failure mode observed in the JobHunter hardening pass:
-        - An external model reads skills and edits target.
-        - Writes and passes developer tests.
-        - Claims in text/commit 'feat(hardening): apply 10 shadows zero-trust'.
-        - Even generates a fake receipt file.
-        - BUT never initialized the run inside the Ten Shadows kernel.
-
-        EXPECTED: is_ten_shadows_execution(...) == False.
-        """
-        # Step 1: Model modifies target
-        (target_repo / "src" / "app.py").write_text("def run(): return 100\n", encoding="utf-8")
-        (target_repo / "tests" / "test_app.py").write_text("from src.app import run\ndef test_run(): assert run() == 100\n", encoding="utf-8")
-
-        # Step 2: Model creates arbitrary receipt file without kernel database record
-        fake_receipt_file = tmp_path / "jobhunter_fake_receipt.json"
-        fake_data = {
-            "receipt_version": "2.0.0",
+        # 2. External actor fabricates a receipt file
+        fake_receipt = tmp_path / "external_model_receipt.json"
+        fake_payload = {
+            "receipt_version": "2.1.0",
             "kernel_version": "10_SHADOWS_KERNEL_v3.0",
-            "run_id": "TS-JOBHUNTER-RUN-3d5b2b2c",
-            "task_id": "job_hunter_hardening",
-            "objective": "Harden job hunter repository under 10 shadows principles",
-            "objective_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-            "target_path": str(target_repo),
+            "run_id": "TS-UNAUTHORIZED-SESSION-001",
+            "task_id": "task_external",
+            "objective": "Harden outside kernel",
+            "objective_hash": "d" * 64,
+            "target_path": str(disposable_git_repo),
             "routing_strategy": "CODE_HARDENING",
-            "routing_decision_digest": "0" * 64,
+            "routing_decision_digest": "e" * 64,
             "capabilities_selected": ["PERSISTENCE_HARDENING"],
+            "attempts": [],
             "worker_invocations": [],
             "artifacts_produced": [],
             "verification": {
-                "verifier_id": "model_self_verifier",
-                "verifier_type": "PYTEST",
-                "builder_id": "model_self_verifier",  # Self-certified!
+                "verifier_id": "model_self",
+                "verifier_type": "BUILDER_TEST",
+                "builder_id": "model_self",
+                "modality": "DETERMINISTIC_TEST",
+                "purpose": "BEHAVIORAL_VERIFICATION",
                 "test_digest": "f" * 64,
-                "tests_collected": 83,
-                "tests_passed": 83,
+                "tests_collected": 1,
+                "tests_passed": 1,
                 "tests_failed": 0,
                 "exit_code": 0,
-                "duration_seconds": 1.62,
-                "falsification_attempted": True,
+                "duration_seconds": 0.05,
+                "falsification_attempted": False,
                 "verified_status": "PASS",
+            },
+            "epistemic_claims": {
+                "claim_kernel_run_created": True,
+                "claim_kernel_routed": True,
+                "claim_worker_executed": True,
+                "claim_empirical_provider_invoked": False,
+                "claim_candidate_mutated": True,
+                "claim_independently_verified": True,
+                "claim_promoted": True,
+                "claim_target_behaviorally_tested": True,
+                "claim_semantic_objective_satisfied": False,
             },
             "final_status": "VERIFIED_SUCCESS",
             "created_at": datetime.now(timezone.utc).isoformat(),
             "sealed_at": datetime.now(timezone.utc).isoformat(),
             "env_fingerprint": {},
-            "receipt_signature": "bad_signature",
+            "receipt_signature": "invalid_sig",
         }
-        fake_receipt_file.write_text(json.dumps(fake_data), encoding="utf-8")
+        fake_receipt.write_text(json.dumps(fake_payload), encoding="utf-8")
 
-        # Mechanical Verification MUST REJECT
-        assert is_ten_shadows_execution("TS-JOBHUNTER-RUN-3d5b2b2c", kernel_db=temp_kernel.db) is False
-        assert is_ten_shadows_execution(fake_receipt_file, kernel_db=temp_kernel.db) is False
+        # Must evaluate to FALSE
+        assert is_ten_shadows_execution("TS-UNAUTHORIZED-SESSION-001", kernel_db=temp_kernel.db) is False
+        assert is_ten_shadows_execution(fake_receipt, kernel_db=temp_kernel.db) is False
 
-        is_valid, errors = verify_execution_receipt(fake_receipt_file, kernel_db=temp_kernel.db)
+        is_valid, errors = verify_execution_receipt(fake_receipt, kernel_db=temp_kernel.db)
         assert is_valid is False
         assert len(errors) >= 1

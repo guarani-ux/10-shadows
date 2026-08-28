@@ -270,7 +270,7 @@ def test_matrix_06_step_governor_strike_limits(tmp_path):
     """Proves StepGovernor enforces 3-strike ceiling and records negative constraints."""
     db_file = tmp_path / "kernel.db"
     kdb = KernelDatabase(db_path=db_file)
-    governor = StepGovernor(kernel_db=kdb, max_strikes=3)
+    governor = StepGovernor(kernel_db=kdb)
 
     runner = ScribeDomainRunner()
     bad_payload = {
@@ -298,7 +298,7 @@ def test_matrix_07_anti_oscillation_guard(tmp_path):
     """Proves that generating an identical candidate on retry triggers anti-oscillation violation."""
     db_file = tmp_path / "kernel.db"
     kdb = KernelDatabase(db_path=db_file)
-    governor = StepGovernor(kernel_db=kdb, max_strikes=3)
+    governor = StepGovernor(kernel_db=kdb)
 
     # Runner that does not adapt and produces static output
     class StaticUnchangingLoop(ScribeDomainRunner):
@@ -330,7 +330,7 @@ def test_matrix_08_failure_injection_and_repair(tmp_path):
     """Proves that a transient failure on attempt 1 is repaired on attempt 2."""
     db_file = tmp_path / "kernel.db"
     kdb = KernelDatabase(db_path=db_file)
-    governor = StepGovernor(kernel_db=kdb, max_strikes=3)
+    governor = StepGovernor(kernel_db=kdb)
 
     runner = HeraldAVScriptDomainRunner()
     brief = CanonicalMediaBrief(

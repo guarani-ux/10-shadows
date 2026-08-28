@@ -60,7 +60,7 @@ def test_herald_forced_failure_and_adaptive_repair_diff_proven(tmp_path):
     assert row2_c2_words <= 14
 
     # C. Run full Governor loop and verify successful promotion
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, brief)
     assert result["status"] == "SUCCESS"
     assert result["receipt"]["status"] == "COMMITTED"
@@ -89,8 +89,12 @@ def test_herald_impossible_brief_honest_abort(tmp_path):
         ),
     )
 
-    gov = Governor(max_strikes=2)
+    from loop_engine.governance import load_canonical_governance
+    custom_gov = load_canonical_governance().model_copy(deep=True)
+    custom_gov.governor.strike_ceiling = 2
+    gov = Governor(governance_config=custom_gov)
     result = gov.run_loop(runner, brief)
+
 
     assert result["status"] in ["SUCCESS", "ABORTED"]
     if result["status"] == "ABORTED":

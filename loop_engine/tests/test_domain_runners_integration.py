@@ -17,7 +17,7 @@ def test_forge_domain_runner_success(tmp_path):
         "code": "def add(a, b):\n    return a + b\n",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, payload)
 
     assert result["status"] == "SUCCESS"
@@ -35,7 +35,7 @@ def test_svris_domain_runner_verification(tmp_path):
         "content": "def clean_calc():\n    return 100\n",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, safe_payload)
 
     assert result["status"] == "SUCCESS"
@@ -53,7 +53,7 @@ def test_svris_domain_runner_catches_unsafe_code(tmp_path):
         "content": "import os\nos.system('calc')\n",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, unsafe_payload)
 
     assert result["status"] == "ABORTED"

@@ -26,7 +26,8 @@ def test_herald_av_script_domain_runner_e2e(tmp_path):
         ),
     )
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
     result = gov.run_loop(runner, brief)
 
     assert result["status"] == "SUCCESS"

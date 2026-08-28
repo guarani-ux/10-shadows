@@ -57,7 +57,8 @@ def test_cross_shadow_closed_loop_vertical_slice(tmp_path):
         ),
     )
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
     herald_res = gov.run_loop(herald_runner, brief)
 
     assert herald_res["status"] == "SUCCESS"

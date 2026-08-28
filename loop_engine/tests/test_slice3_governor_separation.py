@@ -14,7 +14,7 @@ def test_step_governor_execution_and_metrics_injection(tmp_path):
     """Proves StepGovernor executes runner, measures strikes, and injects parent context."""
     db_file = tmp_path / "scratch" / "receipts.db"
     store = ReceiptStore(db_path=db_file)
-    governor = StepGovernor(max_strikes=3)
+    governor = StepGovernor()
 
     parent_ctx = RunContext.create(
         task_id="parent_pipeline_01",
@@ -61,7 +61,7 @@ def test_step_governor_forced_failure_and_retry_recovery(tmp_path):
     """Proves StepGovernor handles forced failure on attempt 1 and recovers on attempt 2."""
     db_file = tmp_path / "scratch" / "receipts.db"
     store = ReceiptStore(db_path=db_file)
-    governor = StepGovernor(max_strikes=3)
+    governor = StepGovernor()
 
     parent_ctx = RunContext.create(
         task_id="parent_pipeline_retry",
@@ -111,7 +111,7 @@ def test_step_governor_three_strikes_hard_abort(tmp_path):
     """Proves StepGovernor exhausts 3 strikes and aborts cleanly."""
     db_file = tmp_path / "scratch" / "receipts.db"
     store = ReceiptStore(db_path=db_file)
-    governor = StepGovernor(max_strikes=3)
+    governor = StepGovernor()
 
     runner = ScribeDomainRunner(receipt_store=store)
     # Malformed payload that fails verification

@@ -19,7 +19,7 @@ def test_code_runner_end_to_end_success(tmp_path):
         "code": "```python\ndef compute_answer():\n    return 42\n```",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, payload)
 
     assert result["status"] == "SUCCESS"
@@ -43,7 +43,7 @@ def test_code_runner_rejects_ast_violation(tmp_path):
         "code": "```python\nimport os\nos.system('whoami')\n```",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, payload)
 
     # Must fail 3 strikes due to hard AST ban and abort
@@ -75,7 +75,7 @@ def test_tool():
         "code": "def run():\n    return True\n",
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, payload)
 
     assert result["status"] == "SUCCESS"

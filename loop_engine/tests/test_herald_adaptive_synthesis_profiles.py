@@ -27,7 +27,7 @@ def test_adaptive_synthesis_30s_brief_150_wpm(tmp_path):
 
     store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = HeraldAVScriptDomainRunner(receipt_store=store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
 
     result = gov.run_loop(runner, brief)
     assert result["status"] == "SUCCESS"
@@ -51,7 +51,7 @@ def test_adaptive_synthesis_60s_brief_150_wpm(tmp_path):
     )
     store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = HeraldAVScriptDomainRunner(receipt_store=store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
 
     result = gov.run_loop(runner, brief)
     assert result["status"] == "SUCCESS"
@@ -74,7 +74,7 @@ def test_adaptive_synthesis_75s_brief_120_wpm(tmp_path):
     )
     store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = HeraldAVScriptDomainRunner(receipt_store=store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
 
     result = gov.run_loop(runner, brief)
     assert result["status"] == "SUCCESS"
@@ -112,7 +112,7 @@ def test_adaptive_synthesis_evidence_heavy_and_unknowns(tmp_path):
     )
     store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = HeraldAVScriptDomainRunner(receipt_store=store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
 
     result = gov.run_loop(runner, brief)
     assert result["status"] == "SUCCESS"

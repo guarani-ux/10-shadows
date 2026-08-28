@@ -65,7 +65,7 @@ class MockStatefulLoop(BaseLoop):
 # -------------------------------------------------------------
 
 def test_governor_first_strike_pass():
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     loop = MockStatefulLoop(pass_on_strike=1)
 
     result = gov.run_loop(loop, "print('first strike success')")
@@ -77,7 +77,7 @@ def test_governor_first_strike_pass():
 
 
 def test_governor_retry_with_feedback_pass():
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     loop = MockStatefulLoop(pass_on_strike=2)
 
     result = gov.run_loop(loop, "print('strike 2 success')")
@@ -92,7 +92,7 @@ def test_governor_retry_with_feedback_pass():
 
 
 def test_governor_hard_abort_at_three_strikes():
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     loop = MockStatefulLoop(pass_on_strike=99)  # will never pass
 
     result = gov.run_loop(loop, "print('doomed to fail')")
@@ -108,7 +108,7 @@ def test_governor_hard_abort_at_three_strikes():
 
 
 def test_governor_trace_compaction():
-    gov = Governor(max_strikes=3, max_error_lines=5)
+    gov = Governor(max_error_lines=5)
     long_trace = "\n".join([f"Traceback frame line {i}" for i in range(50)])
 
     compacted = gov.compact_error_trace(long_trace)
@@ -120,8 +120,9 @@ def test_governor_trace_compaction():
 
 
 def test_governor_rejects_spec_tamper():
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     loop = MockStatefulLoop(pass_on_strike=2, mutate_spec_on_retry=True)
 
     with pytest.raises(SpecTamperError):
         gov.run_loop(loop, "print('tamper test')")
+

@@ -8,7 +8,8 @@ from loop_engine.governor import Governor
 def test_slicer_domain_runner_e2e(tmp_path):
     receipt_store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = SlicerDomainRunner(receipt_store=receipt_store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
 
     payload = {
         "goal_id": "goal_distributed_lock",

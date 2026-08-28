@@ -47,7 +47,7 @@ def test_alchemist_self_healing_successful_repair(tmp_path):
         "target_test_file": str(test_file.as_posix()),
     }
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
     result = gov.run_loop(runner, input_payload)
 
     assert result["status"] == "SUCCESS"
@@ -96,9 +96,13 @@ def test_alchemist_self_healing_failed_repair_rollback(tmp_path):
         "target_test_file": str(test_file.as_posix()),
     }
 
-    # Use max_strikes=1 for fast deterministic failure test
-    gov = Governor(max_strikes=1)
+    # Use strike_ceiling=1 via GovernanceConfig for fast deterministic failure test
+    from loop_engine.governance import load_canonical_governance
+    custom_gov = load_canonical_governance().model_copy(deep=True)
+    custom_gov.governor.strike_ceiling = 1
+    gov = Governor(governance_config=custom_gov)
     result = gov.run_loop(runner, input_payload)
+
 
     # Governor should abort
     assert result["status"] == "ABORTED"

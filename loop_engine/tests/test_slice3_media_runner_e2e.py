@@ -10,7 +10,8 @@ def test_herald_media_runner_e2e(tmp_path):
     store = ReceiptStore(db_path=db_file)
     runner = HeraldMediaRunner(receipt_store=store)
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
     result = gov.run_loop(runner, "https://www.youtube.com/watch?v=C31vB3Mi0i0")
 
     assert result["status"] == "SUCCESS"

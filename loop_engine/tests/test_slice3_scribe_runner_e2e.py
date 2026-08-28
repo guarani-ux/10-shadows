@@ -12,7 +12,8 @@ def test_scribe_domain_runner_e2e(tmp_path):
     receipt_store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
 
     runner = ScribeDomainRunner(memory_store=store, receipt_store=receipt_store)
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
 
     mock_blueprint = {
         "video_id": "test_e2e_scribe",

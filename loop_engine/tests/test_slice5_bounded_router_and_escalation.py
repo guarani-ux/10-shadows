@@ -49,7 +49,8 @@ def test_routed_multi_shadow_pipeline_execution(tmp_path):
         ),
     )
 
-    gov = Governor(max_strikes=3)
+    gov = Governor()
+
     herald_res = gov.run_loop(herald_runner, brief)
     assert herald_res["status"] == "SUCCESS"
     assert herald_res["receipt"]["status"] == "COMMITTED"

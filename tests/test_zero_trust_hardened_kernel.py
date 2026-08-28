@@ -137,9 +137,10 @@ def test_illegal_state_transition_raises(clean_kernel_harness):
     )
     db.record_proposal(manifest)
 
-    # Direct jump from CANDIDATE_SEALED to PROMOTED is illegal -> MUST raise IllegalStateTransitionError
-    with pytest.raises(IllegalStateTransitionError):
+    # Direct jump from CANDIDATE_SEALED to PROMOTED is illegal -> MUST raise error
+    with pytest.raises((IllegalStateTransitionError, PrivilegedStateMutationProhibitedError)):
         db.transition_proposal_state("TASK-STATE-001", State.CANDIDATE_SEALED, State.PROMOTED)
+
 
 
 # Test 4: Fixture directory deletion/mutation blocked
@@ -290,8 +291,6 @@ def test_dirty_or_stale_target_branch_blocked(clean_kernel_harness):
     db.record_proposal(manifest)
     receipt_id, receipt = verifier_gate.verify_candidate(manifest, wt)
     assert receipt.status == State.VERIFIED
-    db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.VERIFYING)
-    db.transition_proposal_state(task_id, State.VERIFYING, State.VERIFIED)
 
     # Dirty the main repo worktree
     (repo_dir / "untracked.txt").write_text("dirty state", encoding="utf-8")
@@ -337,8 +336,6 @@ def test_target_movement_after_verification_aborts(clean_kernel_harness):
     db.record_proposal(manifest)
     receipt_id, receipt = verifier_gate.verify_candidate(manifest, wt)
     assert receipt.status == State.VERIFIED
-    db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.VERIFYING)
-    db.transition_proposal_state(task_id, State.VERIFYING, State.VERIFIED)
 
     # Move target branch HEAD to another commit
     (repo_dir / "unrelated.py").write_text("x = 1\n", encoding="utf-8")
@@ -389,7 +386,7 @@ def test_crash_at_every_promotion_boundary(clean_kernel_harness):
     # Case B: Commit was merged before crash -> reconcile advances to POST_PROMOTION_VERIFIED
     subprocess.run(["git", "checkout", "main"], cwd=repo_dir, check=True, capture_output=True)
     subprocess.run(["git", "merge", "--ff-only", cand_sha], cwd=repo_dir, check=True, capture_output=True)
-    db.transition_proposal_state(task_id, State.VERIFIED, State.PROMOTION_PENDING)
+    db._raw_transition_proposal_state(task_id, State.VERIFIED, State.PROMOTION_PENDING)
 
     promoter.reconcile_interrupted_promotions()
     assert db.get_proposal_state(task_id) == State.POST_PROMOTION_VERIFIED
@@ -412,11 +409,12 @@ def test_concurrent_promotion_attempts_blocked(clean_kernel_harness):
     db.record_proposal(manifest)
 
     # Worker 1 transitions VERIFIED -> PROMOTION_PENDING
-    db.transition_proposal_state("TASK-CONCUR-001", State.VERIFIED, State.PROMOTION_PENDING)
+    db._raw_transition_proposal_state("TASK-CONCUR-001", State.VERIFIED, State.PROMOTION_PENDING)
 
     # Worker 2 attempts concurrent transition from VERIFIED -> MUST raise IllegalStateTransitionError
     with pytest.raises(IllegalStateTransitionError):
-        db.transition_proposal_state("TASK-CONCUR-001", State.VERIFIED, State.PROMOTION_PENDING)
+        db._raw_transition_proposal_state("TASK-CONCUR-001", State.VERIFIED, State.PROMOTION_PENDING)
+
 
 
 # Test 11: Unreadable or changed hashed file rejected

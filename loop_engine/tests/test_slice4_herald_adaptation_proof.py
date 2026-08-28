@@ -90,9 +90,11 @@ def test_herald_impossible_brief_honest_abort(tmp_path):
     )
 
     from loop_engine.governance import load_canonical_governance
+    custom_gov = load_canonical_governance().model_copy(deep=True)
     custom_gov.governor.strike_ceiling = 2
     gov = Governor._create_for_test(governance_config=custom_gov)
     result = gov.run_loop(runner, brief)
+
 
 
 

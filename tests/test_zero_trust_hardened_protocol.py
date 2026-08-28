@@ -115,8 +115,8 @@ def test_hardened_zero_trust_route(test_harness):
 
     assert receipt.status == State.VERIFIED
     assert receipt.physical_tree_hash == cand_tree
-    db.record_receipt(receipt)
-    db.update_state(task_id, State.VERIFIED)
+    assert db.get_proposal_state(task_id) == State.VERIFIED
+
 
     # 4. Failure classification and non-strike governance
     env_strike = governor.evaluate_failure(task_id, FailureClassification.ENVIRONMENT_FAILURE, "sig_socket_timeout")

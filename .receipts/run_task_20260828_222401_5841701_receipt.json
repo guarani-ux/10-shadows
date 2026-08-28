@@ -1,0 +1,138 @@
+{
+  "receipt_version": "2.1.0",
+  "kernel_version": "10_SHADOWS_KERNEL_v3.0",
+  "run_id": "run_task_20260828_222401_5841701",
+  "task_id": "task_20260828_222401",
+  "objective": "Determine what prevents this application from fulfilling its intended objective as reliably and usefully as possible. Implement and verify the improvements. The application should take job postings, compare them against a master resume and work-history database, determine whether each opportunity is worth applying to, generate truthful tailored resumes and cover letters, track applications, and learn from previous applications. Deliver a working tested system rather than a development plan.",
+  "objective_hash": "9b62e43e349004aef0523f7a767413eb91ded2217c8bafbe2a21acff90188926",
+  "target_path": "C:\\10 SHADOWS\\sandbox\\experiments\\worktree_ten_shadows",
+  "starting_head": "c96c123dc43c6fc978370275df2e5b6cb1a2eb82",
+  "final_head": "c96c123dc43c6fc978370275df2e5b6cb1a2eb82",
+  "routing_strategy": "ADVERSARIAL_AUDIT",
+  "routing_decision_digest": "ce10ac4823ea5d1e314b60cc3d47aa68b692388513fc0139986f12bc8ed7314f",
+  "capabilities_selected": [
+    "STATIC_INSPECTION",
+    "ADVERSARIAL_FALSIFICATION",
+    "CONTRACT_VERIFICATION"
+  ],
+  "attempts": [
+    {
+      "attempt_number": 1,
+      "started_at": "2026-08-28T22:24:01.701228+00:00",
+      "ended_at": "2026-08-28T22:24:07.430180+00:00",
+      "duration_seconds": 5.671,
+      "worker_invocations": [
+        {
+          "invocation_id": "inv_1787955841759_1",
+          "worker_id": "forge_builder_task_20260828_222401",
+          "provider": "gemini",
+          "model": "gemini-2.5-flash",
+          "role": "BUILDER",
+          "modality": "STRUCTURAL",
+          "input_digest": "9b62e43e349004aef0523f7a767413eb91ded2217c8bafbe2a21acff90188926",
+          "output_digest": "594b5d320b80cbc28474ebcd595b30f29e75e0004132846a79f8df6296f6cfd4",
+          "started_at": "2026-08-28T22:24:01.759624+00:00",
+          "ended_at": "2026-08-28T22:24:01.759624+00:00",
+          "duration_seconds": 0.001,
+          "status": "SUCCESS",
+          "provider_receipt": null,
+          "extra_metadata": {}
+        }
+      ],
+      "artifacts_staged": [
+        {
+          "target": "C:\\10 SHADOWS\\sandbox\\experiments\\worktree_ten_shadows",
+          "status": "INSPECTED_AND_PREPARED"
+        }
+      ],
+      "verification": {
+        "verifier_id": "svris_verifier_task_20260828_222401",
+        "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+        "builder_id": "forge_builder_task_20260828_222401",
+        "modality": "DETERMINISTIC_TEST",
+        "purpose": "BEHAVIORAL_VERIFICATION",
+        "test_digest": "a2096c0b8f22f60e5ba0847dab577a8ec6c986607c7483c09d4d00761963dbf5",
+        "tests_collected": 106,
+        "tests_passed": 106,
+        "tests_failed": 0,
+        "exit_code": 0,
+        "duration_seconds": 5.614,
+        "falsification_attempted": true,
+        "verified_status": "PASS",
+        "execution_trace": "me_tailor.py::TestTruthfulnessGates::test_fabricated_experience_id_is_rejected PASSED [ 92%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_all_fabricated_ids_are_dropped PASSED [ 93%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_valid_id_survives_gate PASSED [ 94%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_fabricated_achievements_are_replaced_with_real_ones PASSED [ 95%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_verbatim_achievements_pass_gate PASSED [ 96%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_fabricated_skill_name_is_rejected PASSED [ 97%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_real_skills_pass_gate PASSED [ 98%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_skill_gate_case_insensitive_match PASSED [ 99%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_no_skills_in_db_returns_empty PASSED [100%]\n\n============================= 106 passed in 1.68s =============================\n",
+        "timestamp": "2026-08-28T22:24:07.374204+00:00"
+      },
+      "promotion_decision": "PROMOTED",
+      "status": "PASS",
+      "rejection_reason": null
+    }
+  ],
+  "worker_invocations": [
+    {
+      "invocation_id": "inv_1787955841759_1",
+      "worker_id": "forge_builder_task_20260828_222401",
+      "provider": "gemini",
+      "model": "gemini-2.5-flash",
+      "role": "BUILDER",
+      "modality": "STRUCTURAL",
+      "input_digest": "9b62e43e349004aef0523f7a767413eb91ded2217c8bafbe2a21acff90188926",
+      "output_digest": "594b5d320b80cbc28474ebcd595b30f29e75e0004132846a79f8df6296f6cfd4",
+      "started_at": "2026-08-28T22:24:01.759624+00:00",
+      "ended_at": "2026-08-28T22:24:01.759624+00:00",
+      "duration_seconds": 0.001,
+      "status": "SUCCESS",
+      "provider_receipt": null,
+      "extra_metadata": {}
+    }
+  ],
+  "artifacts_produced": [
+    {
+      "target": "C:\\10 SHADOWS\\sandbox\\experiments\\worktree_ten_shadows",
+      "status": "INSPECTED_AND_PREPARED"
+    }
+  ],
+  "verification": {
+    "verifier_id": "svris_verifier_task_20260828_222401",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "forge_builder_task_20260828_222401",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "a2096c0b8f22f60e5ba0847dab577a8ec6c986607c7483c09d4d00761963dbf5",
+    "tests_collected": 106,
+    "tests_passed": 106,
+    "tests_failed": 0,
+    "exit_code": 0,
+    "duration_seconds": 5.614,
+    "falsification_attempted": true,
+    "verified_status": "PASS",
+    "execution_trace": "me_tailor.py::TestTruthfulnessGates::test_fabricated_experience_id_is_rejected PASSED [ 92%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_all_fabricated_ids_are_dropped PASSED [ 93%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_valid_id_survives_gate PASSED [ 94%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_fabricated_achievements_are_replaced_with_real_ones PASSED [ 95%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_verbatim_achievements_pass_gate PASSED [ 96%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_fabricated_skill_name_is_rejected PASSED [ 97%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_real_skills_pass_gate PASSED [ 98%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_skill_gate_case_insensitive_match PASSED [ 99%]\ntests/test_resume_tailor.py::TestTruthfulnessGates::test_no_skills_in_db_returns_empty PASSED [100%]\n\n============================= 106 passed in 1.68s =============================\n",
+    "timestamp": "2026-08-28T22:24:07.374204+00:00"
+  },
+  "promotion": {
+    "status": "PROMOTED",
+    "promoted_at": "2026-08-28T22:24:07.430167+00:00",
+    "head": "c96c123dc43c6fc978370275df2e5b6cb1a2eb82"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": true,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": true,
+    "claim_independently_verified": true,
+    "claim_promoted": true,
+    "claim_target_behaviorally_tested": true,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "VERIFIED_SUCCESS",
+  "created_at": "2026-08-28T22:24:01.701228+00:00",
+  "sealed_at": "2026-08-28T22:24:07.430269+00:00",
+  "env_fingerprint": {
+    "python_version": "3.13.12",
+    "platform_system": "Windows",
+    "platform_release": "11",
+    "architecture": "AMD64",
+    "env_hash": "6dc0be60fa66502abd5e2ba4aa77cf1a9219fb32155a9d69ec8861da4e17582a"
+  },
+  "receipt_signature": "40876c9aa1cc3cad8aca6e8e8262d1c7305149f5521aab0e06421d3c5e48931b"
+}

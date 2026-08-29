@@ -19,7 +19,6 @@ from loop_engine.execution_authority import TenShadowsKernel
 from loop_engine.kernel_db import KernelDatabase
 from loop_engine.orchestrator import TenShadowsOrchestrator
 
-
 UNSUPPORTED_OBJECTIVE = (
     "Determine whether the Magna Carta directly caused the French Revolution "
     "and produce a historically verified conclusion."

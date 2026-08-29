@@ -16,17 +16,14 @@ class AVTableRow(BaseModel):
     start_seconds: float = Field(ge=0.0)
     end_seconds: float = Field(ge=0.0)
 
-    # Column 2: Spoken Human Audio & SFX
     spoken_audio: str = Field(min_length=5, description="Spoken voiceover, dialogue, music cues, and sound effects")
     spoken_words_count: int = Field(ge=0)
     pacing_wpm: float = Field(ge=0.0)
 
-    # Column 3: Cinematographic Video & Visual Directions
     video_direction: str = Field(
         min_length=10, description="Framing, camera move, lighting ratio, focal length, on-screen text"
     )
 
-    # Traceability & Evidence Grounding
     grounded_evidence_ids: List[str] = Field(
         default_factory=list, description="IDs of verified evidence supporting this scene"
     )
@@ -60,12 +57,7 @@ class AVTableRow(BaseModel):
 
 
 class ValidatedCutDownScript(BaseModel):
-    """
-    Section 2: Production-Grade Modular Cut-Down Script.
-
-    Complete, standalone 15-30s vertical script with full audio,
-    vertical 9:16 cinematography, platform-specific CTA, and duration validation.
-    """
+    """Structured, validated modular cut-down script representation."""
 
     cutdown_id: str
     short_title: str
@@ -108,7 +100,7 @@ class TechnicalScope(BaseModel):
 
 
 class MasterAVScriptBlueprint(BaseModel):
-    """The complete 3-Section Production-Ready AV Script Document with Evidence Preservation."""
+    """Structured 3-section AV script document with evidence-preservation fields."""
 
     script_id: str
     strategic_intent: StrategicIntent

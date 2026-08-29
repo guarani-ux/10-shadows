@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, List, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -15,15 +15,12 @@ class AVTableRow(BaseModel):
     time_window: str = Field(description="e.g. '0:00 - 0:15'")
     start_seconds: float = Field(ge=0.0)
     end_seconds: float = Field(ge=0.0)
-
     spoken_audio: str = Field(min_length=5, description="Spoken voiceover, dialogue, music cues, and sound effects")
     spoken_words_count: int = Field(ge=0)
     pacing_wpm: float = Field(ge=0.0)
-
     video_direction: str = Field(
         min_length=10, description="Framing, camera move, lighting ratio, focal length, on-screen text"
     )
-
     grounded_evidence_ids: List[str] = Field(
         default_factory=list, description="IDs of verified evidence supporting this scene"
     )

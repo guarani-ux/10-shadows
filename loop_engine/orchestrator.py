@@ -1,15 +1,17 @@
 """Current canonical Ten Shadows governed-execution orchestrator.
 
 This module coordinates a kernel-established run, an authorized worker adapter,
-physical workspace observation, independent deterministic verification, optional
-capability qualification, optional target promotion, and receipt sealing.
+physical workspace observation, system-owned deterministic verification, bounded
+capability qualification/reuse, optional target promotion, and receipt sealing.
 
 Scope limits are deliberate:
 - the governed workspace is a Ten Shadows staging boundary, not an OS sandbox;
-- only the deterministic verifier path is implemented here;
-- target promotion is opt-in and is not described as atomic Git promotion;
+- only a narrow deterministic verifier family is implemented here;
+- target promotion is opt-in and is not atomic Git promotion;
 - behavioral verification is not semantic proof that an open-ended objective was
-  fully satisfied.
+  fully satisfied;
+- preserved capability reuse is demonstrated only for capabilities with a
+  system-owned verifier and hash-bound artifacts.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import hashlib
 import json
 import os
 import shutil
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
@@ -103,6 +106,8 @@ class TenShadowsOrchestrator:
         self.receipts_dir = receipts_dir or RECEIPTS_DIR
         self.kernel = kernel or TenShadowsKernel(kernel_db=self.db, receipts_dir=self.receipts_dir)
         self.registry = registry or CapabilityRegistry()
+        self.capability_store = Path(self.registry.db_path).resolve().parent / "capability_artifacts"
+        self.capability_store.mkdir(parents=True, exist_ok=True)
 
     def _resolve_provider(self, provider_name: str) -> BaseWorkerProvider:
         normalized = provider_name.strip().lower()
@@ -116,7 +121,6 @@ class TenShadowsOrchestrator:
 
     @staticmethod
     def _take_fs_snapshot(directory: Path) -> Dict[str, str]:
-        """Map observed workspace-relative files to SHA-256 hashes."""
         snapshot: Dict[str, str] = {}
         if not directory.exists():
             return snapshot
@@ -138,22 +142,131 @@ class TenShadowsOrchestrator:
         return snapshot
 
     @staticmethod
-    def _capability_materializable(capability: CapabilityRecord, target: Path) -> bool:
-        """Require every registered artifact to exist at the target with its qualified hash."""
+    def _safe_child(base: Path, rel_path: str) -> Optional[Path]:
+        relative = Path(rel_path)
+        if relative.is_absolute():
+            return None
+        base_resolved = base.resolve()
+        candidate = (base_resolved / relative).resolve()
+        try:
+            candidate.relative_to(base_resolved)
+        except ValueError:
+            return None
+        return candidate
+
+    def _capability_source(self, capability: CapabilityRecord, rel_path: str, target: Path) -> Optional[Path]:
+        expected_hash = capability.artifact_hashes.get(rel_path)
+        if not expected_hash or expected_hash == "UNKNOWN":
+            return None
+
+        candidates = [
+            self._safe_child(self.capability_store / capability.capability_id, rel_path),
+            self._safe_child(target, rel_path),
+        ]
+        for source in candidates:
+            if source is None or not source.is_file():
+                continue
+            try:
+                if hashlib.sha256(source.read_bytes()).hexdigest() == expected_hash:
+                    return source
+            except OSError:
+                continue
+        return None
+
+    def _capability_materializable(self, capability: CapabilityRecord, target: Path) -> bool:
         if not capability.artifact_paths:
             return False
+        return all(self._capability_source(capability, rel_path, target) is not None for rel_path in capability.artifact_paths)
+
+    def _materialize_capability(self, capability: CapabilityRecord, target: Path, workspace: Path) -> None:
         for rel_path in capability.artifact_paths:
-            source = target / rel_path
+            source = self._capability_source(capability, rel_path, target)
+            destination = self._safe_child(workspace, rel_path)
+            if source is None or destination is None:
+                raise ConfigurationError(f"Qualified capability '{capability.capability_id}' cannot be materialized safely")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+
+    def _preserve_qualified_capability(self, capability_id: str, workspace: Path) -> None:
+        capability = self.registry.get_capability(capability_id)
+        if capability is None or capability.epistemic_status != "QUALIFIED":
+            raise ConfigurationError(f"Cannot preserve unqualified capability '{capability_id}'")
+        destination_root = (self.capability_store / capability.capability_id).resolve()
+        destination_root.mkdir(parents=True, exist_ok=True)
+        for rel_path in capability.artifact_paths:
+            source = self._safe_child(workspace, rel_path)
+            destination = self._safe_child(destination_root, rel_path)
             expected_hash = capability.artifact_hashes.get(rel_path)
-            if not source.is_file() or not expected_hash or expected_hash == "UNKNOWN":
-                return False
-            try:
-                actual_hash = hashlib.sha256(source.read_bytes()).hexdigest()
-            except OSError:
-                return False
+            if source is None or destination is None or not source.is_file() or not expected_hash:
+                raise ConfigurationError(f"Capability '{capability_id}' has an unsafe or missing artifact '{rel_path}'")
+            actual_hash = hashlib.sha256(source.read_bytes()).hexdigest()
             if actual_hash != expected_hash:
-                return False
-        return True
+                raise ConfigurationError(f"Capability '{capability_id}' artifact changed after qualification")
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            temporary = destination.with_suffix(destination.suffix + ".tmp")
+            shutil.copy2(source, temporary)
+            if hashlib.sha256(temporary.read_bytes()).hexdigest() != expected_hash:
+                temporary.unlink(missing_ok=True)
+                raise ConfigurationError(f"Capability '{capability_id}' failed preservation hash verification")
+            temporary.replace(destination)
+
+    @staticmethod
+    def _canonical_verifier_command(objective: str, provider_name: str) -> Optional[List[str]]:
+        if provider_name.strip().lower() not in {"deterministic", "local"}:
+            return None
+        obj = objective.lower()
+        if "100" in obj and "fahrenheit" in obj and ("convert" in obj or "using" in obj):
+            code = (
+                "from eval_temperature import calculate_target; "
+                "assert calculate_target() == 212.0, calculate_target(); "
+                "print('1 passed canonical reuse oracle')"
+            )
+            return [sys.executable, "-c", code]
+        if "celsius" in obj and "fahrenheit" in obj and "convert" in obj:
+            code = (
+                "from temperature import celsius_to_fahrenheit, fahrenheit_to_celsius; "
+                "assert celsius_to_fahrenheit(0.0) == 32.0; "
+                "assert celsius_to_fahrenheit(100.0) == 212.0; "
+                "assert celsius_to_fahrenheit(-40.0) == -40.0; "
+                "assert fahrenheit_to_celsius(32.0) == 0.0; "
+                "assert fahrenheit_to_celsius(212.0) == 100.0; "
+                "print('5 passed canonical temperature oracle')"
+            )
+            return [sys.executable, "-c", code]
+        if "hydraulic" in obj or "transient" in obj or "pump" in obj or "valve" in obj:
+            code = (
+                "from hydraulic_transient import compute_joukowsky_surge, compute_wave_speed; "
+                "a=compute_wave_speed(2.2e9,998.0,0.40,200e9,0.008); "
+                "assert 1200.0 <= a <= 1220.0, a; "
+                "dp=compute_joukowsky_surge(998.0,a,2.7852); "
+                "assert 3.3e6 <= dp <= 3.4e6, dp; "
+                "print('2 passed canonical hydraulic oracle')"
+            )
+            return [sys.executable, "-c", code]
+        return None
+
+    @staticmethod
+    def _verification_deficit(
+        worker_id: str,
+        verifier_id: str,
+        payload: str,
+    ) -> IndependentVerificationRecord:
+        return IndependentVerificationRecord(
+            verifier_id=verifier_id,
+            verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
+            builder_id=worker_id,
+            modality=EvidenceModality.DETERMINISTIC_TEST,
+            purpose=EvidencePurpose.BEHAVIORAL_VERIFICATION,
+            test_digest=hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+            tests_collected=0,
+            tests_passed=0,
+            tests_failed=1,
+            exit_code=1,
+            duration_seconds=0.001,
+            falsification_attempted=True,
+            verified_status="FAIL",
+            execution_trace=payload,
+        )
 
     def run_objective(
         self,
@@ -166,7 +279,6 @@ class TenShadowsOrchestrator:
         max_attempts: int = 3,
         no_promote: bool = True,
     ) -> OrchestratorExecutionReport:
-        """Execute one objective. Target mutation is disabled unless explicitly requested."""
         target = Path(target_path or PROJECT_ROOT).resolve()
         start_time = time.time()
 
@@ -175,9 +287,7 @@ class TenShadowsOrchestrator:
         if not 1 <= max_attempts <= 3:
             raise ConfigurationError("max_attempts must be between 1 and 3")
         if verifier_provider.strip().lower() not in {"deterministic", "local"}:
-            raise ConfigurationError(
-                "Only the deterministic verifier path is implemented in the canonical orchestrator."
-            )
+            raise ConfigurationError("Only the deterministic verifier path is implemented in the canonical orchestrator.")
         if not target.exists() or not target.is_dir():
             raise ConfigurationError(f"Target directory does not exist: {target}")
 
@@ -194,18 +304,11 @@ class TenShadowsOrchestrator:
         available_caps = [cap for cap in registry_matches if self._capability_materializable(cap, target)]
         caps_used_ids = [cap.capability_id for cap in available_caps]
         if len(available_caps) != len(registry_matches):
-            logger.emit(
-                "STALE_CAPABILITIES_EXCLUDED",
-                run_id=run_ctx.run_id,
-                count=len(registry_matches) - len(available_caps),
-            )
+            logger.emit("STALE_CAPABILITIES_EXCLUDED", run_id=run_ctx.run_id, count=len(registry_matches) - len(available_caps))
 
-        routing_strategy, required_caps, route_digest = self.kernel.determine_route(
-            run_ctx=run_ctx,
-            objective=clean_objective,
-        )
-
+        routing_strategy, required_caps, route_digest = self.kernel.determine_route(run_ctx=run_ctx, objective=clean_objective)
         starting_head = resolve_physical_commit_sha(target)
+
         workspace_root = (SCRATCH_DIR / "workspaces").resolve()
         workspace_root.mkdir(parents=True, exist_ok=True)
         workspace_dir = (workspace_root / run_ctx.run_id).resolve()
@@ -213,12 +316,8 @@ class TenShadowsOrchestrator:
             raise ConfigurationError("Governed workspace escaped configured workspace root")
         workspace_dir.mkdir(parents=False, exist_ok=False)
 
-        for cap in available_caps:
-            for rel_path in cap.artifact_paths:
-                source = target / rel_path
-                destination = workspace_dir / rel_path
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, destination)
+        for capability in available_caps:
+            self._materialize_capability(capability, target, workspace_dir)
 
         lease_file = SCRATCH_DIR / "active_run_lease.json"
         lease_payload = {
@@ -254,15 +353,6 @@ class TenShadowsOrchestrator:
                 snapshot_before = self._take_fs_snapshot(workspace_dir)
                 worker_id = f"{builder_provider}_builder_{run_ctx.task_id}_{attempt_number}"
                 invocation_id = f"inv_{run_ctx.task_id}_{attempt_number}"
-                auth_token = compute_authorization_token(
-                    run_id=run_ctx.run_id,
-                    task_id=run_ctx.task_id,
-                    invocation_id=invocation_id,
-                    objective_hash=run_ctx.objective_hash,
-                    baseline_sha=starting_head or "UNKNOWN",
-                    governed_workspace_path=str(workspace_dir),
-                    attempt_number=attempt_number,
-                )
                 authorization = WorkerAuthorization(
                     run_id=run_ctx.run_id,
                     task_id=run_ctx.task_id,
@@ -280,7 +370,15 @@ class TenShadowsOrchestrator:
                     filesystem_boundary=str(workspace_dir),
                     attempt_number=attempt_number,
                     authorized_at=datetime.now(timezone.utc).isoformat(),
-                    authorization_token=auth_token,
+                    authorization_token=compute_authorization_token(
+                        run_id=run_ctx.run_id,
+                        task_id=run_ctx.task_id,
+                        invocation_id=invocation_id,
+                        objective_hash=run_ctx.objective_hash,
+                        baseline_sha=starting_head or "UNKNOWN",
+                        governed_workspace_path=str(workspace_dir),
+                        attempt_number=attempt_number,
+                    ),
                 )
 
                 worker_result: WorkerExecutionResult = builder.execute(
@@ -313,10 +411,7 @@ class TenShadowsOrchestrator:
                     candidate_id = candidate["capability_id"]
                     attempt_candidate_ids.append(candidate_id)
                     all_created_caps.append(candidate_id)
-                    artifact_hashes = {
-                        path: snapshot_after.get(path, "UNKNOWN")
-                        for path in candidate.get("artifact_paths", [])
-                    }
+                    artifact_hashes = {path: snapshot_after.get(path, "UNKNOWN") for path in candidate.get("artifact_paths", [])}
                     self.registry.register_candidate(
                         capability_id=candidate_id,
                         name=candidate.get("name", candidate_id),
@@ -330,50 +425,33 @@ class TenShadowsOrchestrator:
 
                 verifier_id = f"independent_verifier_{run_ctx.task_id}_{attempt_number}"
                 if worker_result.exit_status != "SUCCESS":
-                    verification = IndependentVerificationRecord(
-                        verifier_id=verifier_id,
-                        verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
-                        builder_id=worker_id,
-                        modality=EvidenceModality.DETERMINISTIC_TEST,
-                        purpose=EvidencePurpose.BEHAVIORAL_VERIFICATION,
-                        test_digest=hashlib.sha256(worker_result.output_payload.encode("utf-8")).hexdigest(),
-                        tests_collected=0,
-                        tests_passed=0,
-                        tests_failed=1,
-                        exit_code=1,
-                        duration_seconds=0.001,
-                        falsification_attempted=True,
-                        verified_status="FAIL",
-                        execution_trace=worker_result.output_payload,
-                    )
+                    verification = self._verification_deficit(worker_id, verifier_id, worker_result.output_payload)
                 else:
-                    verification = self.kernel.execute_independent_verification(
-                        run_ctx=run_ctx,
-                        target_path=workspace_dir,
-                        builder_id=worker_id,
-                        test_cwd=workspace_dir,
-                        verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
-                    )
+                    verifier_cmd = self._canonical_verifier_command(clean_objective, builder_provider)
+                    if verifier_cmd is None:
+                        verification = self._verification_deficit(
+                            worker_id,
+                            verifier_id,
+                            "VERIFIER_DEFICIT: no system-owned independent oracle exists for this execution path.",
+                        )
+                    else:
+                        verification = self.kernel.execute_independent_verification(
+                            run_ctx=run_ctx,
+                            target_path=workspace_dir,
+                            builder_id=worker_id,
+                            verifier_cmd=verifier_cmd,
+                            test_cwd=workspace_dir,
+                            verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
+                        )
                 last_verification = verification
 
                 passed = verification.verified_status == "PASS" and verification.exit_code == 0
                 if passed and files_deleted and not no_promote:
                     passed = False
-                    verification = IndependentVerificationRecord(
-                        verifier_id=verifier_id,
-                        verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
-                        builder_id=worker_id,
-                        modality=EvidenceModality.DETERMINISTIC_TEST,
-                        purpose=EvidencePurpose.BEHAVIORAL_VERIFICATION,
-                        test_digest=verification.test_digest,
-                        tests_collected=verification.tests_collected,
-                        tests_passed=verification.tests_passed,
-                        tests_failed=max(1, verification.tests_failed),
-                        exit_code=1,
-                        duration_seconds=verification.duration_seconds,
-                        falsification_attempted=True,
-                        verified_status="FAIL",
-                        execution_trace="Promotion rejected: canonical copy promotion does not support deletion semantics.",
+                    verification = self._verification_deficit(
+                        worker_id,
+                        verifier_id,
+                        "Promotion rejected: canonical copy promotion does not support deletion semantics.",
                     )
                     last_verification = verification
 
@@ -387,9 +465,7 @@ class TenShadowsOrchestrator:
                         artifacts_staged=[{"path": path, "sha256": digest} for path, digest in snapshot_after.items()],
                         verification=verification,
                         promotion_decision=(
-                            "PROMOTION_ELIGIBLE"
-                            if passed and not no_promote
-                            else ("SKIPPED_NO_PROMOTE" if passed else "REJECTED")
+                            "PROMOTION_ELIGIBLE" if passed and not no_promote else ("SKIPPED_NO_PROMOTE" if passed else "REJECTED")
                         ),
                         status="COMPLETED" if passed else "FAILED",
                         rejection_reason=None if passed else verification.execution_trace,
@@ -402,17 +478,14 @@ class TenShadowsOrchestrator:
                         try:
                             self.registry.qualify_capability(
                                 capability_id=candidate_id,
-                                verifier_id=verifier_id,
+                                verifier_id=verification.verifier_id,
                                 verification_record=verification.model_dump(),
                                 base_dir=workspace_dir,
                             )
+                            self._preserve_qualified_capability(candidate_id, workspace_dir)
                             all_qualified_caps.append(candidate_id)
                         except Exception as exc:
-                            logger.emit(
-                                "CAPABILITY_QUALIFICATION_FAILED",
-                                capability_id=candidate_id,
-                                error=str(exc),
-                            )
+                            logger.emit("CAPABILITY_QUALIFICATION_FAILED", capability_id=candidate_id, error=str(exc))
                     break
         finally:
             if lease_file.exists():
@@ -424,8 +497,10 @@ class TenShadowsOrchestrator:
         final_head = starting_head
         if is_success and not no_promote:
             for rel_path in snapshot_after:
-                source = workspace_dir / rel_path
-                destination = target / rel_path
+                source = self._safe_child(workspace_dir, rel_path)
+                destination = self._safe_child(target, rel_path)
+                if source is None or destination is None:
+                    raise ConfigurationError(f"Unsafe promotion path: {rel_path}")
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, destination)
             final_head = resolve_physical_commit_sha(target)
@@ -450,6 +525,9 @@ class TenShadowsOrchestrator:
         elif last_worker_error == "CAPABILITY_PROVIDER_UNAVAILABLE":
             final_status = RunStatus.BLOCKED
             objective_status = "PROVIDER_UNAVAILABLE"
+        elif last_verification and last_verification.execution_trace and "VERIFIER_DEFICIT" in last_verification.execution_trace:
+            final_status = RunStatus.BLOCKED
+            objective_status = "VERIFIER_DEFICIT"
         else:
             final_status = RunStatus.FAILED
             objective_status = "OBJECTIVE_UNRESOLVED"
@@ -491,11 +569,7 @@ class TenShadowsOrchestrator:
             receipt_path=str(receipt_path) if receipt_path.exists() else None,
             receipt_valid=receipt_valid,
             final_head=final_head,
-            error_message=(
-                None
-                if is_success
-                else (last_verification.execution_trace if last_verification else last_worker_error or "Execution failed")
-            ),
+            error_message=(None if is_success else (last_verification.execution_trace if last_verification else last_worker_error or "Execution failed")),
             details={
                 "attempts": len(attempt_records),
                 "artifacts_produced": len(artifacts_produced),

@@ -1,21 +1,11 @@
-"""
-loop_engine/providers/base.py
-Strict Worker / Provider Adapter Interface for 10 SHADOWS.
-
-Invariants:
-1. Ten Shadows governs workspace boundaries and calculates physical filesystem diffs directly.
-2. The builder does NOT self-report file mutations without independent physical verification.
-3. If a requested provider is unavailable, it fails closed with CAPABILITY_PROVIDER_UNAVAILABLE.
-"""
+"""Canonical worker/provider adapter interface for the current Ten Shadows path."""
 
 from __future__ import annotations
 
-import hashlib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from loop_engine.dispatcher.protocol import WorkerAuthorization
 from loop_engine.execution_authority import EvidenceModality, WorkerRole
@@ -31,7 +21,7 @@ class WorkerExecutionResult:
     started_at: str
     ended_at: str
     duration_seconds: float
-    exit_status: str  # "SUCCESS" | "FAILURE" | "TIMEOUT" | "REJECTED"
+    exit_status: str  # SUCCESS | FAILURE | TIMEOUT | REJECTED
     output_payload: str
     files_created: List[str] = field(default_factory=list)
     files_modified: List[str] = field(default_factory=list)
@@ -41,10 +31,19 @@ class WorkerExecutionResult:
     error_message: Optional[str] = None
 
 
+def workspace_matches_authorization(authorization: WorkerAuthorization, workspace_path: Path) -> bool:
+    """Require the provider's physical workspace to equal both authorized boundary fields."""
+    try:
+        actual = Path(workspace_path).resolve()
+        governed = Path(authorization.governed_workspace_path).resolve()
+        boundary = Path(authorization.filesystem_boundary).resolve()
+        return actual == governed == boundary
+    except Exception:
+        return False
+
+
 class BaseWorkerProvider(ABC):
-    """
-    Abstract Worker Provider interface.
-    """
+    """Abstract provider interface. Adapters remain untrusted execution workers."""
 
     @abstractmethod
     def execute(
@@ -55,7 +54,5 @@ class BaseWorkerProvider(ABC):
         available_capabilities: List[Dict[str, Any]],
         attempt_number: int = 1,
     ) -> WorkerExecutionResult:
-        """
-        Executes computational work inside the isolated governed workspace.
-        """
-        pass
+        """Attempt computational work within the explicitly authorized workspace."""
+        raise NotImplementedError

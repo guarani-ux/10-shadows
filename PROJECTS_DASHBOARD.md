@@ -2,19 +2,15 @@
 
 This dashboard is a navigation aid for the current repository. It is not an independent source of capability authority.
 
-For present-tense capability claims, use `CAPABILITY_GROUND_TRUTH.md`. For the active milestone, use `CURRENT_OBJECTIVE.md`. Current CI evidence takes precedence over historical test counts or earlier status labels.
-
----
+For present-tense capability claims, use `CAPABILITY_GROUND_TRUTH.md`. For the active milestone, use `CURRENT_OBJECTIVE.md`. Current executable evidence takes precedence over historical test counts or earlier status labels.
 
 ## Current repository position
 
 Ten Shadows contains substantial implementations across ten named domains plus shared Python/Rust execution, authority, verification, persistence, routing, and provider infrastructure.
 
-The repository is currently under full reconciliation. During this process, domain presence must not be translated automatically into labels such as `Production-Ready`, `Runtime-Proven`, `Operationally proven`, or `Verified`.
+The repository is under full reconciliation. Domain presence must not be translated automatically into proof of readiness, runtime completion, operational maturity, or verification.
 
-The previous version of this dashboard made that mistake. It classified multiple Shadows as production-ready and cited a historical `89/89` test count as repository-wide proof. Those statements are retired because they exceeded the evidence available to this dashboard.
-
----
+An earlier version of this dashboard made that mistake. It assigned strong readiness labels to multiple Shadows and treated one historical test count as repository-wide proof. Those statements are retired.
 
 ## Domain inventory
 
@@ -31,27 +27,15 @@ The previous version of this dashboard made that mistake. It classified multiple
 | **9** | **The Alchemist** | Repair/self-healing experiment paths |
 | **10** | **The Game Master** | Local telemetry and status-projection machinery |
 
-These are structural descriptions only. They do not certify end-to-end operational status.
-
----
+These are structural descriptions only. They do not certify end-to-end operation.
 
 ## Shared-system reconciliation
 
 The active milestone seeks to prove an integrated Scribe -> Herald -> Slicer route under shared kernel state. That route remains an objective, not a completed repository-wide capability claim.
 
-The current reconciliation is also testing several broader architectural promises that older dashboard language treated as already settled, including:
+The reconciliation is also testing whether work boundaries hold, material promotion is explicitly authorized, builders cannot self-certify, receipts accurately bind evidence, qualified capabilities materially affect later runs, external provider labels correspond to real execution, and recovery behavior matches its governing rules.
 
-- whether canonical work really executes inside the isolation mechanism that the architecture describes;
-- whether material promotion requires explicit authority rather than happening by default;
-- whether builders can ever self-certify or indirectly launder weak evidence into qualification;
-- whether receipt claims accurately describe what was actually tested and promoted;
-- whether registered capabilities are genuinely reused in later work;
-- whether provider labels correspond to executable governed provider routes;
-- whether failed attempts, recovery, and promotion are physically consistent with their governing rules.
-
-Until those questions are closed by current evidence, this dashboard does not promote them to verified claims.
-
----
+Until those questions are closed by current evidence, this dashboard does not upgrade them into verified claims.
 
 ## Status vocabulary
 
@@ -65,8 +49,6 @@ Use the repository-wide vocabulary defined in `CAPABILITY_GROUND_TRUTH.md`:
 - **BLOCKED** — a known current failure prevents an otherwise implemented path from completing.
 
 No dashboard, generated HUD, historical receipt count, filename, or test-file count may upgrade a capability status by itself.
-
----
 
 ## Active source of truth
 

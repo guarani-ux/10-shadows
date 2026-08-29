@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          python -m pytest -q --tb=short 2>&1 | tee test_out.txt
+          python -m pytest -q --tb=short 2>&1 | tee "$RUNNER_TEMP/test_out.txt"
 
       - name: Verify Working Tree Cleanliness Post-Test
         run: |
@@ -114,5 +114,5 @@ jobs:
         run: |
           echo "## Pytest Output Summary" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          tail -n 120 test_out.txt >> $GITHUB_STEP_SUMMARY
+          tail -n 120 "$RUNNER_TEMP/test_out.txt" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

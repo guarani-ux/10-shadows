@@ -683,7 +683,9 @@ impl KernelRun<Verified> {
             claim_candidate_produced_under_custody: is_governed && promotion_succeeded,
             claim_independently_verified: is_verified,
             claim_promoted: promotion_succeeded,
-            claim_target_behaviorally_tested: is_verified,
+            // Verification is performed against the governed candidate workspace before promotion.
+            // No post-promotion target test is currently executed, so this stronger claim stays false.
+            claim_target_behaviorally_tested: false,
             claim_semantic_obligations_satisfied: objective_satisfied,
             claim_objective_satisfied: objective_satisfied,
             claim_completion_authorized: is_verified

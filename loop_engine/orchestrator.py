@@ -411,6 +411,7 @@ class TenShadowsOrchestrator:
                     duration_seconds=worker_result.duration_seconds,
                     modality=worker_result.modality,
                     provider_receipt=worker_result.provider_receipt,
+                    status=worker_result.exit_status,
                 )
                 invocation_records.append(invocation)
 

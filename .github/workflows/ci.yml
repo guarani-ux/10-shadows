@@ -45,8 +45,27 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - name: Install Ruff
         run: pip install ruff
+      - name: Produce canonical Ruff formatting
+        run: ruff format .
+      - name: Collect formatted Python snapshot
+        if: always()
+        run: |
+          mkdir -p "$RUNNER_TEMP/ruff-formatted"
+          git diff --name-only -- '*.py' > "$RUNNER_TEMP/ruff-formatted/changed.txt"
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            mkdir -p "$RUNNER_TEMP/ruff-formatted/$(dirname "$path")"
+            cp "$path" "$RUNNER_TEMP/ruff-formatted/$path"
+          done < "$RUNNER_TEMP/ruff-formatted/changed.txt"
+      - name: Upload formatter result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ruff-formatted-python
+          path: ${{ runner.temp }}/ruff-formatted
+          if-no-files-found: error
       - name: Ruff Format Check
-        run: ruff format --check .
+        run: git diff --exit-code -- '*.py'
 
   rust-quality:
     name: Rust Format & Clippy

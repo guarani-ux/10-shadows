@@ -126,9 +126,7 @@ class TenShadowsOrchestrator:
             return snapshot
         for root, dirs, files in os.walk(directory):
             dirs[:] = [
-                name
-                for name in dirs
-                if name not in {".git", "__pycache__", ".pytest_cache", "scratch", "sandbox"}
+                name for name in dirs if name not in {".git", "__pycache__", ".pytest_cache", "scratch", "sandbox"}
             ]
             for filename in files:
                 if filename.endswith((".pyc", ".tmp")):
@@ -176,14 +174,18 @@ class TenShadowsOrchestrator:
     def _capability_materializable(self, capability: CapabilityRecord, target: Path) -> bool:
         if not capability.artifact_paths:
             return False
-        return all(self._capability_source(capability, rel_path, target) is not None for rel_path in capability.artifact_paths)
+        return all(
+            self._capability_source(capability, rel_path, target) is not None for rel_path in capability.artifact_paths
+        )
 
     def _materialize_capability(self, capability: CapabilityRecord, target: Path, workspace: Path) -> None:
         for rel_path in capability.artifact_paths:
             source = self._capability_source(capability, rel_path, target)
             destination = self._safe_child(workspace, rel_path)
             if source is None or destination is None:
-                raise ConfigurationError(f"Qualified capability '{capability.capability_id}' cannot be materialized safely")
+                raise ConfigurationError(
+                    f"Qualified capability '{capability.capability_id}' cannot be materialized safely"
+                )
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
 
@@ -287,7 +289,9 @@ class TenShadowsOrchestrator:
         if not 1 <= max_attempts <= 3:
             raise ConfigurationError("max_attempts must be between 1 and 3")
         if verifier_provider.strip().lower() not in {"deterministic", "local"}:
-            raise ConfigurationError("Only the deterministic verifier path is implemented in the canonical orchestrator.")
+            raise ConfigurationError(
+                "Only the deterministic verifier path is implemented in the canonical orchestrator."
+            )
         if not target.exists() or not target.is_dir():
             raise ConfigurationError(f"Target directory does not exist: {target}")
 
@@ -304,9 +308,13 @@ class TenShadowsOrchestrator:
         available_caps = [cap for cap in registry_matches if self._capability_materializable(cap, target)]
         caps_used_ids = [cap.capability_id for cap in available_caps]
         if len(available_caps) != len(registry_matches):
-            logger.emit("STALE_CAPABILITIES_EXCLUDED", run_id=run_ctx.run_id, count=len(registry_matches) - len(available_caps))
+            logger.emit(
+                "STALE_CAPABILITIES_EXCLUDED", run_id=run_ctx.run_id, count=len(registry_matches) - len(available_caps)
+            )
 
-        routing_strategy, required_caps, route_digest = self.kernel.determine_route(run_ctx=run_ctx, objective=clean_objective)
+        routing_strategy, required_caps, route_digest = self.kernel.determine_route(
+            run_ctx=run_ctx, objective=clean_objective
+        )
         starting_head = resolve_physical_commit_sha(target)
 
         workspace_root = (SCRATCH_DIR / "workspaces").resolve()
@@ -411,7 +419,9 @@ class TenShadowsOrchestrator:
                     candidate_id = candidate["capability_id"]
                     attempt_candidate_ids.append(candidate_id)
                     all_created_caps.append(candidate_id)
-                    artifact_hashes = {path: snapshot_after.get(path, "UNKNOWN") for path in candidate.get("artifact_paths", [])}
+                    artifact_hashes = {
+                        path: snapshot_after.get(path, "UNKNOWN") for path in candidate.get("artifact_paths", [])
+                    }
                     self.registry.register_candidate(
                         capability_id=candidate_id,
                         name=candidate.get("name", candidate_id),
@@ -465,7 +475,9 @@ class TenShadowsOrchestrator:
                         artifacts_staged=[{"path": path, "sha256": digest} for path, digest in snapshot_after.items()],
                         verification=verification,
                         promotion_decision=(
-                            "PROMOTION_ELIGIBLE" if passed and not no_promote else ("SKIPPED_NO_PROMOTE" if passed else "REJECTED")
+                            "PROMOTION_ELIGIBLE"
+                            if passed and not no_promote
+                            else ("SKIPPED_NO_PROMOTE" if passed else "REJECTED")
                         ),
                         status="COMPLETED" if passed else "FAILED",
                         rejection_reason=None if passed else verification.execution_trace,
@@ -525,7 +537,11 @@ class TenShadowsOrchestrator:
         elif last_worker_error == "CAPABILITY_PROVIDER_UNAVAILABLE":
             final_status = RunStatus.BLOCKED
             objective_status = "PROVIDER_UNAVAILABLE"
-        elif last_verification and last_verification.execution_trace and "VERIFIER_DEFICIT" in last_verification.execution_trace:
+        elif (
+            last_verification
+            and last_verification.execution_trace
+            and "VERIFIER_DEFICIT" in last_verification.execution_trace
+        ):
             final_status = RunStatus.BLOCKED
             objective_status = "VERIFIER_DEFICIT"
         else:
@@ -569,7 +585,13 @@ class TenShadowsOrchestrator:
             receipt_path=str(receipt_path) if receipt_path.exists() else None,
             receipt_valid=receipt_valid,
             final_head=final_head,
-            error_message=(None if is_success else (last_verification.execution_trace if last_verification else last_worker_error or "Execution failed")),
+            error_message=(
+                None
+                if is_success
+                else (
+                    last_verification.execution_trace if last_verification else last_worker_error or "Execution failed"
+                )
+            ),
             details={
                 "attempts": len(attempt_records),
                 "artifacts_produced": len(artifacts_produced),

@@ -36,5 +36,7 @@ class TerminalHUDView:
             lines.append(f"| {shadow_id} | {name} | {code_name} | {status} | {test_files} | {runner_status} |")
 
         lines.append("+----+------------------+-----------------+----------+--------------+----------+")
-        lines.append("Telemetry reports observed structure/history only. Verification status lives in CAPABILITY_GROUND_TRUTH.md.")
+        lines.append(
+            "Telemetry reports observed structure/history only. Verification status lives in CAPABILITY_GROUND_TRUTH.md."
+        )
         return "\n".join(lines)

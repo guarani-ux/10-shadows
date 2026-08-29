@@ -125,7 +125,9 @@ class MarkdownProjector:
         ]
 
         if query_error:
-            lines.append(f"*Failure query could not be completed (`{query_error}`). No health inference is permitted from this projection.*")
+            lines.append(
+                f"*Failure query could not be completed (`{query_error}`). No health inference is permitted from this projection.*"
+            )
         elif failures:
             lines.extend(
                 [

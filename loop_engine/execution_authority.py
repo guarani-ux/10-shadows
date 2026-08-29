@@ -261,8 +261,13 @@ class TenShadowsReceipt(BaseModel):
         if claims.claim_target_behaviorally_tested and self.verification_scope != "target":
             raise ValueError("Target behavioral-test claim requires verification_scope='target'.")
         if claims.claim_semantic_objective_satisfied:
-            if self.verification is None or self.verification.verifier_type != VerificationType.INDEPENDENT_SEMANTIC_FALSIFICATION:
-                raise ValueError("Semantic objective satisfaction requires independent semantic falsification evidence.")
+            if (
+                self.verification is None
+                or self.verification.verifier_type != VerificationType.INDEPENDENT_SEMANTIC_FALSIFICATION
+            ):
+                raise ValueError(
+                    "Semantic objective satisfaction requires independent semantic falsification evidence."
+                )
         return self
 
     def compute_signature(self) -> str:

@@ -110,9 +110,10 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
                 "Invocation binding digest is invalid.",
                 rejected=True,
             )
-        if workspace != Path(auth.governed_workspace_path).resolve() or workspace != Path(
-            auth.filesystem_boundary
-        ).resolve():
+        if (
+            workspace != Path(auth.governed_workspace_path).resolve()
+            or workspace != Path(auth.filesystem_boundary).resolve()
+        ):
             return self._failed(
                 auth,
                 started_at,
@@ -155,7 +156,9 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
             ),
         }
         model_name = auth.requested_model or "gemini-3.7-flash"
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self._api_key}"
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self._api_key}"
+        )
         request_body = {
             "contents": [{"parts": [{"text": json.dumps(prompt_payload)}]}],
             "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},

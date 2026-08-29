@@ -66,18 +66,13 @@ def handle_status() -> int:
         print("No local run records found.")
         return 0
     for record in runs:
-        print(
-            f"[{record['status']}] {record['run_id']} "
-            f"(task: {record['task_id']}, started: {record['started_at']})"
-        )
+        print(f"[{record['status']}] {record['run_id']} (task: {record['task_id']}, started: {record['started_at']})")
     print("These are local records, not repository-wide capability certification.")
     return 0
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Compatibility launcher; governed execution is delegated to ts_run.py"
-    )
+    parser = argparse.ArgumentParser(description="Compatibility launcher; governed execution is delegated to ts_run.py")
     subparsers = parser.add_subparsers(dest="command")
 
     run_parser = subparsers.add_parser("run", help="Execute through the canonical governed entrypoint")

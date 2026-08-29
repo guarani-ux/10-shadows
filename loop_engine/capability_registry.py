@@ -117,9 +117,7 @@ class CapabilityRegistry:
                 );
                 """
             )
-            conn.execute(
-                "CREATE INDEX IF NOT EXISTS idx_capabilities_status ON capabilities(epistemic_status);"
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_capabilities_status ON capabilities(epistemic_status);")
 
     def register_candidate(
         self,
@@ -315,8 +313,7 @@ class CapabilityRegistry:
         for cap in all_caps:
             score = 0
             cap_corpus = (
-                f"{cap.name} {cap.declared_purpose} {cap.capability_id} "
-                f"{' '.join(cap.applicability_constraints)}"
+                f"{cap.name} {cap.declared_purpose} {cap.capability_id} {' '.join(cap.applicability_constraints)}"
             ).lower()
             for word in words:
                 if word in cap_corpus:

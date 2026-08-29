@@ -104,6 +104,25 @@ impl ObjectiveContract {
         let mut unresolved_mandatory = Vec::new();
         let mut falsified_mandatory = Vec::new();
 
+        // INVARIANT: An empty obligation set on a non-trivial objective CAN NEVER be sufficient!
+        if self.obligations.is_empty() {
+            if !self.canonical_intent.trim().is_empty() {
+                unresolved_mandatory.push("INSUFFICIENT_REQUIREMENTS_EMPTY_SET".to_string());
+            }
+            let mut hasher = Sha256::new();
+            hasher.update(format!("{}:{:?}:false:empty_obligations", self.objective_id, self.sufficiency_rule).as_bytes());
+            let proof_digest = format!("{:x}", hasher.finalize());
+
+            return ObjectiveSufficiencyProof {
+                objective_id: self.objective_id.clone(),
+                is_satisfied: false,
+                satisfied_obligations: vec![],
+                unresolved_mandatory,
+                falsified_mandatory: vec![],
+                proof_digest,
+            };
+        }
+
         for ob in &self.obligations {
             match ob.satisfaction_status {
                 ObligationStatus::Satisfied => {
@@ -127,9 +146,16 @@ impl ObjectiveContract {
             false
         } else {
             match &self.sufficiency_rule {
-                SufficiencyRule::AllMandatory => unresolved_mandatory.is_empty(),
-                SufficiencyRule::AnyOf(ids) => ids.iter().any(|id| satisfied_ids.contains(id)),
-                SufficiencyRule::Custom(_) => unresolved_mandatory.is_empty(),
+                SufficiencyRule::AllMandatory => {
+                    unresolved_mandatory.is_empty() && !satisfied_ids.is_empty()
+                }
+                SufficiencyRule::AnyOf(ids) => {
+                    let has_match = ids.iter().any(|id| satisfied_ids.contains(id));
+                    has_match && unresolved_mandatory.is_empty()
+                }
+                SufficiencyRule::Custom(_) => {
+                    unresolved_mandatory.is_empty() && !satisfied_ids.is_empty()
+                }
             }
         };
 
@@ -173,8 +199,9 @@ impl EvidenceEntailment {
         obligation: &Obligation,
         tested_effect: &str,
     ) -> Self {
-        // Strict Entailment Check: Tested effect must match required effect
-        let is_applicable = tested_effect.trim().eq_ignore_ascii_case(&obligation.required_effect.trim());
+        // Strict Entailment Check: Tested effect must match required effect and evidence digest must be valid
+        let is_applicable = !evidence_digest.trim().is_empty()
+            && tested_effect.trim().eq_ignore_ascii_case(&obligation.required_effect.trim());
         let justification = if is_applicable {
             format!("Evidence '{}' directly tests required effect '{}'", evidence_digest, obligation.required_effect)
         } else {

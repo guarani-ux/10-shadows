@@ -1,23 +1,60 @@
 """
-loop_engine/constitution — Constitutional Ontology, Obligation Semantics, and Law 6 Sufficiency Engine.
+loop_engine/constitution — Unified Constitutional Ontology, Objective Lifecycle,
+Relational Evidence, and Law 6 Sufficiency Engine for 10 SHADOWS.
 """
 
-from .schema import (
-    EvidenceEntailment,
-    ObjectiveContract,
+from .capability import (
+    CapabilityDeficitEngine,
+    CapabilityEpistemicStatus,
+    ConditionalCapability,
+    OperationalCondition,
+)
+from .evidence import (
+    ApplicabilityDimension,
+    AuthorityDimension,
+    BoundedVerifierContract,
+    EpistemicClaim,
+    EpistemicDimension,
+    ObservationDimension,
+    QualifiedEvidence,
+    ReachabilityDimension,
+    RelationalEvidenceEvaluator,
+)
+from .lifecycle import (
+    CandidateInterpretation,
+    ObjectiveLifecycleManager,
+    RawIntent,
+    RevisionType,
+    SemanticQualificationStatus,
+    VersionedObjectiveSpecification,
+)
+from .sufficiency import (
+    CompositionRule,
+    Law6SufficiencyEngine,
     ObjectiveSufficiencyProof,
-    Obligation,
-    ObligationStatus,
-    SufficiencyRule,
-    SufficiencyRuleKind,
 )
 
 __all__ = [
-    "EvidenceEntailment",
-    "ObjectiveContract",
+    "ApplicabilityDimension",
+    "AuthorityDimension",
+    "BoundedVerifierContract",
+    "CandidateInterpretation",
+    "CapabilityDeficitEngine",
+    "CapabilityEpistemicStatus",
+    "CompositionRule",
+    "ConditionalCapability",
+    "EpistemicClaim",
+    "EpistemicDimension",
+    "Law6SufficiencyEngine",
+    "ObjectiveLifecycleManager",
     "ObjectiveSufficiencyProof",
-    "Obligation",
-    "ObligationStatus",
-    "SufficiencyRule",
-    "SufficiencyRuleKind",
+    "ObservationDimension",
+    "OperationalCondition",
+    "QualifiedEvidence",
+    "RawIntent",
+    "ReachabilityDimension",
+    "RelationalEvidenceEvaluator",
+    "RevisionType",
+    "SemanticQualificationStatus",
+    "VersionedObjectiveSpecification",
 ]

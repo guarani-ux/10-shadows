@@ -170,6 +170,8 @@ pub fn evaluate_receipt(
                 suff.unresolved_mandatory
             ));
         }
+    } else {
+        obj_errors.push("Missing ObjectiveSufficiencyProof on VERIFIED_SUCCESS receipt.".into());
     }
 
     let is_objective_accomplished = is_production_valid && obj_errors.is_empty();

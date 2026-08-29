@@ -386,12 +386,14 @@ def verify_execution_receipt(
                 errors.append(f"Worker '{w.worker_id}' claims EMPIRICAL modality but recorded duration <= 0.0.")
 
     # 8. Git HEAD consistency checks
-    if receipt.starting_head and receipt.starting_head.startswith("UNKNOWN_"):
+    if receipt.starting_head and receipt.starting_head.startswith("UNKNOWN"):
         pass  # Non-git target directory is allowable if path exists
     elif receipt.starting_head and len(receipt.starting_head) != 40:
         errors.append(f"Invalid starting_head format: '{receipt.starting_head}'. Must be 40-char SHA or None.")
 
-    if receipt.final_head and len(receipt.final_head) != 40:
+    if receipt.final_head and receipt.final_head.startswith("UNKNOWN"):
+        pass
+    elif receipt.final_head and len(receipt.final_head) != 40:
         errors.append(f"Invalid final_head format: '{receipt.final_head}'. Must be 40-char SHA or None.")
 
     is_valid = len(errors) == 0

@@ -74,7 +74,43 @@ The system is split into two non-overlapping authorities:
 
 ---
 
-## 4. Quickstart & Developer Toolchain
+---
+
+## 4. Mandatory Sovereign Execution Entrypoint (`ts run`)
+
+> [!IMPORTANT]
+> **Canonical Invariant: NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.**
+>
+> The builder/model is never responsible for deciding whether Ten Shadows is used.
+> For governed objectives, the ONLY supported sovereign entrypoint is:
+>
+> ```bash
+> python ts_run.py run "<objective>" [options]
+> # Or binary alias:
+> ts run "<objective>" [options]
+> ```
+>
+> Direct invocation of `Forge`, `Gemini`, `Antigravity`, raw worker scripts, or verifier scripts does **NOT** constitute Ten Shadows execution. Claims of success, qualification, or capability acquisition are authoritative **only** when sealed and verified by the sovereign kernel receipt.
+
+### CLI Usage & Options
+
+```bash
+# Execute an objective through the Ten Shadows Kernel
+python ts_run.py run "Create a Python function that converts Celsius to Fahrenheit and verify it against independently specified examples."
+
+# Execute an objective from a file
+python ts_run.py run --file objective.md --target ./my_project
+
+# Verify cryptographic authenticity of an execution receipt
+python ts_run.py verify .receipts/run_task_20260829_065413_6453956_receipt.json
+
+# Query persistent capability registry
+python ts_run.py capabilities list --status QUALIFIED
+```
+
+---
+
+## 5. Quickstart & Developer Toolchain
 
 ### Prerequisites
 * **Python**: `3.10` or higher (`3.13` recommended)

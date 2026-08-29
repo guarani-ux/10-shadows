@@ -41,6 +41,17 @@ Do not introduce unrelated:
 
 A discovered improvement outside scope becomes a recorded candidate, not an automatic mutation.
 
+### 1.5 Mandatory Sovereign Execution Entrypoint (`ts run`)
+For governed objectives, the ONLY supported sovereign execution entrypoint is:
+`python ts_run.py run "<objective>"` or `ts run "<objective>"`.
+
+Direct invocation of `Forge`, `Gemini`, `Antigravity`, raw worker scripts, or verifier scripts does **NOT** constitute Ten Shadows execution.
+
+**INVARIANT:**
+`NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.`
+
+Claims of success, qualification, or capability acquisition come strictly from sealed kernel state.
+
 ---
 
 # 2. Governing Cognitive Law

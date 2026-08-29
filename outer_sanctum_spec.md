@@ -1,5 +1,8 @@
 # Reverse-Engineering Architectural Decomposition: Outer Sanctum
 
+> **LEGACY SOURCE DECOMPOSITION — NOT TEN SHADOWS CURRENT STATE.** This document describes the separate Outer Sanctum codebase as reverse-engineered source material. Its components and claims are not Ten Shadows capabilities unless independently implemented and verified in the current repository. See `CAPABILITY_GROUND_TRUTH.md`.
+
+
 ## 1. System Topology Overview
 **Outer Sanctum** is a dual-subsystem cognitive manufacturing environment:
 1. **`Komorebi` (Adversarial OS & Harness Kernel)**: A gate-enforced, untrusted-model execution harness driven by AST-level red-team/blue-team verification, fuzz corpus logging, and machine-signed mission receipts.

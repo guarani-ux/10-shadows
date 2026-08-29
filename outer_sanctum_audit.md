@@ -1,5 +1,8 @@
 # Ontological & Empirical Validation Audit: Outer Sanctum
 
+> **LEGACY EXTERNAL AUDIT — NOT TEN SHADOWS CURRENT STATE.** This document audits a separate local Outer Sanctum codebase and retains its historical conclusions as provenance. It does not certify Ten Shadows or any current repository capability. See `CAPABILITY_GROUND_TRUTH.md` for present-tense status.
+
+
 **Target Codebase**: `C:\Users\flowe\OneDrive\Desktop\Outer Sanctum`
 
 ---

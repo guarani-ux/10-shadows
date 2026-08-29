@@ -1,15 +1,11 @@
-# CURRENT GOAL: Shared Kernel Closure and Executable Route
+# CURRENT GOAL: Reconciled Ten Shadows Candidate
 
-`CURRENT_OBJECTIVE.md` is the authoritative detailed milestone specification.
+`CURRENT_OBJECTIVE.md` is the authoritative detailed objective.
 
-## Current state
+Ten Shadows is currently at the **reconciliation candidate / approval gate**.
 
-Ten Shadows is currently working toward **Milestone A: Executable Shared Kernel Route**. The target is an integrated, stateful route governed by the shared kernel and demonstrated through a Scribe -> Herald -> Slicer execution path with typed handoffs, persistent state, bounded recovery, and reconstructable receipts.
+The immediate goal is not expansion. It is to hold one defensible picture of the system in which present-tense claims do not exceed implementation or evidence.
 
-**Status: In progress.**
+The candidate must remain on its reconciliation branch until explicit approval. `master` is not part of the working change surface.
 
-This file does not claim that the complete route is already verified. Completion requires the success criteria and verification gates in `CURRENT_OBJECTIVE.md` to pass.
-
-## Documentation rule
-
-Older Shadow-specific goals, including the Herald AV-script objective previously stored in this file, are historical development targets rather than the repository-wide current mission. Individual modules may implement portions of those targets, but their existence must not be described as proof of full-system capability.
+After reconciliation is approved, the prior Shared Kernel Closure / Scribe -> Herald -> Slicer milestone may resume as the next development target. Until then it is a future target, not the current system state.

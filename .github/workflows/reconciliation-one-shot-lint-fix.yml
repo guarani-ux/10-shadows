@@ -1,0 +1,38 @@
+name: Reconciliation One-Shot Lint Fix
+
+on:
+  push:
+    branches: [ 'docs/ground-truth-capability-audit' ]
+
+permissions:
+  contents: write
+
+jobs:
+  fix-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          ref: docs/ground-truth-capability-audit
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Apply safe Ruff fixes
+        run: |
+          pip install ruff
+          ruff check tests/test_unsupported_objective_fail_closed.py --fix
+          ruff format tests/test_unsupported_objective_fail_closed.py
+      - name: Commit lint fix
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No lint changes required."
+            exit 0
+          fi
+          git config user.name "Ten Shadows Reconciliation"
+          git config user.email "reconciliation@ten-shadows.local"
+          git add tests/test_unsupported_objective_fail_closed.py
+          git commit -m "apply canonical lint fix to unsupported-objective proof"
+          git push origin HEAD:docs/ground-truth-capability-audit

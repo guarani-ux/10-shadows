@@ -110,6 +110,8 @@ jobs:
           git config --global user.email "ci@ten-shadows.local"
       - name: Execute Deterministic Preflight Health Check
         run: python scripts/preflight.py
+      - name: Enforce capability claim discipline
+        run: python scripts/check_capability_claims.py
       - name: Execute Full Pytest Suite
         shell: bash
         run: |
@@ -157,6 +159,8 @@ jobs:
           git config --global user.email "clean-room@ten-shadows.local"
       - name: Preflight from fresh checkout
         run: python scripts/preflight.py
+      - name: Capability claims remain bounded
+        run: python scripts/check_capability_claims.py
       - name: Public CLI loads
         run: |
           python ts_run.py --help

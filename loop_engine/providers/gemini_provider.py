@@ -1,7 +1,8 @@
-"""
-loop_engine/providers/gemini_provider.py
-Gemini Model Provider Adapter for 10 SHADOWS.
-Fails closed with CAPABILITY_PROVIDER_UNAVAILABLE if API key is not configured.
+"""Canonical Gemini provider scaffold for Ten Shadows.
+
+This adapter currently performs authorization/configuration checks and fails
+closed. It does not perform a live Gemini generation call, so it must not report
+empirical execution success.
 """
 
 from __future__ import annotations
@@ -10,17 +11,15 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from loop_engine.dispatcher.protocol import WorkerAuthorization
 from loop_engine.execution_authority import EvidenceModality, WorkerRole
-from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult
+from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult, workspace_matches_authorization
 
 
 class GeminiBuilderProvider(BaseWorkerProvider):
-    """
-    Gemini API builder adapter.
-    """
+    """Fail-closed canonical adapter until a governed live invocation is implemented."""
 
     def execute(
         self,
@@ -34,48 +33,59 @@ class GeminiBuilderProvider(BaseWorkerProvider):
         start_iso = datetime.now(timezone.utc).isoformat()
 
         if not authorization.verify_token():
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="gemini",
-                model=authorization.requested_model,
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.EMPIRICAL,
-                started_at=start_iso,
-                ended_at=datetime.now(timezone.utc).isoformat(),
-                duration_seconds=time.time() - start_time,
-                exit_status="REJECTED",
-                output_payload="Authorization token verification failed.",
-                error_message="AUTHORIZATION_TOKEN_INVALID",
+            return self._failure(
+                authorization,
+                start_time,
+                start_iso,
+                "REJECTED",
+                "Authorization token verification failed.",
+                "AUTHORIZATION_TOKEN_INVALID",
+            )
+
+        if not workspace_matches_authorization(authorization, workspace_path):
+            return self._failure(
+                authorization,
+                start_time,
+                start_iso,
+                "REJECTED",
+                "Requested workspace does not match the authorized filesystem boundary.",
+                "WORKSPACE_BOUNDARY_MISMATCH",
             )
 
         api_key = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
         if not api_key:
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="gemini",
-                model=authorization.requested_model,
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.EMPIRICAL,
-                started_at=start_iso,
-                ended_at=datetime.now(timezone.utc).isoformat(),
-                duration_seconds=time.time() - start_time,
-                exit_status="FAILURE",
-                output_payload="Gemini API key is not configured in environment.",
-                error_message="CAPABILITY_PROVIDER_UNAVAILABLE",
-            )
+            message = "Gemini API credentials are not configured."
+        else:
+            message = "Canonical Gemini live generation is not implemented in this provider path."
 
-        # When API key exists, this executes empirical model generation
-        # For current sandbox without live network credentials, fail closed cleanly
+        return self._failure(
+            authorization,
+            start_time,
+            start_iso,
+            "FAILURE",
+            message,
+            "CAPABILITY_PROVIDER_UNAVAILABLE",
+        )
+
+    @staticmethod
+    def _failure(
+        authorization: WorkerAuthorization,
+        start_time: float,
+        start_iso: str,
+        exit_status: str,
+        message: str,
+        error_code: str,
+    ) -> WorkerExecutionResult:
         return WorkerExecutionResult(
             worker_id=authorization.worker_id,
             provider="gemini",
             model=authorization.requested_model,
             role=WorkerRole.BUILDER,
-            modality=EvidenceModality.EMPIRICAL,
+            modality=EvidenceModality.STRUCTURAL,
             started_at=start_iso,
             ended_at=datetime.now(timezone.utc).isoformat(),
             duration_seconds=time.time() - start_time,
-            exit_status="FAILURE",
-            output_payload="Gemini API network call not enabled in sterile sandbox.",
-            error_message="CAPABILITY_PROVIDER_UNAVAILABLE",
+            exit_status=exit_status,
+            output_payload=message,
+            error_message=error_code,
         )

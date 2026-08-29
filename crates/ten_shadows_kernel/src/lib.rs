@@ -1,6 +1,7 @@
 //! ten_shadows_kernel — Mechanically Authoritative Trusted Kernel for 10 SHADOWS.
 
 pub mod candidate;
+pub mod constitution;
 pub mod db;
 pub mod dispatcher;
 pub mod evidence;
@@ -13,6 +14,7 @@ pub mod time_utils;
 pub mod verifier;
 
 pub use candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
+pub use constitution::{EvidenceEntailment, ObjectiveContract, ObjectiveSufficiencyProof, Obligation, ObligationStatus, SufficiencyRule};
 pub use db::KernelDb;
 pub use dispatcher::{DispatchError, ProviderUsage, WorkerAuthorization, WorkerDispatcher, WorkerExecutionResult};
 pub use evidence::{assert_evidence_monotonicity, EvidenceModality, EvidencePurpose, SubstrateLawError, VerificationType};

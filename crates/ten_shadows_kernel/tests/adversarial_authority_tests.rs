@@ -19,6 +19,7 @@ use ten_shadows_kernel::receipt::{
 };
 use ten_shadows_kernel::repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 use ten_shadows_kernel::state_machine::KernelRun;
+use ten_shadows_kernel::{ObjectiveContract, Obligation, SufficiencyRule};
 
 fn create_test_dir(name: &str) -> PathBuf {
     let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
@@ -117,6 +118,7 @@ fn test_02_fake_receipt_unanchored_fails() {
         artifacts_produced: vec![],
         verification: None,
         promotion: None,
+        objective_sufficiency: None,
         epistemic_claims: DisaggregatedEpistemicClaims {
             claim_kernel_run_created: true,
             claim_kernel_routed: true,
@@ -127,7 +129,9 @@ fn test_02_fake_receipt_unanchored_fails() {
             claim_independently_verified: false,
             claim_promoted: false,
             claim_target_behaviorally_tested: false,
-            claim_semantic_objective_satisfied: false,
+            claim_semantic_obligations_satisfied: false,
+            claim_objective_satisfied: false,
+            claim_completion_authorized: false,
         },
         final_status: RunStatus::CompletedUnverified,
         created_at: current_timestamp_rfc3339(),
@@ -421,6 +425,7 @@ fn test_07_retroactive_worker_fails_lineage() {
         artifacts_produced: vec![],
         verification: Some(ver_rec),
         promotion: None,
+        objective_sufficiency: None,
         epistemic_claims: DisaggregatedEpistemicClaims {
             claim_kernel_run_created: true,
             claim_kernel_routed: true,
@@ -431,7 +436,9 @@ fn test_07_retroactive_worker_fails_lineage() {
             claim_independently_verified: true,
             claim_promoted: true,
             claim_target_behaviorally_tested: true,
-            claim_semantic_objective_satisfied: false,
+            claim_semantic_obligations_satisfied: false,
+            claim_objective_satisfied: false,
+            claim_completion_authorized: false,
         },
         final_status: RunStatus::VerifiedSuccess,
         created_at: current_timestamp_rfc3339(),
@@ -504,6 +511,7 @@ fn test_08_wrong_baseline_fails_lineage() {
         artifacts_produced: vec![],
         verification: Some(ver_rec),
         promotion: None,
+        objective_sufficiency: None,
         epistemic_claims: DisaggregatedEpistemicClaims {
             claim_kernel_run_created: true,
             claim_kernel_routed: true,
@@ -514,7 +522,9 @@ fn test_08_wrong_baseline_fails_lineage() {
             claim_independently_verified: true,
             claim_promoted: true,
             claim_target_behaviorally_tested: true,
-            claim_semantic_objective_satisfied: false,
+            claim_semantic_obligations_satisfied: false,
+            claim_objective_satisfied: false,
+            claim_completion_authorized: false,
         },
         final_status: RunStatus::VerifiedSuccess,
         created_at: current_timestamp_rfc3339(),
@@ -662,6 +672,7 @@ fn test_10_missing_empirical_provider_receipt_fails() {
         artifacts_produced: vec![],
         verification: Some(ver_rec),
         promotion: None,
+        objective_sufficiency: None,
         epistemic_claims: DisaggregatedEpistemicClaims {
             claim_kernel_run_created: true,
             claim_kernel_routed: true,
@@ -672,7 +683,9 @@ fn test_10_missing_empirical_provider_receipt_fails() {
             claim_independently_verified: true,
             claim_promoted: true,
             claim_target_behaviorally_tested: true,
-            claim_semantic_objective_satisfied: false,
+            claim_semantic_obligations_satisfied: false,
+            claim_objective_satisfied: false,
+            claim_completion_authorized: false,
         },
         final_status: RunStatus::VerifiedSuccess,
         created_at: current_timestamp_rfc3339(),
@@ -852,7 +865,7 @@ fn test_15_repair_loop_multi_attempt_retention() {
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_rep");
     let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
-    let ws_path = run_ws.workspace_path.clone().unwrap();
+    let _ws_path = run_ws.workspace_path.clone().unwrap();
 
     // Attempt 1: Worker produces deliberate failing test
     let run_auth1 = run_ws.authorize_worker("repair_builder");
@@ -1170,4 +1183,269 @@ fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
     assert!(report.is_execution_valid);
     assert!(!report.is_production_valid);
     assert!(report.errors.iter().any(|e| e.contains("ExternalCandidate")));
+}
+
+/// TEST 21: REQUIRED FALSIFICATION FIXTURE (Negative Control)
+/// Irrelevant passing test (tested addition when objective was multiplication)
+/// MUST satisfy production custody BUT REJECT objective accomplishment.
+#[test]
+fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplishment() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("neg_ctrl_irrelevant");
+    let db_dir = create_test_dir("db_neg_ctrl");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
+    let run_id = run.run_id.clone();
+    let task_id = run.task_id.clone();
+    let obj_hash = run.objective_hash.clone();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_neg_ctrl");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let ws_path = run_ws.workspace_path.clone().unwrap();
+
+    let run_auth = run_ws.authorize_worker("builder_forge_neg");
+
+    // Worker creates file and commits
+    let math_file = ws_path.join("math_lib.py");
+    fs::write(&math_file, "def add(a, b): return a + b").unwrap();
+    Command::new("git").args(["add", "math_lib.py"]).current_dir(&ws_path).output().unwrap();
+    Command::new("git").args(["commit", "-m", "feat: implement addition only"]).current_dir(&ws_path).output().unwrap();
+
+    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+
+    let worker_rec = WorkerInvocationRecord {
+        invocation_id: format!("inv_{}", task_id),
+        worker_id: "builder_forge_neg".into(),
+        provider: "deterministic_test_harness".into(),
+        model: "deterministic-v1".into(),
+        role: WorkerRole::Builder,
+        modality: EvidenceModality::Structural,
+        input_digest: obj_hash.clone(),
+        output_digest: "mut_digest_neg".into(),
+        started_at: current_timestamp_rfc3339(),
+        ended_at: current_timestamp_rfc3339(),
+        duration_seconds: 0.2,
+        status: "SUCCESS".into(),
+        provider_receipt: None,
+    };
+
+    let run_cand = run_auth.record_governed_candidate(&candidate_sha, worker_rec, 1);
+
+    // Verifier executes passing test, but ONLY for ADDITION!
+    let ver_rec = IndependentVerificationRecord {
+        verifier_id: "svris_independent_oracle".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        builder_id: "builder_forge_neg".into(),
+        modality: EvidenceModality::DeterministicTest,
+        purpose: EvidencePurpose::BehavioralVerification,
+        test_digest: "test_addition_passed_sha256".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("test_addition PASSED (multiplication not tested)".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(ver_rec);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    // Must be classified as ObjectiveUnsatisfied!
+    assert_eq!(receipt.final_status, RunStatus::ObjectiveUnsatisfied);
+    assert!(!receipt.epistemic_claims.claim_objective_satisfied);
+    assert!(!receipt.epistemic_claims.claim_completion_authorized);
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(report.is_production_valid);
+    assert!(!report.is_objective_accomplished);
+    assert!(report.errors.iter().any(|e| e.contains("OBJECTIVE_UNSATISFIED") || e.contains("ObjectiveSufficiencyProof failed")));
+}
+
+/// TEST 22: POSITIVE CONTROL
+/// Relevant passing test (tested multiplication when objective was multiplication)
+/// MUST satisfy production custody AND AUTHORIZE objective accomplishment.
+#[test]
+fn test_22_positive_control_multiplication_objective_accomplished() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("pos_ctrl_mult");
+    let db_dir = create_test_dir("db_pos_ctrl");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
+    let run_id = run.run_id.clone();
+    let task_id = run.task_id.clone();
+    let obj_hash = run.objective_hash.clone();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_pos_ctrl");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let ws_path = run_ws.workspace_path.clone().unwrap();
+
+    let run_auth = run_ws.authorize_worker("builder_forge_pos");
+
+    // Worker creates multiplication implementation and commits
+    let math_file = ws_path.join("math_lib.py");
+    fs::write(&math_file, "def multiply(a, b): return a * b").unwrap();
+    Command::new("git").args(["add", "math_lib.py"]).current_dir(&ws_path).output().unwrap();
+    Command::new("git").args(["commit", "-m", "feat: implement multiply"]).current_dir(&ws_path).output().unwrap();
+
+    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+
+    let worker_rec = WorkerInvocationRecord {
+        invocation_id: format!("inv_{}", task_id),
+        worker_id: "builder_forge_pos".into(),
+        provider: "deterministic_test_harness".into(),
+        model: "deterministic-v1".into(),
+        role: WorkerRole::Builder,
+        modality: EvidenceModality::Structural,
+        input_digest: obj_hash.clone(),
+        output_digest: "mut_digest_pos".into(),
+        started_at: current_timestamp_rfc3339(),
+        ended_at: current_timestamp_rfc3339(),
+        duration_seconds: 0.2,
+        status: "SUCCESS".into(),
+        provider_receipt: None,
+    };
+
+    let run_cand = run_auth.record_governed_candidate(&candidate_sha, worker_rec, 1);
+
+    // Verifier executes passing test for MULTIPLICATION!
+    let ver_rec = IndependentVerificationRecord {
+        verifier_id: "svris_independent_oracle".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        builder_id: "builder_forge_pos".into(),
+        modality: EvidenceModality::DeterministicTest,
+        purpose: EvidencePurpose::BehavioralVerification,
+        test_digest: "test_multiply_passed_sha256".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("test_multiply PASSED (multiplication verified)".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(ver_rec);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    assert_eq!(receipt.final_status, RunStatus::VerifiedSuccess);
+    assert!(receipt.epistemic_claims.claim_objective_satisfied);
+    assert!(receipt.epistemic_claims.claim_completion_authorized);
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(report.is_production_valid);
+    assert!(report.is_objective_accomplished);
+}
+
+/// TEST 23: Incomplete obligation coverage blocks objective accomplishment.
+#[test]
+fn test_23_incomplete_obligations_blocks_objective_accomplishment() {
+    let mut ob1 = Obligation::new("ob1", "Implement multiply", "ARITHMETIC_MULTIPLICATION", true);
+
+    // Only ob1 is satisfied
+    ob1.satisfy("digest_mult", "Multiply verified");
+    let partial_contract = ObjectiveContract::new(
+        "contract_dual",
+        "Implement multiply and divide",
+        vec![ob1, Obligation::new("ob2", "Implement divide", "ARITHMETIC_DIVISION", true)],
+        SufficiencyRule::AllMandatory,
+    );
+
+    let proof = partial_contract.evaluate_sufficiency();
+    assert!(!proof.is_satisfied);
+    assert_eq!(proof.unresolved_mandatory, vec!["ob2"]);
+}
+
+/// TEST 24: Disjunctive ANY_OF sufficiency rule evaluation.
+#[test]
+fn test_24_disjunctive_any_of_sufficiency_rule() {
+    let mut ob_alt = Obligation::new("ob_alt", "Alternative method", "METHOD_B", false);
+    ob_alt.satisfy("digest_alt", "Alternative method verified");
+
+    let active_contract = ObjectiveContract::new(
+        "contract_any",
+        "Execute via primary or alt",
+        vec![Obligation::new("ob_pri", "Primary method", "METHOD_A", false), ob_alt],
+        SufficiencyRule::AnyOf(vec!["ob_pri".into(), "ob_alt".into()]),
+    );
+
+    let proof = active_contract.evaluate_sufficiency();
+    assert!(proof.is_satisfied);
+    assert_eq!(proof.satisfied_obligations, vec!["ob_alt"]);
+}
+
+/// TEST 25: Tampered completion claim in receipt is rejected by predicate evaluation.
+#[test]
+fn test_25_tampered_proof_digest_rejected() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("tamper_proof");
+    let db_dir = create_test_dir("db_tamper");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
+    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_tamper");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let run_auth = run_ws.authorize_worker("builder_tamper");
+
+    let mock_worker = WorkerInvocationRecord {
+        invocation_id: "inv_tamper".into(),
+        worker_id: "builder_tamper".into(),
+        provider: "deterministic".into(),
+        model: "deterministic-v1".into(),
+        role: WorkerRole::Builder,
+        modality: EvidenceModality::DeterministicTest,
+        input_digest: "hash".into(),
+        output_digest: "hash".into(),
+        started_at: current_timestamp_rfc3339(),
+        ended_at: current_timestamp_rfc3339(),
+        duration_seconds: 0.1,
+        status: "SUCCESS".into(),
+        provider_receipt: None,
+    };
+
+    let run_cand = run_auth.record_governed_candidate(&baseline_sha, mock_worker, 0);
+
+    let mock_ver = IndependentVerificationRecord {
+        verifier_id: "svris_verifier".into(),
+        builder_id: "builder_tamper".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        purpose: EvidencePurpose::BehavioralVerification,
+        modality: EvidenceModality::DeterministicTest,
+        test_digest: "digest".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("PASSED".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(mock_ver);
+    let (_promoted, mut receipt) = run_ver.promote_and_seal();
+
+    // Adversary falsely alters epistemic claims to declare objective satisfied without valid signature
+    receipt.epistemic_claims.claim_completion_authorized = true;
+    receipt.epistemic_claims.claim_objective_satisfied = true;
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(!report.is_execution_valid);
+    assert!(!report.is_objective_accomplished);
+    assert!(report.errors.iter().any(|e| e.contains("Receipt signature mismatch")));
 }

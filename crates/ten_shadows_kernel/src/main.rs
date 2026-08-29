@@ -201,8 +201,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             let report = evaluate_receipt(&receipt, Some(&db));
             println!("\n[PREDICATE EVALUATION]");
-            println!("  Execution Valid:    {}", report.is_execution_valid);
-            println!("  Production Valid:   {}", report.is_production_valid);
+            println!("  Execution Valid:     {}", report.is_execution_valid);
+            println!("  Production Valid:    {}", report.is_production_valid);
+            println!("  Objective Satisfied: {}", report.is_objective_accomplished);
         }
 
         "verify-receipt" if args.len() >= 3 => {
@@ -242,6 +243,28 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("\n[VERIFICATION PASSED] Candidate was ACTUALLY produced under Ten Shadows custody.");
             } else {
                 println!("\n[VERIFICATION FAILED] Candidate was NOT produced under Ten Shadows custody:");
+                for err in report.errors {
+                    println!("  - {}", err);
+                }
+                std::process::exit(1);
+            }
+        }
+
+        "verify-objective" if args.len() >= 3 => {
+            let receipt_path = PathBuf::from(&args[2]);
+            println!("========================================================");
+            println!("       TEN SHADOWS OBJECTIVE SUFFICIENCY VERIFICATION   ");
+            println!("========================================================");
+            println!("Target: {}", receipt_path.display());
+
+            let data = fs::read_to_string(&receipt_path)?;
+            let parsed: TenShadowsReceipt = serde_json::from_str(&data)?;
+            let report = evaluate_receipt(&parsed, Some(&db));
+
+            if report.is_objective_accomplished {
+                println!("\n[VERIFICATION PASSED] Objective was AUTHORITATIVELY satisfied under Law 6 Sufficiency.");
+            } else {
+                println!("\n[VERIFICATION FAILED] Objective was NOT accomplished:");
                 for err in report.errors {
                     println!("  - {}", err);
                 }

@@ -14,6 +14,8 @@ pub enum RunStatus {
     Running,
     Verifying,
     VerifiedSuccess,
+    ObjectiveUnsatisfied,
+    IntermediatePromoted,
     ExternalAuditVerified,
     CompletedUnverified,
     Failed,
@@ -120,7 +122,9 @@ pub struct DisaggregatedEpistemicClaims {
     pub claim_independently_verified: bool,
     pub claim_promoted: bool,
     pub claim_target_behaviorally_tested: bool,
-    pub claim_semantic_objective_satisfied: bool,
+    pub claim_semantic_obligations_satisfied: bool,
+    pub claim_objective_satisfied: bool,
+    pub claim_completion_authorized: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -147,6 +151,8 @@ pub struct TenShadowsReceipt {
     pub artifacts_produced: Vec<serde_json::Value>,
     pub verification: Option<IndependentVerificationRecord>,
     pub promotion: Option<serde_json::Value>,
+    #[serde(default)]
+    pub objective_sufficiency: Option<crate::constitution::ObjectiveSufficiencyProof>,
     pub epistemic_claims: DisaggregatedEpistemicClaims,
     pub final_status: RunStatus,
     pub created_at: String,

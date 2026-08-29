@@ -14,6 +14,7 @@ use crate::receipt::{RunStatus, TenShadowsReceipt};
 pub struct VerificationReport {
     pub is_execution_valid: bool,
     pub is_production_valid: bool,
+    pub is_objective_accomplished: bool,
     pub errors: Vec<String>,
 }
 
@@ -51,7 +52,7 @@ pub fn evaluate_receipt(
         }
     }
 
-    // 3. Verification Independence
+    // 3. Verification Independence & Modality
     if let Some(ref v) = receipt.verification {
         if v.builder_id == v.verifier_id {
             errors.push(format!(
@@ -95,9 +96,9 @@ pub fn evaluate_receipt(
         prod_errors.push("Execution validity failed.".into());
     }
 
-    if receipt.final_status != RunStatus::VerifiedSuccess {
+    if receipt.final_status != RunStatus::VerifiedSuccess && receipt.final_status != RunStatus::ObjectiveUnsatisfied {
         prod_errors.push(format!(
-            "Run status is '{:?}' (not VERIFIED_SUCCESS). Candidate is unpromoted or failed.",
+            "Run status is '{:?}' (not VERIFIED_SUCCESS or OBJECTIVE_UNSATISFIED). Candidate is unpromoted or failed.",
             receipt.final_status
         ));
     }
@@ -145,9 +146,39 @@ pub fn evaluate_receipt(
     let is_production_valid = is_execution_valid && prod_errors.is_empty();
     errors.extend(prod_errors);
 
+    // 6. Strict Objective Accomplishment Checks (Law 6 Sufficiency)
+    let mut obj_errors = Vec::new();
+    if !is_production_valid {
+        obj_errors.push("Objective accomplishment requires valid production custody.".into());
+    }
+    if receipt.final_status != RunStatus::VerifiedSuccess {
+        obj_errors.push(format!("Run status is '{:?}' (not VERIFIED_SUCCESS).", receipt.final_status));
+    }
+    if !receipt.epistemic_claims.claim_semantic_obligations_satisfied {
+        obj_errors.push("Epistemic claims indicate semantic obligations were NOT satisfied.".into());
+    }
+    if !receipt.epistemic_claims.claim_objective_satisfied {
+        obj_errors.push("Epistemic claims indicate objective was NOT satisfied.".into());
+    }
+    if !receipt.epistemic_claims.claim_completion_authorized {
+        obj_errors.push("Epistemic claims do NOT authorize user-facing completion claim.".into());
+    }
+    if let Some(ref suff) = receipt.objective_sufficiency {
+        if !suff.is_satisfied {
+            obj_errors.push(format!(
+                "ObjectiveSufficiencyProof failed: unresolved mandatory obligations: {:?}",
+                suff.unresolved_mandatory
+            ));
+        }
+    }
+
+    let is_objective_accomplished = is_production_valid && obj_errors.is_empty();
+    errors.extend(obj_errors);
+
     VerificationReport {
         is_execution_valid,
         is_production_valid,
+        is_objective_accomplished,
         errors,
     }
 }

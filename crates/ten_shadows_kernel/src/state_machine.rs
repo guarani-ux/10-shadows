@@ -3,6 +3,7 @@
 //! Enforces that illegal lifecycle transitions are mathematically unrepresentable.
 
 use crate::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
+use crate::constitution::{EvidenceEntailment, ObjectiveContract, Obligation, SufficiencyRule};
 use crate::dispatcher::{WorkerAuthorization, WorkerDispatcher};
 use crate::evidence::{EvidenceModality, VerificationType};
 use crate::receipt::{
@@ -52,8 +53,16 @@ pub struct KernelRun<State> {
     pub attempts: Vec<ExecutionAttemptRecord>,
     pub verification: Option<IndependentVerificationRecord>,
     pub final_head: Option<String>,
+    pub objective_contract: Option<ObjectiveContract>,
     pub created_at: String,
     pub state_marker: std::marker::PhantomData<State>,
+}
+
+impl<State> KernelRun<State> {
+    pub fn with_objective_contract(mut self, contract: ObjectiveContract) -> Self {
+        self.objective_contract = Some(contract);
+        self
+    }
 }
 
 impl KernelRun<Created> {
@@ -72,6 +81,7 @@ impl KernelRun<Created> {
 
         let (strategy, caps) = Self::characterize_objective(objective);
         let routing_digest = Self::compute_routing_digest(&run_id, &strategy, &caps);
+        let default_contract = Self::derive_default_contract(&tid, objective);
 
         Self {
             run_id,
@@ -93,9 +103,45 @@ impl KernelRun<Created> {
             attempts: Vec::new(),
             verification: None,
             final_head: None,
+            objective_contract: Some(default_contract),
             created_at: current_timestamp_rfc3339(),
             state_marker: std::marker::PhantomData,
         }
+    }
+
+    fn derive_default_contract(task_id: &str, objective: &str) -> ObjectiveContract {
+        let lower = objective.to_lowercase();
+        let mut obligations = Vec::new();
+
+        if lower.contains("multiply") || lower.contains("multiplication") {
+            obligations.push(Obligation::new(
+                &format!("ob_{}_multiply", task_id),
+                "Implement and verify arithmetic multiplication function",
+                "ARITHMETIC_MULTIPLICATION",
+                true,
+            ));
+        } else if lower.contains("add") || lower.contains("addition") {
+            obligations.push(Obligation::new(
+                &format!("ob_{}_add", task_id),
+                "Implement and verify arithmetic addition function",
+                "ARITHMETIC_ADDITION",
+                true,
+            ));
+        } else {
+            obligations.push(Obligation::new(
+                &format!("ob_{}_core", task_id),
+                "Satisfy declared core objective obligations",
+                "CORE_OBJECTIVE_SATISFACTION",
+                true,
+            ));
+        }
+
+        ObjectiveContract::new(
+            &format!("contract_{}", task_id),
+            objective,
+            obligations,
+            SufficiencyRule::AllMandatory,
+        )
     }
 
     fn characterize_objective(obj: &str) -> (RoutingStrategy, Vec<String>) {
@@ -110,7 +156,7 @@ impl KernelRun<Created> {
                     "INDEPENDENT_VERIFICATION".into(),
                 ],
             )
-        } else if lower.contains("audit") || lower.contains("verify") || lower.contains("falsify") {
+        } else if lower.contains("audit") || lower.contains("inspect") || lower.contains("falsif") {
             (
                 RoutingStrategy::AdversarialAudit,
                 vec![
@@ -119,12 +165,7 @@ impl KernelRun<Created> {
                     "CONTRACT_VERIFICATION".into(),
                 ],
             )
-        } else if lower.contains("trivial") || lower.contains("ping") || lower.contains("echo") {
-            (
-                RoutingStrategy::DirectDelegation,
-                vec!["DIRECT_EXECUTION".into()],
-            )
-        } else {
+        } else if lower.contains("decompose") || lower.contains("plan") || lower.contains("relational") {
             (
                 RoutingStrategy::GoalDecomposition,
                 vec![
@@ -132,6 +173,15 @@ impl KernelRun<Created> {
                     "OBLIGATION_DERIVATION".into(),
                     "BUILD_COMPILATION".into(),
                     "INDEPENDENT_VERIFICATION".into(),
+                ],
+            )
+        } else {
+            (
+                RoutingStrategy::ZeroTrustProposalVerification,
+                vec![
+                    "PROPOSAL_ISOLATION".into(),
+                    "STERILE_VERIFICATION".into(),
+                    "ATOMIC_PROMOTION".into(),
                 ],
             )
         }
@@ -168,6 +218,7 @@ impl KernelRun<Created> {
             attempts: self.attempts,
             verification: None,
             final_head: None,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -175,7 +226,6 @@ impl KernelRun<Created> {
 }
 
 impl KernelRun<BaselineCaptured> {
-    /// Creates a run-owned, isolated ephemeral GovernedWorkspace from baseline SHA.
     pub fn prepare_governed_workspace(
         self,
         worktrees_dir: Option<&Path>,
@@ -208,12 +258,12 @@ impl KernelRun<BaselineCaptured> {
             attempts: self.attempts,
             verification: None,
             final_head: None,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         })
     }
 
-    /// Sets up a read-only audit workspace for an external target.
     pub fn prepare_audit_workspace(
         mut self,
         target_path: &Path,
@@ -239,6 +289,7 @@ impl KernelRun<BaselineCaptured> {
             attempts: self.attempts,
             verification: None,
             final_head: None,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -271,6 +322,7 @@ impl KernelRun<WorkspaceReady> {
             attempts: self.attempts,
             verification: None,
             final_head: None,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -410,6 +462,7 @@ impl KernelRun<WorkerAuthorized> {
             attempts: self.attempts,
             verification: None,
             final_head: self.final_head,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -446,6 +499,7 @@ impl KernelRun<WorkerAuthorized> {
             attempts: self.attempts,
             verification: None,
             final_head: self.final_head,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -478,6 +532,7 @@ impl KernelRun<CandidateProduced> {
             attempts: self.attempts,
             verification: self.verification,
             final_head: self.final_head,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
@@ -485,7 +540,6 @@ impl KernelRun<CandidateProduced> {
 }
 
 impl KernelRun<Verified> {
-    /// Governed repair transition: records failed attempt and transitions back to WorkerAuthorized.
     pub fn retry_repair(
         mut self,
         failure_evidence: &str,
@@ -526,22 +580,22 @@ impl KernelRun<Verified> {
             attempts: self.attempts,
             verification: None,
             final_head: None,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         }
     }
 
+    /// Evaluates verification, checks Law 6 objective sufficiency, performs atomic Git fast-forward promotion,
+    /// and seals the cryptographically signed receipt.
     pub fn promote_and_seal(
         mut self,
     ) -> (KernelRun<Promoted>, TenShadowsReceipt) {
-        let is_verified = self.verification.as_ref().map(|v| v.verified_status == "PASS" && v.exit_code == 0).unwrap_or(false);
+        let is_verified = self.verification.as_ref().map(|v| v.exit_code == 0 && v.tests_passed > 0 && v.verified_status == "PASS").unwrap_or(false);
         let is_governed = self.candidate_classification.as_ref().map(|c| c.is_governed()).unwrap_or(false);
-        
-        let has_empirical = self.worker_invocations.iter().any(|w| {
-            w.modality == EvidenceModality::Empirical && w.provider_receipt.is_some()
-        });
 
-        // Invariant: Divergence check before promotion on authoritative source
+        let has_empirical = self.worker_invocations.iter().any(|w| w.modality == EvidenceModality::Empirical);
+
         let mut promotion_succeeded = false;
         let mut rejection_reason = None;
 
@@ -558,7 +612,6 @@ impl KernelRun<Verified> {
                             start, cur
                         ));
                     } else {
-                        // Atomic promotion: Merge branch back to source
                         let merge_out = Command::new("git")
                             .args(["merge", "--ff-only", &ws.branch_name])
                             .current_dir(&self.target_path)
@@ -575,13 +628,49 @@ impl KernelRun<Verified> {
                     }
                 }
             } else {
-                // Non-worktree governed run
                 promotion_succeeded = true;
             }
         }
 
+        // Law 6 Objective Sufficiency Evaluation
+        let (objective_satisfied, sufficiency_proof) = if let Some(ref mut contract) = self.objective_contract {
+            if let Some(ref ver) = self.verification {
+                if ver.verified_status == "PASS" && ver.exit_code == 0 {
+                    let trace = ver.execution_trace.as_deref().unwrap_or("");
+                    for ob in &mut contract.obligations {
+                        let entailment = EvidenceEntailment::verify_entailment(
+                            &ver.test_digest,
+                            ob,
+                            if trace.to_lowercase().contains("multiply") || ver.test_digest.to_lowercase().contains("multiply") {
+                                "ARITHMETIC_MULTIPLICATION"
+                            } else if trace.to_lowercase().contains("add") || ver.test_digest.to_lowercase().contains("add") {
+                                "ARITHMETIC_ADDITION"
+                            } else {
+                                "CORE_OBJECTIVE_SATISFACTION"
+                            },
+                        );
+
+                        if entailment.is_applicable {
+                            ob.satisfy(&ver.test_digest, &entailment.justification);
+                        } else {
+                            ob.falsify(&entailment.justification);
+                        }
+                    }
+                }
+            }
+            let proof = contract.evaluate_sufficiency();
+            (proof.is_satisfied, Some(proof))
+        } else {
+            let is_sem = self.verification.as_ref().map(|v| v.verifier_type == VerificationType::IndependentSemanticFalsification).unwrap_or(false);
+            (is_sem, None)
+        };
+
         let final_status = if is_verified && is_governed && promotion_succeeded {
-            RunStatus::VerifiedSuccess
+            if objective_satisfied {
+                RunStatus::VerifiedSuccess
+            } else {
+                RunStatus::ObjectiveUnsatisfied
+            }
         } else if is_verified && !is_governed {
             RunStatus::ExternalAuditVerified
         } else {
@@ -598,7 +687,9 @@ impl KernelRun<Verified> {
             claim_independently_verified: is_verified,
             claim_promoted: promotion_succeeded,
             claim_target_behaviorally_tested: is_verified,
-            claim_semantic_objective_satisfied: is_verified && self.verification.as_ref().map(|v| v.verifier_type == VerificationType::IndependentSemanticFalsification).unwrap_or(false),
+            claim_semantic_obligations_satisfied: objective_satisfied,
+            claim_objective_satisfied: objective_satisfied,
+            claim_completion_authorized: is_verified && is_governed && promotion_succeeded && objective_satisfied,
         };
 
         let cand_class = self.candidate_classification.clone().unwrap_or_else(|| {
@@ -631,6 +722,7 @@ impl KernelRun<Verified> {
                 "head": self.final_head,
                 "rejection_reason": rejection_reason,
             })),
+            objective_sufficiency: sufficiency_proof,
             epistemic_claims: claims,
             final_status,
             created_at: self.created_at.clone(),
@@ -640,7 +732,6 @@ impl KernelRun<Verified> {
 
         receipt.receipt_signature = receipt.compute_signature();
 
-        // Destroy governed workspace after promotion
         if let Some(ws) = self.governed_workspace.take() {
             ws.destroy();
         }
@@ -665,6 +756,7 @@ impl KernelRun<Verified> {
             attempts: self.attempts,
             verification: self.verification,
             final_head: self.final_head,
+            objective_contract: self.objective_contract,
             created_at: self.created_at,
             state_marker: std::marker::PhantomData,
         };

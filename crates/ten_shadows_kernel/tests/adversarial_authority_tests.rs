@@ -974,3 +974,17 @@ fn test_16_shadow_domain_forge_dispatch() {
     assert!(report.is_execution_valid);
     assert!(report.is_production_valid);
 }
+
+#[test]
+fn test_17_relational_graph_epistemic_monotonicity() {
+    use ten_shadows_kernel::graph::{EpistemicStatus, NodeType, RelationalNode};
+
+    let node = RelationalNode::new("req_compress", NodeType::Requirement, "Lossless Compression", EpistemicStatus::Proposed);
+    assert_eq!(node.epistemic_status, EpistemicStatus::Proposed);
+    assert!(!node.provenance_digest.is_empty());
+
+    // Law 4 monotonicity transition rules
+    assert!(EpistemicStatus::Proposed.can_transition_to(EpistemicStatus::Invalidated));
+    assert!(EpistemicStatus::Verified.can_transition_to(EpistemicStatus::Contested));
+    assert!(EpistemicStatus::Verified.can_transition_to(EpistemicStatus::Invalidated));
+}

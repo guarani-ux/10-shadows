@@ -4,6 +4,7 @@ pub mod candidate;
 pub mod db;
 pub mod dispatcher;
 pub mod evidence;
+pub mod graph;
 pub mod predicate;
 pub mod receipt;
 pub mod repository;

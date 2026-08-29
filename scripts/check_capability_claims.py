@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Fail CI when current-state surfaces reintroduce known inflated capability claims.
+"""Guard the repository surfaces that define present-tense capability.
 
-This is intentionally narrow. It does not decide whether arbitrary prose is true;
-it prevents previously identified failure modes from silently returning and
-requires present-tense status surfaces to point back to the capability ledger.
+The guard checks for required scope boundaries and prevents runtime status
+machinery from reintroducing previously identified self-certification labels.
+Historical documents may still discuss retired claims as history; the guard does
+not confuse mentioning an old claim with asserting it now.
 """
 
 from __future__ import annotations
@@ -11,53 +12,74 @@ from __future__ import annotations
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-CURRENT_STATE_FILES = [
-    "README.md",
-    "PROJECTS_DASHBOARD.md",
-    "SYSTEM_STATE.md",
-    "FAILURE_LEDGER.md",
-    "RECONCILIATION_STATE.md",
+
+REQUIRED_SCOPE_MARKERS = {
+    "README.md": [
+        "CAPABILITY_GROUND_TRUTH.md",
+        "not demonstrated as a general-purpose autonomous intelligence",
+        "staging boundary, not an operating-system security sandbox",
+    ],
+    "PROJECTS_DASHBOARD.md": [
+        "CAPABILITY_GROUND_TRUTH.md",
+        "structural descriptions only",
+        "narrowest claim supported by current executable evidence governs",
+    ],
+    "SYSTEM_STATE.md": [
+        "not repository qualification",
+        "did **not** establish current operational proof",
+    ],
+    "FAILURE_LEDGER.md": [
+        "does not mean CI is green",
+        "must not be interpreted as repository-wide success",
+    ],
+    "RECONCILIATION_STATE.md": [
+        "must not be merged without explicit approval",
+    ],
+}
+
+RUNTIME_STATUS_FILES = [
+    "loop_engine/gamemaster/state_projector.py",
+    "loop_engine/gamemaster/hud_view.py",
+    "loop_engine/gamemaster/project_markdown.py",
+    "loop_engine/gamemaster/cli.py",
 ]
 
-FORBIDDEN_CURRENT_CLAIMS = {
-    "Master Domain & Runtime Truth": "telemetry was previously upgraded into authority",
-    "Operationally proven": "file/test presence is not operational proof",
-    "Route-proven": "route labels require current route evidence",
-    "Unit-proven": "unit-test presence is not repository capability proof",
-    "Zero-Trust Autonomous Execution Operating System": "current runtime does not establish this scope",
-    "3.0.0-SOVEREIGN": "retired self-issued runtime certification label",
-    "89/89 physical automated tests passing": "historical test count cannot be current authority",
-    "autonomous cognitive compiler and execution operating system": "retired generality claim",
-}
+FORBIDDEN_RUNTIME_CERTIFICATION_LABELS = [
+    "3.0.0-SOVEREIGN",
+    "Master Domain & Runtime Truth",
+    "Operationally proven",
+    "Route-proven",
+    "Unit-proven",
+    "Zero-Trust Autonomous Execution Operating System",
+]
 
 
 def main() -> int:
     errors: list[str] = []
+
     ground_truth = ROOT / "CAPABILITY_GROUND_TRUTH.md"
     if not ground_truth.is_file():
         errors.append("CAPABILITY_GROUND_TRUTH.md is missing")
 
-    for relative in CURRENT_STATE_FILES:
+    for relative, markers in REQUIRED_SCOPE_MARKERS.items():
         path = ROOT / relative
         if not path.is_file():
             errors.append(f"required current-state surface is missing: {relative}")
             continue
         text = path.read_text(encoding="utf-8")
-        for phrase, reason in FORBIDDEN_CURRENT_CLAIMS.items():
-            if phrase in text:
-                errors.append(f"{relative}: forbidden current claim {phrase!r} ({reason})")
+        for marker in markers:
+            if marker not in text:
+                errors.append(f"{relative}: required scope marker is missing: {marker!r}")
 
-    readme = (ROOT / "README.md").read_text(encoding="utf-8") if (ROOT / "README.md").is_file() else ""
-    if "CAPABILITY_GROUND_TRUTH.md" not in readme:
-        errors.append("README.md must point to CAPABILITY_GROUND_TRUTH.md")
-
-    dashboard = (
-        (ROOT / "PROJECTS_DASHBOARD.md").read_text(encoding="utf-8")
-        if (ROOT / "PROJECTS_DASHBOARD.md").is_file()
-        else ""
-    )
-    if "CAPABILITY_GROUND_TRUTH.md" not in dashboard:
-        errors.append("PROJECTS_DASHBOARD.md must point to CAPABILITY_GROUND_TRUTH.md")
+    for relative in RUNTIME_STATUS_FILES:
+        path = ROOT / relative
+        if not path.is_file():
+            errors.append(f"runtime status surface is missing: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for label in FORBIDDEN_RUNTIME_CERTIFICATION_LABELS:
+            if label in text:
+                errors.append(f"{relative}: retired self-certification label remains: {label!r}")
 
     if errors:
         print("CAPABILITY CLAIM DISCIPLINE: FAIL")

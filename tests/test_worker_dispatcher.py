@@ -18,7 +18,7 @@ from loop_engine.dispatcher.protocol import (
     compute_authorization_token,
 )
 from loop_engine.dispatcher.worker_dispatcher import dispatch_worker
-from loop_engine.harness.git_worktree import PROJECT_ROOT, AuthoritativeSourceProtectionError
+from loop_engine.harness.git_worktree import PROJECT_ROOT
 
 
 @pytest.fixture
@@ -124,7 +124,7 @@ def test_tampered_authorization_token_rejected(disposable_workspace):
 
     assert result.exit_status == "REJECTED"
     assert result.completion_status == "REJECTED"
-    assert "Worker authorization token verification failed" in result.errors[0]
+    assert "authorization binding digest" in result.errors[0]
     assert result.workspace_after_sha == baseline_sha
 
 
@@ -158,8 +158,10 @@ def test_authoritative_root_as_workspace_rejected():
         authorization_token=token,
     )
 
-    with pytest.raises(AuthoritativeSourceProtectionError):
-        dispatch_worker(auth)
+    result = dispatch_worker(auth)
+    assert result.exit_status == "REJECTED"
+    assert result.completion_status == "REJECTED"
+    assert "Authoritative source protection rejected workspace" in result.errors[0]
 
 
 def test_gemini_missing_credentials_fails_closed(disposable_workspace, monkeypatch):
@@ -201,7 +203,7 @@ def test_gemini_missing_credentials_fails_closed(disposable_workspace, monkeypat
 
     assert result.exit_status == "FAILURE"
     assert result.resolved_model == "UNPROVEN"
-    assert "GEMINI_API_KEY not configured in environment." in result.errors[0]
+    assert "no provider invocation occurred" in result.errors[0]
     assert result.workspace_after_sha == baseline_sha
 
 

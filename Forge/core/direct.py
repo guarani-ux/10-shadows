@@ -1,4 +1,5 @@
 from typing import Any, Dict
+
 from forge.adapters.model import ModelAdapter
 from forge.core.schema import validate_contract
 
@@ -19,20 +20,12 @@ def direct(task_spec: Dict[str, Any], model_adapter: ModelAdapter) -> Dict[str, 
         f"Success Conditions: {task_spec.get('success_conditions')}\n"
     )
 
-    generation = model_adapter.generate(
-        instruction=prompt,
-        input_data=task_spec
-    )
+    generation = model_adapter.generate(instruction=prompt, input_data=task_spec)
 
     unresolved = generation.get("unresolved", []) if isinstance(generation, dict) else []
     status = "COMPLETE" if not unresolved else "NEEDS_INPUT"
 
-    direct_result = {
-        "task_id": task_spec["task_id"],
-        "status": status,
-        "result": generation,
-        "unresolved": unresolved
-    }
+    direct_result = {"task_id": task_spec["task_id"], "status": status, "result": generation, "unresolved": unresolved}
 
     validate_contract("DirectResult", direct_result)
     return direct_result

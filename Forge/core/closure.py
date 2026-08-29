@@ -28,6 +28,7 @@ from forge.core.substrate import (
 
 class AntiCheatingViolation(Exception):
     """Raised when an execution result is accepted despite open closure or missing proofs."""
+
     pass
 
 
@@ -145,7 +146,7 @@ class ClosureGate:
                         )
                     )
 
-        is_closed = (len(cap_deficits) == 0 and len(ev_deficits) == 0)
+        is_closed = len(cap_deficits) == 0 and len(ev_deficits) == 0
 
         return ClosureReport(
             is_closed=is_closed,

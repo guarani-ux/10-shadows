@@ -24,7 +24,9 @@ def test_search_policy_determination():
     engine = SearchEngine(context_compiler=compiler)
 
     assert engine.determine_search_policy(TaskDifficulty.LOW, has_prior_failures=False) == SearchPolicy.SINGLE
-    assert engine.determine_search_policy(TaskDifficulty.MEDIUM, has_prior_failures=False) == SearchPolicy.CRITIQUE_REPAIR
+    assert (
+        engine.determine_search_policy(TaskDifficulty.MEDIUM, has_prior_failures=False) == SearchPolicy.CRITIQUE_REPAIR
+    )
     assert engine.determine_search_policy(TaskDifficulty.HIGH, has_prior_failures=False) == SearchPolicy.MULTI_CANDIDATE
     assert engine.determine_search_policy(TaskDifficulty.LOW, has_prior_failures=True) == SearchPolicy.MULTI_CANDIDATE
 

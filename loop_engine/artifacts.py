@@ -4,12 +4,13 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional, Tuple, Union
+
 from pydantic import BaseModel, Field
 
 from loop_engine.base import PROJECT_ROOT
-from loop_engine.kernel_db import KernelDatabase, KERNEL_DB_PATH
 from loop_engine.canonical_objective import EvidenceReference, UnknownReference
-from loop_engine.herald.schema import StrategicIntent, TechnicalScope, AVTableRow, ValidatedCutDownScript
+from loop_engine.herald.schema import AVTableRow, StrategicIntent, TechnicalScope, ValidatedCutDownScript
+from loop_engine.kernel_db import KERNEL_DB_PATH, KernelDatabase
 from loop_engine.slicer.schema import VerticalSliceTask
 
 ARTIFACTS_DIR = PROJECT_ROOT / "scratch" / "artifacts"
@@ -19,14 +20,16 @@ ARTIFACTS_DIR = PROJECT_ROOT / "scratch" / "artifacts"
 # 1. Typed Semantic Handoff Artifact Schemas
 # -----------------------------------------------------------------------------
 
+
 class StructuredSourceArtifact(BaseModel):
     """
     Schema Version 1.0.0.
     Produced by Shadow 6 (The Scribe) -> Consumed by Shadow 3 (The Herald).
-    
+
     Contains conditioned source material, verified factual citations,
     historical pacing benchmarks from Scribe memory, and identified epistemic blindspots.
     """
+
     schema_version: str = "1.0.0"
     artifact_type: Literal["StructuredSourceArtifact"] = "StructuredSourceArtifact"
     source_project_id: str = Field(min_length=2)
@@ -52,15 +55,18 @@ class MasterAVScriptArtifact(BaseModel):
     """
     Schema Version 1.0.0.
     Produced by Shadow 3 (The Herald) -> Consumed by Shadow 7 (The Slicer).
-    
+
     Contains the master 3-column AV script table, strategic intent, pacing stats,
     preserved evidence references, and 9:16 vertical cutdown scripts.
     """
+
     schema_version: str = "1.0.0"
     artifact_type: Literal["MasterAVScriptArtifact"] = "MasterAVScriptArtifact"
     script_id: str = Field(min_length=3)
     source_artifact_id: str = Field(min_length=2, description="Lineage ID of StructuredSourceArtifact")
-    source_artifact_hash: str = Field(default="0" * 64, min_length=8, description="SHA-256 hash of StructuredSourceArtifact")
+    source_artifact_hash: str = Field(
+        default="0" * 64, min_length=8, description="SHA-256 hash of StructuredSourceArtifact"
+    )
     strategic_intent: StrategicIntent
     technical_scope: TechnicalScope
     verified_facts: List[EvidenceReference] = Field(default_factory=list)
@@ -82,15 +88,18 @@ class ProductionPlanDAGArtifact(BaseModel):
     """
     Schema Version 1.0.0.
     Produced by Shadow 7 (The Slicer) -> Consumed by Downstream Route.
-    
+
     Decomposes the master AV script into a topologically-ordered task DAG
     with explicit shot dependencies, equipment specs, and required human approvals.
     """
+
     schema_version: str = "1.0.0"
     artifact_type: Literal["ProductionPlanDAGArtifact"] = "ProductionPlanDAGArtifact"
     plan_id: str = Field(min_length=3)
     source_artifact_id: str = Field(min_length=2, description="Lineage ID of MasterAVScriptArtifact")
-    source_artifact_hash: str = Field(default="0" * 64, min_length=8, description="SHA-256 hash of MasterAVScriptArtifact")
+    source_artifact_hash: str = Field(
+        default="0" * 64, min_length=8, description="SHA-256 hash of MasterAVScriptArtifact"
+    )
     goal_id: str = Field(min_length=3)
     goal_description: str = Field(min_length=5)
     ordered_tasks: List[VerticalSliceTask] = Field(min_length=1)
@@ -124,6 +133,7 @@ class ArtifactRecord(BaseModel):
     """
     Durable, auditable metadata record for an artifact in the registry.
     """
+
     artifact_id: str
     idempotency_key: str
     run_id: str
@@ -147,10 +157,11 @@ class ArtifactRecord(BaseModel):
 # 3. Persistent, Idempotent Artifact Registry
 # -----------------------------------------------------------------------------
 
+
 class ArtifactRegistry:
     """
     Persistent, Idempotent Artifact Custody Registry.
-    
+
     Guarantees:
     - Single-database transactional storage inside scratch/kernel.db.
     - Physical idempotency via 8-tuple cryptographic hash and SQLite UNIQUE constraint.
@@ -224,7 +235,7 @@ class ArtifactRegistry:
 
         artifact_id = f"art_{domain_code}_{idempotency_key[:16]}"
         storage_path = self.storage_dir / f"{artifact_id}.json"
-        
+
         # Write physical payload to disk
         storage_path.write_text(artifact_obj.model_dump_json(indent=2), encoding="utf-8")
 
@@ -232,9 +243,7 @@ class ArtifactRegistry:
 
         with self.kernel_db.get_connection() as conn:
             # Check for existing idempotency key
-            existing = conn.execute(
-                "SELECT * FROM artifacts WHERE idempotency_key = ?;", (idempotency_key,)
-            ).fetchone()
+            existing = conn.execute("SELECT * FROM artifacts WHERE idempotency_key = ?;", (idempotency_key,)).fetchone()
 
             if existing:
                 row_dict = dict(existing)
@@ -318,7 +327,9 @@ class ArtifactRegistry:
         val_json = json.dumps(validator_results, default=str) if validator_results else None
 
         with self.kernel_db.get_connection() as conn:
-            row = conn.execute("SELECT current_state, idempotency_key FROM artifacts WHERE artifact_id = ?;", (artifact_id,)).fetchone()
+            row = conn.execute(
+                "SELECT current_state, idempotency_key FROM artifacts WHERE artifact_id = ?;", (artifact_id,)
+            ).fetchone()
             if not row:
                 raise ValueError(f"Artifact '{artifact_id}' not found in registry.")
 
@@ -394,10 +405,10 @@ class ArtifactRegistry:
         p = Path(artifact_record.storage_path)
         if not p.exists():
             raise FileNotFoundError(f"Artifact physical file missing at '{p}'")
-        
+
         text = p.read_text(encoding="utf-8")
         actual_hash = hashlib.sha256(text.encode("utf-8")).hexdigest()
-        
+
         # Invariant: Physical content hash must match recorded SHA-256
         data = json.loads(text)
         return data

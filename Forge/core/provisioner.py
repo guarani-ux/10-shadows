@@ -16,11 +16,11 @@ import ast
 import hashlib
 import importlib.util
 import inspect
-from pathlib import Path
 import time
 import types
-from typing import Any, Callable, Dict, Optional, Tuple
 import uuid
+from pathlib import Path
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
@@ -66,7 +66,9 @@ class CapabilityProvisioner:
             # If execution_callable is not extracted from candidate_code, verify it doesn't violate identity
             code_str = inspect.getsource(execution_callable) if hasattr(execution_callable, "__code__") else ""
             if code_str and code_str.strip() != candidate_code.strip():
-                raise ValueError("Artifact Identity Violation: Supplied execution_callable differs from candidate_code.")
+                raise ValueError(
+                    "Artifact Identity Violation: Supplied execution_callable differs from candidate_code."
+                )
 
         # Stage 1: Write candidate source code to isolated staging file
         staged_file = self.staging_dir / f"{cap_id}.py"
@@ -93,7 +95,11 @@ class CapabilityProvisioner:
 
         # Stage 5: Mandatory Independent Behavioral Testing
         if not test_fixture:
-            return False, None, "PROVISIONING_FAILED: No independent test fixture provided; cannot advance to ISOLATED_TESTED."
+            return (
+                False,
+                None,
+                "PROVISIONING_FAILED: No independent test fixture provided; cannot advance to ISOLATED_TESTED.",
+            )
 
         # Detect fake dummy test fixtures (e.g. lambda: True without exercising the loaded module)
         try:
@@ -106,7 +112,11 @@ class CapabilityProvisioner:
                 # Inspect bytecode to detect trivial constant return True
                 code_obj = getattr(test_fixture, "__code__", None)
                 if code_obj and len(code_obj.co_names) == 0 and code_obj.co_consts == (None, True):
-                    return False, None, "PROVISIONING_FAILED: Dummy 'lambda: True' fixture rejected. Test must exercise artifact behavior."
+                    return (
+                        False,
+                        None,
+                        "PROVISIONING_FAILED: Dummy 'lambda: True' fixture rejected. Test must exercise artifact behavior.",
+                    )
 
                 test_passed = test_fixture()
 
@@ -138,12 +148,14 @@ class CapabilityProvisioner:
 
         # Stage 8: Create and Register Sealed Manifest
         prov_data = provenance or {}
-        prov_data.update({
-            "artifact_hash": artifact_hash,
-            "staged_path": str(staged_file),
-            "verifier_receipt": verifier_receipt,
-            "deficit": deficit.missing_capability,
-        })
+        prov_data.update(
+            {
+                "artifact_hash": artifact_hash,
+                "staged_path": str(staged_file),
+                "verifier_receipt": verifier_receipt,
+                "deficit": deficit.missing_capability,
+            }
+        )
 
         manifest = CapabilityManifest(
             capability_id=cap_id,

@@ -1,17 +1,19 @@
-import pytest
 from pathlib import Path
-from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, UnknownItem, ProductionConstraints
-from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
-from loop_engine.runners.alchemist_runner import RealAlchemistSelfHealingEngine
+
+import pytest
+
 from loop_engine.gamemaster.state_projector import SovereignStateProjector
 from loop_engine.governor import Governor
+from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, ProductionConstraints, UnknownItem
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.alchemist_runner import RealAlchemistSelfHealingEngine
+from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
 
 
 def test_cross_shadow_closed_loop_vertical_slice(tmp_path):
     """
     Executes and proves the complete integrated multi-Shadow vertical slice:
-    
+
     1. Shadow 3 (The Herald) synthesizes a multi-constraint AV script from a CanonicalMediaBrief.
     2. Verification Gate validates WPM, anti-AI linguistics, cinematography, and 9:16 vertical cutdowns.
     3. Shadow 2 (svris) & SQLite WAL records structured receipt.
@@ -70,11 +72,10 @@ def test_cross_shadow_closed_loop_vertical_slice(tmp_path):
     # STEP 2: Execute Alchemist Active Self-Healing Repair
     # ----------------------------------------------------
     alchemist_runner = RealAlchemistSelfHealingEngine(receipt_store=store)
-    
+
     broken_file = tmp_path / "energy_calc.py"
     broken_file.write_text(
-        "def compute_efficiency(kwh, loss):\n"
-        "    return (kwh - loss) / kwh\n",
+        "def compute_efficiency(kwh, loss):\n    return (kwh - loss) / kwh\n",
         encoding="utf-8",
     )
 
@@ -89,10 +90,10 @@ def test_cross_shadow_closed_loop_vertical_slice(tmp_path):
     )
 
     crash_trace = (
-        f'Traceback (most recent call last):\n'
+        f"Traceback (most recent call last):\n"
         f'  File "{broken_file}", line 2, in compute_efficiency\n'
-        f'    return (kwh - loss) / kwh\n'
-        f'ZeroDivisionError: division by zero\n'
+        f"    return (kwh - loss) / kwh\n"
+        f"ZeroDivisionError: division by zero\n"
     )
 
     alchemist_payload = {

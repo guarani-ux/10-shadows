@@ -18,24 +18,24 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+
 import pytest
 
+from loop_engine.governor import GovernorEngine
+from loop_engine.kernel_db import KernelDatabase as StateDatabase
+from loop_engine.promoter import PromotionCoordinator
+from loop_engine.quarantine import QuarantineManager
 from loop_engine.schema import (
-    State,
     FailureClassification,
     ProposalManifest,
+    State,
+    compute_env_fingerprint,
+    compute_failure_signature,
     compute_spec_hash,
     compute_test_digest,
     compute_tree_hash,
-    compute_env_fingerprint,
-    compute_failure_signature,
 )
-from loop_engine.kernel_db import KernelDatabase as StateDatabase
-from loop_engine.governor import GovernorEngine
 from loop_engine.verifier_gate import PhysicalVerifierGate
-from loop_engine.promoter import PromotionCoordinator
-from loop_engine.quarantine import QuarantineManager
-
 
 
 @pytest.fixture
@@ -79,17 +79,25 @@ def test_hardened_zero_trust_route(test_harness):
 
     task_id = "TASK-AUDIT-001"
     spec_hash = compute_spec_hash("Upgrade return value to v2.0")
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     # 1. Proposer isolated worktree
     wt = test_harness["tmp_path"] / "proposer_wt"
-    subprocess.run(["git", "worktree", "add", "-b", "feature", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "feature", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "app.py"], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "candidate v2"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     # 2. Manifest Registration (8-Point Cryptographic Binding)
     manifest = ProposalManifest(
@@ -111,12 +119,13 @@ def test_hardened_zero_trust_route(test_harness):
     receipt = verifier.verify_candidate(manifest, wt)
 
     if receipt.status != State.VERIFIED:
-        print(f"\n[DEBUG RECEIPT ERROR]:\nStatus: {receipt.status}\nClassification: {receipt.failure_classification}\nSignature: {receipt.failure_signature}\nTrace:\n{receipt.execution_trace}\n")
+        print(
+            f"\n[DEBUG RECEIPT ERROR]:\nStatus: {receipt.status}\nClassification: {receipt.failure_classification}\nSignature: {receipt.failure_signature}\nTrace:\n{receipt.execution_trace}\n"
+        )
 
     assert receipt.status == State.VERIFIED
     assert receipt.physical_tree_hash == cand_tree
     assert db.get_proposal_state(task_id) == State.VERIFIED
-
 
     # 4. Failure classification and non-strike governance
     env_strike = governor.evaluate_failure(task_id, FailureClassification.ENVIRONMENT_FAILURE, "sig_socket_timeout")
@@ -129,22 +138,26 @@ def test_hardened_zero_trust_route(test_harness):
     assert db.get_proposal_state(task_id) == State.POST_PROMOTION_VERIFIED
 
     # 6. Verification of target tree identity
-    target_tree = subprocess.run(["git", "rev-parse", "main^{tree}"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    target_tree = subprocess.run(
+        ["git", "rev-parse", "main^{tree}"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
     assert target_tree == cand_tree
 
     # 7. Recovery reconciliation test
     interrupted_task = "TASK-ZT-RECOVER"
-    db.record_proposal(ProposalManifest(
-        task_id=interrupted_task,
-        spec_hash="spec_recover",
-        base_commit_sha=base_commit,
-        candidate_commit_sha=cand_sha,
-        candidate_tree_sha=cand_tree,
-        verifier_version="2.0.0",
-        acceptance_test_digest=manifest.acceptance_test_digest,
-        env_fingerprint=manifest.env_fingerprint,
-        state=State.PROMOTION_PENDING,
-    ))
+    db.record_proposal(
+        ProposalManifest(
+            task_id=interrupted_task,
+            spec_hash="spec_recover",
+            base_commit_sha=base_commit,
+            candidate_commit_sha=cand_sha,
+            candidate_tree_sha=cand_tree,
+            verifier_version="2.0.0",
+            acceptance_test_digest=manifest.acceptance_test_digest,
+            env_fingerprint=manifest.env_fingerprint,
+            state=State.PROMOTION_PENDING,
+        )
+    )
     promoter.reconcile_interrupted_promotions()
     assert db.get_proposal_state(interrupted_task) in [State.PROMOTED, State.POST_PROMOTION_VERIFIED]
 
@@ -163,17 +176,28 @@ def test_tamper_rejection_and_quarantine(test_harness):
     quarantine = test_harness["quarantine"]
 
     task_id = "TASK-TAMPER-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     # 1. Proposer mutates canonical test fixture
     wt = test_harness["tmp_path"] / "tamper_wt"
-    subprocess.run(["git", "worktree", "add", "-b", "tamper-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "tamper-branch", str(wt), "HEAD"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
     (wt / "canonical_fixtures" / "test_app.py").write_text("def test_app(): assert True\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "tampered test"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,

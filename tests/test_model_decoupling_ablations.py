@@ -114,7 +114,9 @@ def test_ablation_without_failure_feedback_fails_difficult_repair():
     def repair_evaluator(cand: Any) -> CandidateEvaluation:
         if isinstance(cand, dict) and "repaired_weak" in cand.get("code", ""):
             return CandidateEvaluation(candidate_id="c_rep", payload=cand, is_valid=True, score=1.0)
-        return CandidateEvaluation(candidate_id="c_fail", payload=cand, is_valid=False, score=0.0, failure_signature="SIG_FLAWED_STUB")
+        return CandidateEvaluation(
+            candidate_id="c_fail", payload=cand, is_valid=False, score=0.0, failure_signature="SIG_FLAWED_STUB"
+        )
 
     repair_task = BenchmarkTask(
         task_id="BM_REPAIR_TEST",

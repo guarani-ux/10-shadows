@@ -1,15 +1,16 @@
-import pytest
 from pathlib import Path
-from loop_engine.runners.slicer_runner import SlicerDomainRunner
-from loop_engine.receipts import ReceiptStore
+
+import pytest
+
 from loop_engine.governor import Governor
+from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.slicer_runner import SlicerDomainRunner
 
 
 def test_slicer_domain_runner_e2e(tmp_path):
     receipt_store = ReceiptStore(db_path=tmp_path / "test_receipts.db")
     runner = SlicerDomainRunner(receipt_store=receipt_store)
     gov = Governor()
-
 
     payload = {
         "goal_id": "goal_distributed_lock",

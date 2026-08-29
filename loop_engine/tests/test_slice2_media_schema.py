@@ -1,9 +1,10 @@
 import pytest
 from pydantic import ValidationError
+
 from loop_engine.media.schema import (
-    VideoDeconstructionBlueprint,
-    GroundedScene,
     EpistemicBlindspot,
+    GroundedScene,
+    VideoDeconstructionBlueprint,
 )
 
 

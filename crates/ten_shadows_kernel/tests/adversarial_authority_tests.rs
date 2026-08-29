@@ -4,7 +4,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
-use ten_shadows_kernel::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
+use ten_shadows_kernel::candidate::{
+    CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate,
+};
 use ten_shadows_kernel::current_timestamp_rfc3339;
 use ten_shadows_kernel::db::KernelDb;
 use ten_shadows_kernel::dispatcher::{WorkerAuthorization, WorkerDispatcher};
@@ -22,7 +24,10 @@ use ten_shadows_kernel::state_machine::KernelRun;
 use ten_shadows_kernel::{ObjectiveContract, Obligation, SufficiencyRule};
 
 fn create_test_dir(name: &str) -> PathBuf {
-    let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    let millis = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis();
     let dir = std::env::temp_dir().join(format!("ts_adv_test_{}_{}", name, millis));
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -30,16 +35,40 @@ fn create_test_dir(name: &str) -> PathBuf {
 
 fn create_disposable_git_repo(name: &str) -> (PathBuf, String) {
     let repo_dir = create_test_dir(name);
-    Command::new("git").args(["init"]).current_dir(&repo_dir).output().unwrap();
-    Command::new("git").args(["config", "user.name", "Test Harness"]).current_dir(&repo_dir).output().unwrap();
-    Command::new("git").args(["config", "user.email", "test@ten-shadows.local"]).current_dir(&repo_dir).output().unwrap();
+    Command::new("git")
+        .args(["init"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.name", "Test Harness"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["config", "user.email", "test@ten-shadows.local"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
 
     let plan_file = repo_dir.join("plan.md");
     fs::write(&plan_file, "# Baseline Plan").unwrap();
-    Command::new("git").args(["add", "plan.md"]).current_dir(&repo_dir).output().unwrap();
-    Command::new("git").args(["commit", "-m", "chore: initial baseline commit"]).current_dir(&repo_dir).output().unwrap();
+    Command::new("git")
+        .args(["add", "plan.md"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "chore: initial baseline commit"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
 
-    let head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&repo_dir).output().unwrap();
+    let head_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&repo_dir)
+        .output()
+        .unwrap();
     let head = String::from_utf8_lossy(&head_out.stdout).trim().to_string();
     (repo_dir, head)
 }
@@ -55,13 +84,15 @@ fn test_01_post_hoc_candidate_fails_production_custody() {
     let run = KernelRun::new("Audit external codebase", &target, None);
     let run_id = run.run_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &run.task_id, &obj_hash, "baseline_sha_123").unwrap();
+    db.record_run_created(&run_id, &run.task_id, &obj_hash, "baseline_sha_123")
+        .unwrap();
 
     let run_base = run.capture_baseline(Some("baseline_sha_123".into()));
     let run_ws = run_base.prepare_audit_workspace(&target);
     let run_auth = run_ws.authorize_worker("auditor_01");
 
-    let run_cand = run_auth.record_external_candidate("ext_candidate_456", "External candidate audited post-hoc");
+    let run_cand = run_auth
+        .record_external_candidate("ext_candidate_456", "External candidate audited post-hoc");
 
     let verifier_rec = IndependentVerificationRecord {
         verifier_id: "svris_verifier_01".into(),
@@ -87,9 +118,18 @@ fn test_01_post_hoc_candidate_fails_production_custody() {
     let (_promoted, receipt) = run_ver.promote_and_seal();
 
     let report = evaluate_receipt(&receipt, Some(&db));
-    assert!(report.is_execution_valid, "Audit receipt itself is valid execution record");
-    assert!(!report.is_production_valid, "External candidate must NOT qualify as Ten Shadows produced");
-    assert!(report.errors.iter().any(|e| e.contains("Candidate was NOT produced under Ten Shadows custody")));
+    assert!(
+        report.is_execution_valid,
+        "Audit receipt itself is valid execution record"
+    );
+    assert!(
+        !report.is_production_valid,
+        "External candidate must NOT qualify as Ten Shadows produced"
+    );
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("Candidate was NOT produced under Ten Shadows custody")));
 }
 
 /// TEST 2: Fake receipt without database anchor must fail execution validity.
@@ -144,8 +184,14 @@ fn test_02_fake_receipt_unanchored_fails() {
     let report = evaluate_receipt(&fake_receipt, Some(&db));
     assert!(!report.is_execution_valid);
     assert!(!report.is_production_valid);
-    assert!(report.errors.iter().any(|e| e.contains("signature mismatch")));
-    assert!(report.errors.iter().any(|e| e.contains("does not exist in authoritative KernelDatabase")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("signature mismatch")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("does not exist in authoritative KernelDatabase")));
 }
 
 /// TEST 3: Self-certification (builder_id == verifier_id) must be rejected.
@@ -159,7 +205,8 @@ fn test_03_self_certification_rejected() {
     let run = KernelRun::new("Test self certification", &target, None);
     let run_id = run.run_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_sha").unwrap();
+    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_sha")
+        .unwrap();
 
     let run_base = run.capture_baseline(Some("base_sha".into()));
     let run_ws = run_base.prepare_audit_workspace(&target);
@@ -208,7 +255,11 @@ fn test_03_self_certification_rejected() {
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(!report.is_execution_valid);
-    assert!(report.errors.iter().any(|e| e.contains("builder_id 'builder_alpha' is identical to verifier_id 'builder_alpha'")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e
+            .contains("builder_id 'builder_alpha' is identical to verifier_id 'builder_alpha'")));
 }
 
 /// TEST 4: Stale receipt replay must fail signature verification.
@@ -222,7 +273,8 @@ fn test_04_stale_receipt_replay_rejected() {
     let run = KernelRun::new("Original objective", &target, None);
     let run_id = run.run_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_1").unwrap();
+    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_1")
+        .unwrap();
 
     let run_base = run.capture_baseline(Some("base_1".into()));
     let run_ws = run_base.prepare_audit_workspace(&target);
@@ -270,28 +322,33 @@ fn test_04_stale_receipt_replay_rejected() {
     valid_receipt.run_id = "REPLAYED-RUN-ID-999".into();
     let report = evaluate_receipt(&valid_receipt, Some(&db));
     assert!(!report.is_execution_valid);
-    assert!(report.errors.iter().any(|e| e.contains("signature mismatch")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("signature mismatch")));
 }
 
 /// TEST 5: Law 4 Evidence Monotonicity Violation must be mechanically rejected.
 #[test]
 fn test_05_evidence_upgrade_law_4_violation() {
-    let res = assert_evidence_monotonicity(
-        EvidenceModality::Structural,
-        EvidenceModality::Empirical,
-    );
-    assert!(matches!(res, Err(SubstrateLawError::MonotonicityViolation(_))));
+    let res =
+        assert_evidence_monotonicity(EvidenceModality::Structural, EvidenceModality::Empirical);
+    assert!(matches!(
+        res,
+        Err(SubstrateLawError::MonotonicityViolation(_))
+    ));
 
     let res2 = assert_evidence_monotonicity(
         EvidenceModality::Simulated,
         EvidenceModality::DeterministicTest,
     );
-    assert!(matches!(res2, Err(SubstrateLawError::MonotonicityViolation(_))));
+    assert!(matches!(
+        res2,
+        Err(SubstrateLawError::MonotonicityViolation(_))
+    ));
 
-    let valid_downgrade = assert_evidence_monotonicity(
-        EvidenceModality::Empirical,
-        EvidenceModality::Structural,
-    );
+    let valid_downgrade =
+        assert_evidence_monotonicity(EvidenceModality::Empirical, EvidenceModality::Structural);
     assert!(valid_downgrade.is_ok());
 }
 
@@ -305,7 +362,12 @@ fn test_06_valid_governed_production_success() {
     let contract = ObjectiveContract::new(
         "contract_gov_01",
         "Governed code improvement",
-        vec![Obligation::new("ob_gov", "Implement feature in governed workspace", "GOVERNED_FEATURE", true)],
+        vec![Obligation::new(
+            "ob_gov",
+            "Implement feature in governed workspace",
+            "GOVERNED_FEATURE",
+            true,
+        )],
         SufficiencyRule::AllMandatory,
     );
     let run = KernelRun::new("Governed code improvement", &disposable_repo, None)
@@ -313,10 +375,11 @@ fn test_06_valid_governed_production_success() {
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
-    
+
     // Spawns isolated ephemeral GovernedWorkspace
     let wt_tmp = create_test_dir("wts");
     let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
@@ -327,11 +390,29 @@ fn test_06_valid_governed_production_success() {
     // Worker modifies file inside the governed workspace via deterministic dispatcher
     let feature_file = ws_path.join("feature.py");
     fs::write(&feature_file, "def feature(): return 42").unwrap();
-    Command::new("git").args(["add", "feature.py"]).current_dir(&ws_path).output().unwrap();
-    Command::new("git").args(["commit", "-m", "feat: implement feature in governed workspace"]).current_dir(&ws_path).output().unwrap();
+    Command::new("git")
+        .args(["add", "feature.py"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args([
+            "commit",
+            "-m",
+            "feat: implement feature in governed workspace",
+        ])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
 
-    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
-    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+    let cand_head_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout)
+        .trim()
+        .to_string();
 
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
@@ -376,14 +457,30 @@ fn test_06_valid_governed_production_success() {
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(report.is_execution_valid, "Valid execution receipt");
-    assert!(report.is_production_valid, "Candidate was produced under Ten Shadows custody: {:?}", report.errors);
+    assert!(
+        report.is_production_valid,
+        "Candidate was produced under Ten Shadows custody: {:?}",
+        report.errors
+    );
     assert_eq!(report.errors.len(), 0);
 
     // Verify promotion advanced authoritative target from baseline to candidate
-    let final_target_head = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&disposable_repo).output().unwrap();
-    let final_head = String::from_utf8_lossy(&final_target_head.stdout).trim().to_string();
-    assert_eq!(final_head, candidate_sha, "Authoritative target was promoted to candidate SHA");
-    assert_ne!(final_head, baseline_sha, "Target HEAD advanced from baseline");
+    let final_target_head = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&disposable_repo)
+        .output()
+        .unwrap();
+    let final_head = String::from_utf8_lossy(&final_target_head.stdout)
+        .trim()
+        .to_string();
+    assert_eq!(
+        final_head, candidate_sha,
+        "Authoritative target was promoted to candidate SHA"
+    );
+    assert_ne!(
+        final_head, baseline_sha,
+        "Target HEAD advanced from baseline"
+    );
 }
 
 /// TEST 7: Retroactive Worker / Broken Ingress Lineage fails production validity.
@@ -396,7 +493,8 @@ fn test_07_retroactive_worker_fails_lineage() {
 
     let run_id = "run_retro_07".to_string();
     let obj_hash = "obj_hash_07".to_string();
-    db.record_run_created(&run_id, "task_07", &obj_hash, "base_07").unwrap();
+    db.record_run_created(&run_id, "task_07", &obj_hash, "base_07")
+        .unwrap();
 
     let external_cand = CandidateClassification::External(ExternalCandidate {
         candidate_sha: "unauthorized_ext_sha".into(),
@@ -467,7 +565,10 @@ fn test_07_retroactive_worker_fails_lineage() {
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(report.is_execution_valid);
     assert!(!report.is_production_valid);
-    assert!(report.errors.iter().any(|e| e.contains("Candidate was NOT produced under Ten Shadows custody")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("Candidate was NOT produced under Ten Shadows custody")));
 }
 
 /// TEST 8: Wrong Baseline Mismatch (Candidate lineage doesn't match starting_head).
@@ -480,7 +581,8 @@ fn test_08_wrong_baseline_fails_lineage() {
 
     let run_id = "run_wrong_base_08".to_string();
     let obj_hash = "obj_hash_08".to_string();
-    db.record_run_created(&run_id, "task_08", &obj_hash, "true_baseline_sha").unwrap();
+    db.record_run_created(&run_id, "task_08", &obj_hash, "true_baseline_sha")
+        .unwrap();
 
     let forged_lineage = CandidateLineage {
         parent_baseline_sha: "WRONG_FORGED_BASELINE".into(),
@@ -521,7 +623,9 @@ fn test_08_wrong_baseline_fails_lineage() {
         target_path: target.display().to_string(),
         starting_head: Some("true_baseline_sha".into()),
         final_head: Some("candidate_08".into()),
-        candidate_classification: CandidateClassification::Governed(GovernedCandidate { lineage: forged_lineage }),
+        candidate_classification: CandidateClassification::Governed(GovernedCandidate {
+            lineage: forged_lineage,
+        }),
         routing_strategy: RoutingStrategy::CodeHardening,
         routing_decision_digest: "digest".into(),
         capabilities_selected: vec![],
@@ -554,7 +658,10 @@ fn test_08_wrong_baseline_fails_lineage() {
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(!report.is_production_valid);
-    assert!(report.errors.iter().any(|e| e.contains("Lineage baseline mismatch")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("Lineage baseline mismatch")));
 }
 
 /// TEST 9: Interrupted / Failed Verification Rejects Promotion.
@@ -568,7 +675,8 @@ fn test_09_failed_verification_rejects_promotion() {
     let run = KernelRun::new("Failing test run", &target, None);
     let run_id = run.run_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_09").unwrap();
+    db.record_run_created(&run_id, &run.task_id, &obj_hash, "base_09")
+        .unwrap();
 
     let run_base = run.capture_baseline(Some("base_09".into()));
     let run_ws = run_base.prepare_audit_workspace(&target);
@@ -617,12 +725,18 @@ fn test_09_failed_verification_rejects_promotion() {
     let (_promoted, receipt) = run_ver.promote_and_seal();
 
     assert_eq!(receipt.final_status, RunStatus::Failed);
-    assert_eq!(receipt.epistemic_claims.claim_independently_verified, false);
-    assert_eq!(receipt.epistemic_claims.claim_promoted, false);
+    assert!(!receipt.epistemic_claims.claim_independently_verified);
+    assert!(!receipt.epistemic_claims.claim_promoted);
 
     let report = evaluate_receipt(&receipt, Some(&db));
-    assert!(report.is_execution_valid, "Failure is a valid execution receipt");
-    assert!(!report.is_production_valid, "Failed run cannot produce promoted candidate");
+    assert!(
+        report.is_execution_valid,
+        "Failure is a valid execution receipt"
+    );
+    assert!(
+        !report.is_production_valid,
+        "Failed run cannot produce promoted candidate"
+    );
 }
 
 /// TEST 10: Missing empirical provider receipt when claiming EMPIRICAL modality fails execution.
@@ -635,7 +749,8 @@ fn test_10_missing_empirical_provider_receipt_fails() {
 
     let run_id = "run_emp_10".to_string();
     let obj_hash = "obj_hash_10".to_string();
-    db.record_run_created(&run_id, "task_10", &obj_hash, "base_10").unwrap();
+    db.record_run_created(&run_id, "task_10", &obj_hash, "base_10")
+        .unwrap();
 
     let bad_worker = WorkerInvocationRecord {
         invocation_id: "inv_10".into(),
@@ -719,7 +834,10 @@ fn test_10_missing_empirical_provider_receipt_fails() {
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(!report.is_execution_valid);
-    assert!(report.errors.iter().any(|e| e.contains("claims EMPIRICAL modality but missing provider_receipt")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("claims EMPIRICAL modality but missing provider_receipt")));
 }
 
 /// TEST 11: Authoritative Source Repository supplied directly as mutable workspace is REJECTED.
@@ -732,9 +850,15 @@ fn test_11_authoritative_source_as_workspace_rejected() {
         "run_guard_11",
         &source,
         &baseline_sha,
-        Some(&repo.parent().unwrap().to_path_buf()),
+        Some(repo.parent().unwrap()),
     );
-    assert!(res.is_ok() || matches!(res, Err(RepositoryRoleError::AuthoritativeSourceMutationForbidden(_))));
+    assert!(
+        res.is_ok()
+            || matches!(
+                res,
+                Err(RepositoryRoleError::AuthoritativeSourceMutationForbidden(_))
+            )
+    );
 }
 
 /// TEST 12: Diverged Authoritative Target between Baseline and Promotion rejects promotion.
@@ -748,7 +872,8 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_div");
@@ -760,10 +885,24 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
     // Worker creates candidate inside worktree
     let feature_file = ws_path.join("feature.py");
     fs::write(&feature_file, "def feat(): pass").unwrap();
-    Command::new("git").args(["add", "feature.py"]).current_dir(&ws_path).output().unwrap();
-    Command::new("git").args(["commit", "-m", "feat: candidate commit"]).current_dir(&ws_path).output().unwrap();
-    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
-    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+    Command::new("git")
+        .args(["add", "feature.py"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "feat: candidate commit"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    let cand_head_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout)
+        .trim()
+        .to_string();
 
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
@@ -786,8 +925,16 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
     // CRITICAL: Simulate external mutation to the authoritative repository BEFORE promotion!
     let external_file = disposable_repo.join("unrelated_external_commit.txt");
     fs::write(&external_file, "external unexpected change").unwrap();
-    Command::new("git").args(["add", "unrelated_external_commit.txt"]).current_dir(&disposable_repo).output().unwrap();
-    Command::new("git").args(["commit", "-m", "fix: external unexpected commit on master"]).current_dir(&disposable_repo).output().unwrap();
+    Command::new("git")
+        .args(["add", "unrelated_external_commit.txt"])
+        .current_dir(&disposable_repo)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "fix: external unexpected commit on master"])
+        .current_dir(&disposable_repo)
+        .output()
+        .unwrap();
 
     let ver_rec = IndependentVerificationRecord {
         verifier_id: "svris_oracle".into(),
@@ -814,10 +961,13 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
 
     // Promotion MUST fail because authoritative target diverged!
     assert_eq!(receipt.final_status, RunStatus::Failed);
-    assert_eq!(receipt.epistemic_claims.claim_promoted, false);
+    assert!(!receipt.epistemic_claims.claim_promoted);
 
     let report = evaluate_receipt(&receipt, Some(&db));
-    assert!(!report.is_production_valid, "Diverged authoritative target must fail production validity");
+    assert!(
+        !report.is_production_valid,
+        "Diverged authoritative target must fail production validity"
+    );
 }
 
 /// TEST 13: Worker Token Tampering is mechanically rejected.
@@ -844,7 +994,10 @@ fn test_13_worker_token_tamper_rejected() {
 
     // Tamper with objective_hash
     auth.objective_hash = "tampered_objective_hash_13".into();
-    assert!(!auth.verify_token(), "Tampered authorization must fail verify_token()");
+    assert!(
+        !auth.verify_token(),
+        "Tampered authorization must fail verify_token()"
+    );
 }
 
 /// TEST 14: End-to-End Worker Dispatch via Rust Dispatcher Module.
@@ -884,7 +1037,12 @@ fn test_15_repair_loop_multi_attempt_retention() {
     let contract = ObjectiveContract::new(
         "contract_rep",
         "fail_attempt_1 and repair",
-        vec![Obligation::new("ob_rep", "Repair feature", "REPAIR_FEATURE", true)],
+        vec![Obligation::new(
+            "ob_rep",
+            "Repair feature",
+            "REPAIR_FEATURE",
+            true,
+        )],
         SufficiencyRule::AllMandatory,
     );
     let run = KernelRun::new("fail_attempt_1 and repair", &disposable_repo, None)
@@ -892,7 +1050,8 @@ fn test_15_repair_loop_multi_attempt_retention() {
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_rep");
@@ -901,7 +1060,9 @@ fn test_15_repair_loop_multi_attempt_retention() {
 
     // Attempt 1: Worker produces deliberate failing test
     let run_auth1 = run_ws.authorize_worker("repair_builder");
-    let run_cand1 = run_auth1.dispatch_and_produce_candidate("deterministic", "deterministic-v1", None).unwrap();
+    let run_cand1 = run_auth1
+        .dispatch_and_produce_candidate("deterministic", "deterministic-v1", None)
+        .unwrap();
 
     let failing_ver = IndependentVerificationRecord {
         verifier_id: "svris_rep_01".into(),
@@ -929,11 +1090,16 @@ fn test_15_repair_loop_multi_attempt_retention() {
     let run_auth2 = run_ver1.retry_repair("Test failed with assert False");
     assert_eq!(run_auth2.current_attempt, 2);
     assert_eq!(run_auth2.attempts.len(), 1);
-    assert_eq!(run_auth2.attempts[0].rejection_reason, Some("Test failed with assert False".into()));
+    assert_eq!(
+        run_auth2.attempts[0].rejection_reason,
+        Some("Test failed with assert False".into())
+    );
 
     // Attempt 2: Worker repairs the failure
-    let run_cand2 = run_auth2.dispatch_and_produce_candidate("deterministic", "deterministic-v1", None).unwrap();
-    
+    let run_cand2 = run_auth2
+        .dispatch_and_produce_candidate("deterministic", "deterministic-v1", None)
+        .unwrap();
+
     let passing_ver = IndependentVerificationRecord {
         verifier_id: "svris_rep_02".into(),
         verifier_type: VerificationType::IndependentBehavioralOracle,
@@ -959,7 +1125,7 @@ fn test_15_repair_loop_multi_attempt_retention() {
 
     assert_eq!(receipt.final_status, RunStatus::VerifiedSuccess);
     assert_eq!(receipt.attempts.len(), 1);
-    assert_eq!(receipt.epistemic_claims.claim_promoted, true);
+    assert!(receipt.epistemic_claims.claim_promoted);
 
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(report.is_execution_valid);
@@ -975,7 +1141,12 @@ fn test_16_shadow_domain_forge_dispatch() {
     let contract = ObjectiveContract::new(
         "contract_sh_f",
         "Synthesize Forge module",
-        vec![Obligation::new("ob_sh_f", "Synthesize Forge module", "FORGE_SYNTHESIS", true)],
+        vec![Obligation::new(
+            "ob_sh_f",
+            "Synthesize Forge module",
+            "FORGE_SYNTHESIS",
+            true,
+        )],
         SufficiencyRule::AllMandatory,
     );
     let run = KernelRun::new("Synthesize Forge module", &disposable_repo, None)
@@ -983,7 +1154,8 @@ fn test_16_shadow_domain_forge_dispatch() {
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_sh_f");
@@ -991,7 +1163,9 @@ fn test_16_shadow_domain_forge_dispatch() {
     let run_auth = run_ws.authorize_worker("forge_domain_builder");
 
     // Dispatch to shadow:forge domain adapter
-    let run_cand = run_auth.dispatch_and_produce_candidate("shadow:forge", "forge", None).unwrap();
+    let run_cand = run_auth
+        .dispatch_and_produce_candidate("shadow:forge", "forge", None)
+        .unwrap();
     match run_cand.candidate_classification.as_ref().unwrap() {
         CandidateClassification::Governed(g) => {
             assert_ne!(&g.lineage.candidate_sha, &baseline_sha);
@@ -1025,7 +1199,10 @@ fn test_16_shadow_domain_forge_dispatch() {
 
     assert_eq!(receipt.final_status, RunStatus::VerifiedSuccess);
     assert_eq!(receipt.worker_invocations[0].provider, "shadow_forge");
-    assert_eq!(receipt.worker_invocations[0].model, "SHADOW_FORGE_ENGINE_v3");
+    assert_eq!(
+        receipt.worker_invocations[0].model,
+        "SHADOW_FORGE_ENGINE_v3"
+    );
     assert_eq!(receipt.worker_invocations[0].status, "SUCCESS");
 
     let report = evaluate_receipt(&receipt, Some(&db));
@@ -1037,7 +1214,12 @@ fn test_16_shadow_domain_forge_dispatch() {
 fn test_17_relational_graph_epistemic_monotonicity() {
     use ten_shadows_kernel::graph::{EpistemicStatus, NodeType, RelationalNode};
 
-    let node = RelationalNode::new("req_compress", NodeType::Requirement, "Lossless Compression", EpistemicStatus::Proposed);
+    let node = RelationalNode::new(
+        "req_compress",
+        NodeType::Requirement,
+        "Lossless Compression",
+        EpistemicStatus::Proposed,
+    );
     assert_eq!(node.epistemic_status, EpistemicStatus::Proposed);
     assert!(!node.provenance_digest.is_empty());
 
@@ -1054,7 +1236,13 @@ fn test_18_zero_mutation_governed_candidate_rejected() {
     let db = KernelDb::open(&db_dir).unwrap();
 
     let run = KernelRun::new("Zero mutation attempt", &disposable_repo, None);
-    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+    db.record_run_created(
+        &run.run_id,
+        &run.task_id,
+        &run.objective_hash,
+        &baseline_sha,
+    )
+    .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_zero_mut");
@@ -1081,7 +1269,11 @@ fn test_18_zero_mutation_governed_candidate_rejected() {
     let run_cand = run_auth.record_governed_candidate(&baseline_sha, mock_worker, 0);
 
     // Must be classified as External, NOT Governed!
-    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+    assert!(!run_cand
+        .candidate_classification
+        .as_ref()
+        .unwrap()
+        .is_governed());
 
     let mock_ver = IndependentVerificationRecord {
         verifier_id: "svris_verifier".into(),
@@ -1121,15 +1313,26 @@ fn test_19_external_candidate_verified_emits_external_audit_status() {
     let db = KernelDb::open(&db_dir).unwrap();
 
     let run = KernelRun::new("External audit", &disposable_repo, None);
-    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+    db.record_run_created(
+        &run.run_id,
+        &run.task_id,
+        &run.objective_hash,
+        &baseline_sha,
+    )
+    .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_ext_audit");
     let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
     let run_auth = run_ws.authorize_worker("test_worker");
 
-    let run_cand = run_auth.record_external_candidate("external_sha_12345", "Pre-existing external candidate");
-    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+    let run_cand =
+        run_auth.record_external_candidate("external_sha_12345", "Pre-existing external candidate");
+    assert!(!run_cand
+        .candidate_classification
+        .as_ref()
+        .unwrap()
+        .is_governed());
 
     let mock_ver = IndependentVerificationRecord {
         verifier_id: "svris_verifier".into(),
@@ -1155,7 +1358,11 @@ fn test_19_external_candidate_verified_emits_external_audit_status() {
     let (_promoted, receipt) = run_ver.promote_and_seal();
 
     assert_eq!(receipt.final_status, RunStatus::ExternalAuditVerified);
-    assert!(!receipt.epistemic_claims.claim_candidate_produced_under_custody);
+    assert!(
+        !receipt
+            .epistemic_claims
+            .claim_candidate_produced_under_custody
+    );
     assert!(!receipt.epistemic_claims.claim_promoted);
 
     let report = evaluate_receipt(&receipt, Some(&db));
@@ -1171,13 +1378,30 @@ fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
 
     // 1. External AI writes and commits to target repo before Ten Shadows runs
     fs::write(disposable_repo.join("feature.txt"), "External work").unwrap();
-    Command::new("git").args(["add", "feature.txt"]).current_dir(&disposable_repo).output().unwrap();
-    Command::new("git").args(["commit", "-m", "feat: external commit"]).current_dir(&disposable_repo).output().unwrap();
-    let external_head = AuthoritativeSource::new(&disposable_repo).unwrap().capture_head().unwrap();
+    Command::new("git")
+        .args(["add", "feature.txt"])
+        .current_dir(&disposable_repo)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "feat: external commit"])
+        .current_dir(&disposable_repo)
+        .output()
+        .unwrap();
+    let external_head = AuthoritativeSource::new(&disposable_repo)
+        .unwrap()
+        .capture_head()
+        .unwrap();
 
     // 2. Ten Shadows is invoked post-hoc
     let run = KernelRun::new("Audit external work", &disposable_repo, None);
-    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &external_head).unwrap();
+    db.record_run_created(
+        &run.run_id,
+        &run.task_id,
+        &run.objective_hash,
+        &external_head,
+    )
+    .unwrap();
 
     let run_base = run.capture_baseline(Some(external_head.clone()));
     assert_eq!(run_base.starting_head.as_ref().unwrap(), &external_head);
@@ -1204,7 +1428,11 @@ fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
     };
 
     let run_cand = run_auth.record_governed_candidate(&external_head, mock_worker, 0);
-    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+    assert!(!run_cand
+        .candidate_classification
+        .as_ref()
+        .unwrap()
+        .is_governed());
 
     let mock_ver = IndependentVerificationRecord {
         verifier_id: "svris_verifier".into(),
@@ -1233,7 +1461,10 @@ fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(report.is_execution_valid);
     assert!(!report.is_production_valid);
-    assert!(report.errors.iter().any(|e| e.contains("ExternalCandidate")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("ExternalCandidate")));
 }
 
 /// TEST 21: REQUIRED FALSIFICATION FIXTURE (Negative Control)
@@ -1248,7 +1479,12 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
     let contract = ObjectiveContract::new(
         "contract_mult_neg",
         "Add multiplication capability",
-        vec![Obligation::new("ob_mult", "Multiply", "ARITHMETIC_MULTIPLICATION", true)],
+        vec![Obligation::new(
+            "ob_mult",
+            "Multiply",
+            "ARITHMETIC_MULTIPLICATION",
+            true,
+        )],
         SufficiencyRule::AllMandatory,
     );
     let run = KernelRun::new("Add multiplication capability", &disposable_repo, None)
@@ -1256,7 +1492,8 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_neg_ctrl");
@@ -1268,11 +1505,25 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
     // Worker creates file and commits
     let math_file = ws_path.join("math_lib.py");
     fs::write(&math_file, "def add(a, b): return a + b").unwrap();
-    Command::new("git").args(["add", "math_lib.py"]).current_dir(&ws_path).output().unwrap();
-    Command::new("git").args(["commit", "-m", "feat: implement addition only"]).current_dir(&ws_path).output().unwrap();
+    Command::new("git")
+        .args(["add", "math_lib.py"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "feat: implement addition only"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
 
-    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
-    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+    let cand_head_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout)
+        .trim()
+        .to_string();
 
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
@@ -1325,7 +1576,11 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
     assert!(report.is_execution_valid);
     assert!(report.is_production_valid);
     assert!(!report.is_objective_accomplished);
-    assert!(report.errors.iter().any(|e| e.contains("OBJECTIVE_UNSATISFIED") || e.contains("ObjectiveSufficiencyProof failed")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("OBJECTIVE_UNSATISFIED")
+            || e.contains("ObjectiveSufficiencyProof failed")));
 }
 
 /// TEST 22: POSITIVE CONTROL
@@ -1340,7 +1595,12 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
     let contract = ObjectiveContract::new(
         "contract_mult_pos",
         "Add multiplication capability",
-        vec![Obligation::new("ob_mult", "Multiply", "ARITHMETIC_MULTIPLICATION", true)],
+        vec![Obligation::new(
+            "ob_mult",
+            "Multiply",
+            "ARITHMETIC_MULTIPLICATION",
+            true,
+        )],
         SufficiencyRule::AllMandatory,
     );
     let run = KernelRun::new("Add multiplication capability", &disposable_repo, None)
@@ -1348,7 +1608,8 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
-    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha).unwrap();
+    db.record_run_created(&run_id, &task_id, &obj_hash, &baseline_sha)
+        .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_pos_ctrl");
@@ -1360,11 +1621,25 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
     // Worker creates multiplication implementation and commits
     let math_file = ws_path.join("math_lib.py");
     fs::write(&math_file, "def multiply(a, b): return a * b").unwrap();
-    Command::new("git").args(["add", "math_lib.py"]).current_dir(&ws_path).output().unwrap();
-    Command::new("git").args(["commit", "-m", "feat: implement multiply"]).current_dir(&ws_path).output().unwrap();
+    Command::new("git")
+        .args(["add", "math_lib.py"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    Command::new("git")
+        .args(["commit", "-m", "feat: implement multiply"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
 
-    let cand_head_out = Command::new("git").args(["rev-parse", "HEAD"]).current_dir(&ws_path).output().unwrap();
-    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout).trim().to_string();
+    let cand_head_out = Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(&ws_path)
+        .output()
+        .unwrap();
+    let candidate_sha = String::from_utf8_lossy(&cand_head_out.stdout)
+        .trim()
+        .to_string();
 
     let worker_rec = WorkerInvocationRecord {
         invocation_id: format!("inv_{}", task_id),
@@ -1421,14 +1696,22 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
 /// TEST 23: Incomplete obligation coverage blocks objective accomplishment.
 #[test]
 fn test_23_incomplete_obligations_blocks_objective_accomplishment() {
-    let mut ob1 = Obligation::new("ob1", "Implement multiply", "ARITHMETIC_MULTIPLICATION", true);
+    let mut ob1 = Obligation::new(
+        "ob1",
+        "Implement multiply",
+        "ARITHMETIC_MULTIPLICATION",
+        true,
+    );
 
     // Only ob1 is satisfied
     ob1.satisfy("digest_mult", "Multiply verified");
     let partial_contract = ObjectiveContract::new(
         "contract_dual",
         "Implement multiply and divide",
-        vec![ob1, Obligation::new("ob2", "Implement divide", "ARITHMETIC_DIVISION", true)],
+        vec![
+            ob1,
+            Obligation::new("ob2", "Implement divide", "ARITHMETIC_DIVISION", true),
+        ],
         SufficiencyRule::AllMandatory,
     );
 
@@ -1446,7 +1729,10 @@ fn test_24_disjunctive_any_of_sufficiency_rule() {
     let active_contract = ObjectiveContract::new(
         "contract_any",
         "Execute via primary or alt",
-        vec![Obligation::new("ob_pri", "Primary method", "METHOD_A", false), ob_alt],
+        vec![
+            Obligation::new("ob_pri", "Primary method", "METHOD_A", false),
+            ob_alt,
+        ],
         SufficiencyRule::AnyOf(vec!["ob_pri".into(), "ob_alt".into()]),
     );
 
@@ -1463,7 +1749,13 @@ fn test_25_tampered_proof_digest_rejected() {
     let db = KernelDb::open(&db_dir).unwrap();
 
     let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
-    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+    db.record_run_created(
+        &run.run_id,
+        &run.task_id,
+        &run.objective_hash,
+        &baseline_sha,
+    )
+    .unwrap();
 
     let run_base = run.capture_baseline(Some(baseline_sha.clone()));
     let wt_tmp = create_test_dir("wts_tamper");
@@ -1518,5 +1810,8 @@ fn test_25_tampered_proof_digest_rejected() {
     let report = evaluate_receipt(&receipt, Some(&db));
     assert!(!report.is_execution_valid);
     assert!(!report.is_objective_accomplished);
-    assert!(report.errors.iter().any(|e| e.contains("Receipt signature mismatch")));
+    assert!(report
+        .errors
+        .iter()
+        .any(|e| e.contains("Receipt signature mismatch")));
 }

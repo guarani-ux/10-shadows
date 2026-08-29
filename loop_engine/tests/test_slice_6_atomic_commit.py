@@ -1,10 +1,12 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.receipts import (
+    AtomicCommitError,
+    ReceiptStore,
     atomic_two_phase_commit,
     compute_file_sha256,
-    ReceiptStore,
-    AtomicCommitError,
 )
 
 

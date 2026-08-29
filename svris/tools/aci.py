@@ -21,16 +21,12 @@ class AntiCheatVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call):
         if isinstance(node.func, ast.Name) and node.func.id in ("eval", "exec"):
-            self.violations.append(
-                f"{self.filename}:{node.lineno}: Banned execution primitive '{node.func.id}()'"
-            )
+            self.violations.append(f"{self.filename}:{node.lineno}: Banned execution primitive '{node.func.id}()'")
         self.generic_visit(node)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler):
         if node.type is None:
-            self.violations.append(
-                f"{self.filename}:{node.lineno}: Bare 'except:' clause forbidden"
-            )
+            self.violations.append(f"{self.filename}:{node.lineno}: Bare 'except:' clause forbidden")
         if len(node.body) == 1 and isinstance(node.body[0], ast.Pass):
             self.violations.append(
                 f"{self.filename}:{node.lineno}: Silent error suppression ('except ...: pass') forbidden"
@@ -42,10 +38,13 @@ class AntiCheatVisitor(ast.NodeVisitor):
         if len(node.body) == 1:
             stmt = node.body[0]
             if isinstance(stmt, ast.Pass):
-                self.violations.append(
-                    f"{self.filename}:{node.lineno}: Function '{node.name}' has empty 'pass' body"
-                )
-            elif isinstance(stmt, ast.Raise) and isinstance(stmt.exc, ast.Call) and isinstance(stmt.exc.func, ast.Name) and stmt.exc.func.id == "NotImplementedError":
+                self.violations.append(f"{self.filename}:{node.lineno}: Function '{node.name}' has empty 'pass' body")
+            elif (
+                isinstance(stmt, ast.Raise)
+                and isinstance(stmt.exc, ast.Call)
+                and isinstance(stmt.exc.func, ast.Name)
+                and stmt.exc.func.id == "NotImplementedError"
+            ):
                 self.violations.append(
                     f"{self.filename}:{node.lineno}: Function '{node.name}' has stub 'NotImplementedError'"
                 )
@@ -96,7 +95,7 @@ def scan_directory(directory: str) -> Tuple[int, List[str]]:
 def main():
     target_dir = sys.argv[1] if len(sys.argv) > 1 else "svris"
     files_scanned, violations = scan_directory(target_dir)
-    print(f"--- ACI Anti-Cheat Scan Report ---")
+    print("--- ACI Anti-Cheat Scan Report ---")
     print(f"Target: {target_dir} | Files Scanned: {files_scanned}")
     if violations:
         print(f"FAILED: {len(violations)} violations detected:")

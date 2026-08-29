@@ -18,10 +18,7 @@ pub struct VerificationReport {
     pub errors: Vec<String>,
 }
 
-pub fn evaluate_receipt(
-    receipt: &TenShadowsReceipt,
-    db: Option<&KernelDb>,
-) -> VerificationReport {
+pub fn evaluate_receipt(receipt: &TenShadowsReceipt, db: Option<&KernelDb>) -> VerificationReport {
     let mut errors = Vec::new();
 
     // 1. Cryptographic Signature Verification
@@ -68,11 +65,17 @@ pub fn evaluate_receipt(
                 ));
             }
             if v.verifier_type == VerificationType::BuilderTest {
-                errors.push("BUILDER_TEST evidence is insufficient for consequential VERIFIED_SUCCESS.".into());
+                errors.push(
+                    "BUILDER_TEST evidence is insufficient for consequential VERIFIED_SUCCESS."
+                        .into(),
+                );
             }
         }
     } else if receipt.final_status == RunStatus::VerifiedSuccess {
-        errors.push("Consequential VERIFIED_SUCCESS status requires independent verification evidence.".into());
+        errors.push(
+            "Consequential VERIFIED_SUCCESS status requires independent verification evidence."
+                .into(),
+        );
     }
 
     // 4. Empirical Worker Verification
@@ -80,10 +83,16 @@ pub fn evaluate_receipt(
         if w.modality == EvidenceModality::Empirical {
             if let Some(ref pr) = w.provider_receipt {
                 if pr.duration_seconds <= 0.0 || pr.transaction_id.is_empty() {
-                    errors.push(format!("Worker '{}' has invalid empirical receipt details.", w.worker_id));
+                    errors.push(format!(
+                        "Worker '{}' has invalid empirical receipt details.",
+                        w.worker_id
+                    ));
                 }
             } else {
-                errors.push(format!("Worker '{}' claims EMPIRICAL modality but missing provider_receipt.", w.worker_id));
+                errors.push(format!(
+                    "Worker '{}' claims EMPIRICAL modality but missing provider_receipt.",
+                    w.worker_id
+                ));
             }
         }
     }
@@ -96,7 +105,9 @@ pub fn evaluate_receipt(
         prod_errors.push("Execution validity failed.".into());
     }
 
-    if receipt.final_status != RunStatus::VerifiedSuccess && receipt.final_status != RunStatus::ObjectiveUnsatisfied {
+    if receipt.final_status != RunStatus::VerifiedSuccess
+        && receipt.final_status != RunStatus::ObjectiveUnsatisfied
+    {
         prod_errors.push(format!(
             "Run status is '{:?}' (not VERIFIED_SUCCESS or OBJECTIVE_UNSATISFIED). Candidate is unpromoted or failed.",
             receipt.final_status
@@ -109,8 +120,13 @@ pub fn evaluate_receipt(
 
     match &receipt.candidate_classification {
         CandidateClassification::Governed(g) => {
-            if !receipt.epistemic_claims.claim_candidate_produced_under_custody {
-                prod_errors.push("Epistemic claims do not assert candidate was produced under custody.".into());
+            if !receipt
+                .epistemic_claims
+                .claim_candidate_produced_under_custody
+            {
+                prod_errors.push(
+                    "Epistemic claims do not assert candidate was produced under custody.".into(),
+                );
             }
             if g.lineage.mutations_count == 0 {
                 prod_errors.push("Lineage indicates ZERO mutations produced under custody.".into());
@@ -152,10 +168,17 @@ pub fn evaluate_receipt(
         obj_errors.push("Objective accomplishment requires valid production custody.".into());
     }
     if receipt.final_status != RunStatus::VerifiedSuccess {
-        obj_errors.push(format!("Run status is '{:?}' (not VERIFIED_SUCCESS).", receipt.final_status));
+        obj_errors.push(format!(
+            "Run status is '{:?}' (not VERIFIED_SUCCESS).",
+            receipt.final_status
+        ));
     }
-    if !receipt.epistemic_claims.claim_semantic_obligations_satisfied {
-        obj_errors.push("Epistemic claims indicate semantic obligations were NOT satisfied.".into());
+    if !receipt
+        .epistemic_claims
+        .claim_semantic_obligations_satisfied
+    {
+        obj_errors
+            .push("Epistemic claims indicate semantic obligations were NOT satisfied.".into());
     }
     if !receipt.epistemic_claims.claim_objective_satisfied {
         obj_errors.push("Epistemic claims indicate objective was NOT satisfied.".into());

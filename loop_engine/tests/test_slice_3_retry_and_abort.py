@@ -1,9 +1,10 @@
 import os
-import pytest
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
+import pytest
+
+from loop_engine.base import PROJECT_ROOT, BaseLoop
 from loop_engine.governor import Governor, StrikeCeilingExceededError
 from loop_engine.preflight import SpecTamperError
 
@@ -63,6 +64,7 @@ class MockStatefulLoop(BaseLoop):
 # -------------------------------------------------------------
 # UNIT TESTS FOR SLICE 3
 # -------------------------------------------------------------
+
 
 def test_governor_first_strike_pass():
     gov = Governor()
@@ -125,4 +127,3 @@ def test_governor_rejects_spec_tamper():
 
     with pytest.raises(SpecTamperError):
         gov.run_loop(loop, "print('tamper test')")
-

@@ -2,11 +2,13 @@ import hashlib
 import json
 import uuid
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 
 class EvidenceReference(BaseModel):
     """A verified factual source or evidence reference with provenance."""
+
     evidence_id: str = Field(min_length=2)
     source_description: str = Field(min_length=5)
     confidence: Literal["VERIFIED_FACT", "DOCUMENTED_METRIC", "DIRECT_QUOTE"] = "VERIFIED_FACT"
@@ -16,6 +18,7 @@ class EvidenceReference(BaseModel):
 
 class UnknownReference(BaseModel):
     """An explicit unknown, assumption, or required approval gate."""
+
     unknown_id: str = Field(min_length=2)
     description: str = Field(min_length=5)
     classification: Literal[
@@ -30,6 +33,7 @@ class UnknownReference(BaseModel):
 
 class ConstraintSet(BaseModel):
     """Execution, production, and linguistic invariants."""
+
     target_duration_seconds: int = Field(default=60, ge=5, le=7200)
     target_pacing_wpm: float = Field(default=150.0, ge=50.0, le=250.0)
     primary_platform: str = "YouTube"
@@ -50,6 +54,7 @@ class CanonicalObjective(BaseModel):
     Establishes a single canonical understanding of objective, evidence, unknowns,
     invariants, authority level, and success conditions.
     """
+
     objective_id: str = Field(min_length=3)
     objective_type: Literal[
         "media_production",
@@ -61,7 +66,7 @@ class CanonicalObjective(BaseModel):
     ] = "media_production"
     description: str = Field(min_length=5)
     desired_outcome: str = Field(min_length=5)
-    
+
     # Authority & Governance
     authority_level: Literal["AUTOMATIC", "HUMAN_REQUIRED", "GOVERNOR_LOCKED"] = "AUTOMATIC"
     allowed_capabilities: List[str] = Field(default_factory=list)
@@ -108,11 +113,15 @@ class CanonicalObjective(BaseModel):
             if "objective_id" not in raw_copy:
                 raw_copy["objective_id"] = f"obj_{uuid.uuid4().hex[:8]}"
             if "description" not in raw_copy:
-                raw_copy["description"] = raw_copy.get("project_title") or raw_copy.get("goal") or "Standard Execution Objective"
+                raw_copy["description"] = (
+                    raw_copy.get("project_title") or raw_copy.get("goal") or "Standard Execution Objective"
+                )
             if "desired_outcome" not in raw_copy:
-                raw_copy["desired_outcome"] = raw_copy.get("organizational_goal") or raw_copy.get("description") or "Fulfill bounded objective"
+                raw_copy["desired_outcome"] = (
+                    raw_copy.get("organizational_goal") or raw_copy.get("description") or "Fulfill bounded objective"
+                )
             return cls.model_validate(raw_copy)
-        
+
         raw_str = str(raw)
         return cls(
             objective_id=f"obj_{uuid.uuid4().hex[:8]}",

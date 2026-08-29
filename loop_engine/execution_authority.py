@@ -19,6 +19,7 @@ LAW 4 — EVIDENCE MONOTONICITY:
 Core Invariant:
 NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -39,19 +40,19 @@ from pydantic import BaseModel, Field, model_validator
 from loop_engine.base import PROJECT_ROOT
 from loop_engine.context import RunContext, resolve_physical_commit_sha
 from loop_engine.epistemic import (
-    EvidenceOrigin,
-    EpistemicStatus,
     EpistemicDisposition,
+    EpistemicStatus,
+    EvidenceOrigin,
     SemanticLaunderingError,
     canonical_json_digest,
 )
-from loop_engine.kernel_db import KernelDatabase, KERNEL_DB_PATH
+from loop_engine.kernel_db import KERNEL_DB_PATH, KernelDatabase
 from loop_engine.schema import EnvironmentFingerprint, compute_env_fingerprint
-
 
 # ---------------------------------------------------------------------------
 # Canonical Substrate Enums
 # ---------------------------------------------------------------------------
+
 
 class RunStatus(str, Enum):
     CREATED = "CREATED"
@@ -83,27 +84,27 @@ class WorkerRole(str, Enum):
 
 
 class EvidenceModality(str, Enum):
-    SIMULATED = "SIMULATED"                    # Mock/synthetic generation, zero real execution
-    STRUCTURAL = "STRUCTURAL"                  # Static structure, AST rules, schema adherence
+    SIMULATED = "SIMULATED"  # Mock/synthetic generation, zero real execution
+    STRUCTURAL = "STRUCTURAL"  # Static structure, AST rules, schema adherence
     DETERMINISTIC_TEST = "DETERMINISTIC_TEST"  # Deterministic test execution against local sandbox
-    INTEGRATION = "INTEGRATION"                # Multi-component/subprocess integration
-    EMPIRICAL = "EMPIRICAL"                    # Verified physical provider API or system call
+    INTEGRATION = "INTEGRATION"  # Multi-component/subprocess integration
+    EMPIRICAL = "EMPIRICAL"  # Verified physical provider API or system call
 
 
 class EvidencePurpose(str, Enum):
-    EXECUTION = "EXECUTION"                    # Proves computational work was performed
-    INTEGRITY = "INTEGRITY"                    # Proves data has not changed (hash matching)
-    PROVENANCE = "PROVENANCE"                  # Traces causal chain to raw objective
-    BEHAVIORAL_VERIFICATION = "BEHAVIORAL_VERIFICATION" # Proves test assertions passed
-    SEMANTIC_VERIFICATION = "SEMANTIC_VERIFICATION"     # Proves domain goal satisfied via independent oracle
-    PROMOTION = "PROMOTION"                    # Authorizes atomic merge/commit to target
+    EXECUTION = "EXECUTION"  # Proves computational work was performed
+    INTEGRITY = "INTEGRITY"  # Proves data has not changed (hash matching)
+    PROVENANCE = "PROVENANCE"  # Traces causal chain to raw objective
+    BEHAVIORAL_VERIFICATION = "BEHAVIORAL_VERIFICATION"  # Proves test assertions passed
+    SEMANTIC_VERIFICATION = "SEMANTIC_VERIFICATION"  # Proves domain goal satisfied via independent oracle
+    PROMOTION = "PROMOTION"  # Authorizes atomic merge/commit to target
 
 
 class VerificationType(str, Enum):
-    BUILDER_TEST = "BUILDER_TEST"              # Authored by builder; verifies developer intent
-    INDEPENDENT_BEHAVIORAL_ORACLE = "INDEPENDENT_BEHAVIORAL_ORACLE" # Independent test harness
-    INDEPENDENT_SEMANTIC_FALSIFICATION = "INDEPENDENT_SEMANTIC_FALSIFICATION" # Active falsifier
-    STATIC_ANALYSIS_GUARD = "STATIC_ANALYSIS_GUARD" # AST security / structural verifier
+    BUILDER_TEST = "BUILDER_TEST"  # Authored by builder; verifies developer intent
+    INDEPENDENT_BEHAVIORAL_ORACLE = "INDEPENDENT_BEHAVIORAL_ORACLE"  # Independent test harness
+    INDEPENDENT_SEMANTIC_FALSIFICATION = "INDEPENDENT_SEMANTIC_FALSIFICATION"  # Active falsifier
+    STATIC_ANALYSIS_GUARD = "STATIC_ANALYSIS_GUARD"  # AST security / structural verifier
 
 
 MODALITY_RANK: Dict[EvidenceModality, int] = {
@@ -127,8 +128,10 @@ def assert_evidence_monotonicity(declared_modality: EvidenceModality, claimed_mo
 # Typed Evidence Models
 # ---------------------------------------------------------------------------
 
+
 class ProviderExecutionReceipt(BaseModel):
     """Immutable proof of external physical provider invocation."""
+
     provider: str
     model: str
     transaction_id: str
@@ -143,7 +146,11 @@ class ProviderExecutionReceipt(BaseModel):
     @model_validator(mode="after")
     def validate_provider_evidence(self) -> "ProviderExecutionReceipt":
         if self.modality == EvidenceModality.EMPIRICAL:
-            if not self.transaction_id or self.transaction_id.startswith("mock_") or self.transaction_id.startswith("fake_"):
+            if (
+                not self.transaction_id
+                or self.transaction_id.startswith("mock_")
+                or self.transaction_id.startswith("fake_")
+            ):
                 raise ValueError("EMPIRICAL provider execution requires authentic non-mock transaction_id.")
             if self.duration_seconds <= 0.0:
                 raise ValueError("EMPIRICAL provider execution requires positive duration_seconds.")
@@ -154,6 +161,7 @@ class ProviderExecutionReceipt(BaseModel):
 
 class WorkerInvocationRecord(BaseModel):
     """Mechanically recorded evidence of an external model or tool invocation."""
+
     invocation_id: str
     worker_id: str
     provider: str
@@ -181,6 +189,7 @@ class WorkerInvocationRecord(BaseModel):
 
 class IndependentVerificationRecord(BaseModel):
     """Mechanically captured record from an independent verifier harness."""
+
     verifier_id: str
     verifier_type: VerificationType = VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE
     builder_id: str
@@ -208,6 +217,7 @@ class IndependentVerificationRecord(BaseModel):
 
 class ExecutionAttemptRecord(BaseModel):
     """Immutable, append-only record of a single execution attempt within a run."""
+
     attempt_number: int
     started_at: str
     ended_at: str
@@ -225,6 +235,7 @@ class DisaggregatedEpistemicClaims(BaseModel):
     Explicitly distinguishes the 9 separate claims so the receipt cannot imply
     stronger conclusions than physical evidence establishes.
     """
+
     claim_kernel_run_created: bool
     claim_kernel_routed: bool
     claim_worker_executed: bool
@@ -240,6 +251,7 @@ class TenShadowsReceipt(BaseModel):
     """
     Authoritative, sealed execution receipt emitted exclusively by TenShadowsKernel.
     """
+
     receipt_version: str = "2.1.0"
     kernel_version: str = "10_SHADOWS_KERNEL_v3.0"
     run_id: str
@@ -283,6 +295,7 @@ class TenShadowsReceipt(BaseModel):
 # ---------------------------------------------------------------------------
 # Verification Predicate & Inspector
 # ---------------------------------------------------------------------------
+
 
 def verify_execution_receipt(
     receipt_data: Union[Dict[str, Any], Path, str],
@@ -398,7 +411,11 @@ def is_ten_shadows_execution(
     db = kernel_db or KernelDatabase()
 
     # If passed a run_id string
-    if isinstance(run_id_or_receipt, str) and not run_id_or_receipt.endswith(".json") and not os.path.exists(run_id_or_receipt):
+    if (
+        isinstance(run_id_or_receipt, str)
+        and not run_id_or_receipt.endswith(".json")
+        and not os.path.exists(run_id_or_receipt)
+    ):
         run_id = run_id_or_receipt
         run_record = db.get_run(run_id)
         if not run_record:
@@ -430,6 +447,7 @@ def is_ten_shadows_execution(
 # ---------------------------------------------------------------------------
 # Authoritative Execution Kernel
 # ---------------------------------------------------------------------------
+
 
 class TenShadowsKernel:
     """
@@ -535,11 +553,11 @@ class TenShadowsKernel:
             "capabilities": caps,
             "timestamp": datetime.now(timezone.utc).isoformat(),
         }
-        decision_digest = hashlib.sha256(
-            json.dumps(decision_payload, sort_keys=True).encode("utf-8")
-        ).hexdigest()
+        decision_digest = hashlib.sha256(json.dumps(decision_payload, sort_keys=True).encode("utf-8")).hexdigest()
 
-        history = [s.get("status", str(s)) if isinstance(s, dict) else str(s) for s in run_ctx.status_history] + [RunStatus.ROUTED.value]
+        history = [s.get("status", str(s)) if isinstance(s, dict) else str(s) for s in run_ctx.status_history] + [
+            RunStatus.ROUTED.value
+        ]
         self.db.record_run_state(
             run_id=run_ctx.run_id,
             task_id=run_ctx.task_id,
@@ -782,7 +800,9 @@ class TenShadowsKernel:
             )
 
         # Update final run state in KernelDatabase
-        history = [s.get("status", str(s)) if isinstance(s, dict) else str(s) for s in run_ctx.status_history] + [receipt.final_status.value]
+        history = [s.get("status", str(s)) if isinstance(s, dict) else str(s) for s in run_ctx.status_history] + [
+            receipt.final_status.value
+        ]
         self.db.record_run_state(
             run_id=run_ctx.run_id,
             task_id=run_ctx.task_id,

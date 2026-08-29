@@ -1,4 +1,5 @@
 import pytest
+
 from loop_engine.media.semantic_chunker import SemanticChunker
 
 
@@ -13,10 +14,30 @@ def test_semantic_chunker_multi_scene_segmentation():
     # Simulated 2-minute dialogue
     mock_segments = [
         {"start": 0.0, "end": 10.0, "words": 25, "text": "First we start by shelving all the books on the main floor."},
-        {"start": 10.0, "end": 22.0, "words": 30, "text": "And then we move on to checking the pull lists for patrons."},
-        {"start": 22.0, "end": 35.0, "words": 28, "text": "When there is an event we do the full setup in the conference room."},
-        {"start": 35.0, "end": 50.0, "words": 32, "text": "Also the team environment here is super friendly and supportive."},
-        {"start": 50.0, "end": 75.0, "words": 45, "text": "One of my favourite parts is the regular scheduled shifts every week."},
+        {
+            "start": 10.0,
+            "end": 22.0,
+            "words": 30,
+            "text": "And then we move on to checking the pull lists for patrons.",
+        },
+        {
+            "start": 22.0,
+            "end": 35.0,
+            "words": 28,
+            "text": "When there is an event we do the full setup in the conference room.",
+        },
+        {
+            "start": 35.0,
+            "end": 50.0,
+            "words": 32,
+            "text": "Also the team environment here is super friendly and supportive.",
+        },
+        {
+            "start": 50.0,
+            "end": 75.0,
+            "words": 45,
+            "text": "One of my favourite parts is the regular scheduled shifts every week.",
+        },
     ]
 
     scenes = chunker.chunk_transcript(mock_segments)

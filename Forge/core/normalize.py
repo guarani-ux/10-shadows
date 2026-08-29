@@ -1,5 +1,6 @@
 import uuid
 from typing import Any, Dict
+
 from forge.adapters.model import ModelAdapter
 from forge.core.schema import validate_contract
 
@@ -20,10 +21,7 @@ def normalize(intent_request: Dict[str, Any], model_adapter: ModelAdapter) -> Di
         "Do not invent facts. Keep simple tasks simple."
     )
 
-    extracted = model_adapter.generate(
-        instruction=prompt,
-        input_data=intent_request
-    )
+    extracted = model_adapter.generate(instruction=prompt, input_data=intent_request)
 
     task_id = f"task_{uuid.uuid4().hex[:8]}"
 
@@ -31,9 +29,12 @@ def normalize(intent_request: Dict[str, Any], model_adapter: ModelAdapter) -> Di
     task_spec = {
         "task_id": task_id,
         "objective": extracted.get("objective") or intent_request.get("intent"),
-        "deliverable": extracted.get("deliverable") or {
-            "kind": intent_request.get("requested_surface") if intent_request.get("requested_surface") != "AUTO" else "ANSWER",
-            "description": f"Outcome for {intent_request.get('intent')}"
+        "deliverable": extracted.get("deliverable")
+        or {
+            "kind": intent_request.get("requested_surface")
+            if intent_request.get("requested_surface") != "AUTO"
+            else "ANSWER",
+            "description": f"Outcome for {intent_request.get('intent')}",
         },
         "constraints": extracted.get("constraints", intent_request.get("constraints", [])),
         "knowns": extracted.get("knowns", []),
@@ -42,7 +43,7 @@ def normalize(intent_request: Dict[str, Any], model_adapter: ModelAdapter) -> Di
         "success_conditions": extracted.get("success_conditions", [f"Fulfill {intent_request.get('intent')}"]),
         "requires_external_action": bool(extracted.get("requires_external_action", False)),
         "reversibility": extracted.get("reversibility", "REVERSIBLE"),
-        "risk": extracted.get("risk", "LOW")
+        "risk": extracted.get("risk", "LOW"),
     }
 
     validate_contract("TaskSpec", task_spec)

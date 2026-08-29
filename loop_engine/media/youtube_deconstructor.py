@@ -2,8 +2,9 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from youtube_transcript_api import YouTubeTranscriptApi
+
 import yt_dlp
+from youtube_transcript_api import YouTubeTranscriptApi
 
 
 class YouTubeDeconstructor:
@@ -47,13 +48,15 @@ class YouTubeDeconstructor:
             if not clean_text or clean_text == "[Music]":
                 continue
             words = len(clean_text.split())
-            segments.append({
-                "start": round(entry.start, 2),
-                "end": round(entry.start + entry.duration, 2),
-                "duration": round(entry.duration, 2),
-                "text": clean_text,
-                "words": words,
-            })
+            segments.append(
+                {
+                    "start": round(entry.start, 2),
+                    "end": round(entry.start + entry.duration, 2),
+                    "duration": round(entry.duration, 2),
+                    "text": clean_text,
+                    "words": words,
+                }
+            )
         return segments
 
     def deconstruct(self, url_or_id: str) -> Dict[str, Any]:

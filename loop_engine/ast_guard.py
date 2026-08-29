@@ -11,9 +11,9 @@ prior to sterile subprocess test execution. Detects and rejects:
 """
 
 import ast
+import os
 from dataclasses import dataclass, field
 from enum import Enum
-import os
 from pathlib import Path
 from typing import List, Optional, Set
 

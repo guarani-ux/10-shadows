@@ -6,6 +6,7 @@ fails closed and is actively caught by mechanical test gates.
 """
 
 import pytest
+
 from loop_engine.ast_guard import scan_ast
 from loop_engine.authority import (
     ProofWitness,
@@ -14,8 +15,8 @@ from loop_engine.authority import (
 )
 from loop_engine.disposition import ActionDisposition, evaluate_execution_disposition
 from loop_engine.epistemic import (
-    EvidenceOrigin,
     EpistemicStatus,
+    EvidenceOrigin,
     PrivilegedMintingError,
     create_unverified_envelope,
     mint_verified_envelope,
@@ -58,7 +59,7 @@ class TestMutationSensitivitySterileEnv:
     def test_sensitive_env_leak_is_blocked(self, monkeypatch):
         monkeypatch.setenv("PROD_SECRET_KEY", "super_secret_val")
         monkeypatch.setenv("DATABASE_PASS", "pass123")
-        
+
         env = build_sterile_environment()
         assert "PROD_SECRET_KEY" not in env
         assert "DATABASE_PASS" not in env
@@ -77,6 +78,7 @@ class TestMutationSensitivityEarnedBuild:
             signature="forged_sig",
         )
         from loop_engine.authority import VerificationContractWitness
+
         contract = VerificationContractWitness(
             contract_id="vcw_fake",
             objective_hash="obj_hash",

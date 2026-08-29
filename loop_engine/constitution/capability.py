@@ -10,11 +10,11 @@ Enforces:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from forge.core.substrate import (
@@ -52,6 +52,7 @@ class ConditionalCapability:
     Rich representation of an operational capability.
     Requires explicit supported environments and operational conditions.
     """
+
     capability_id: str
     actor_id: str
     operator_type: OperatorType
@@ -67,16 +68,18 @@ class ConditionalCapability:
 
     @property
     def capability_digest(self) -> str:
-        return compute_digest({
-            "id": self.capability_id,
-            "actor": self.actor_id,
-            "op": self.operator_type.value,
-            "envs": sorted(list(self.supported_environments)),
-            "conditions": [c.condition_id for c in self.supported_conditions],
-            "kind": self.kind.value,
-            "lifecycle": self.lifecycle_state.value,
-            "status": self.epistemic_status.value,
-        })
+        return compute_digest(
+            {
+                "id": self.capability_id,
+                "actor": self.actor_id,
+                "op": self.operator_type.value,
+                "envs": sorted(list(self.supported_environments)),
+                "conditions": [c.condition_id for c in self.supported_conditions],
+                "kind": self.kind.value,
+                "lifecycle": self.lifecycle_state.value,
+                "status": self.epistemic_status.value,
+            }
+        )
 
     def is_applicable(self, environment_fingerprint: str, required_resources: List[str]) -> bool:
         """Evaluates whether capability is qualified and applicable in target environment."""
@@ -138,12 +141,14 @@ class CapabilityDeficitEngine:
             if matched:
                 bound_caps.append(matched)
             else:
-                deficits.append(CapabilityDeficit(
-                    required_operation_id=op.operation_id,
-                    missing_capability=f"Operator_{op.operator.value}_for_{op.semantic_responsibility}",
-                    consequence=f"Cannot execute required transition: {op.semantic_responsibility}",
-                    provisionable=True,
-                    acquisition_route="PROVISION",
-                ))
+                deficits.append(
+                    CapabilityDeficit(
+                        required_operation_id=op.operation_id,
+                        missing_capability=f"Operator_{op.operator.value}_for_{op.semantic_responsibility}",
+                        consequence=f"Cannot execute required transition: {op.semantic_responsibility}",
+                        provisionable=True,
+                        acquisition_route="PROVISION",
+                    )
+                )
 
         return (bound_caps, deficits)

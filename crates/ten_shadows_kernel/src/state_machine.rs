@@ -2,20 +2,20 @@
 //!
 //! Enforces that illegal lifecycle transitions are mathematically unrepresentable.
 
-use crate::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
+use crate::candidate::{
+    CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate,
+};
 use crate::constitution::{EvidenceEntailment, ObjectiveContract};
 use crate::dispatcher::{WorkerAuthorization, WorkerDispatcher};
 use crate::evidence::EvidenceModality;
 use crate::receipt::{
     DisaggregatedEpistemicClaims, ExecutionAttemptRecord, IndependentVerificationRecord,
-    ProviderExecutionReceipt, RoutingStrategy, RunStatus, TenShadowsReceipt, WorkerInvocationRecord, WorkerRole,
+    ProviderExecutionReceipt, RoutingStrategy, RunStatus, TenShadowsReceipt,
+    WorkerInvocationRecord, WorkerRole,
 };
 use crate::repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 use crate::time_utils::current_timestamp_rfc3339;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
-use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -69,15 +69,14 @@ impl<State> KernelRun<State> {
 }
 
 impl KernelRun<Created> {
-    pub fn new(
-        objective: &str,
-        target_path: &Path,
-        task_id: Option<String>,
-    ) -> Self {
-        let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+    pub fn new(objective: &str, target_path: &Path, task_id: Option<String>) -> Self {
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         let tid = task_id.unwrap_or_else(|| format!("task_{}", millis));
         let run_id = format!("run_{}_{}", tid, millis % 10000000);
-        
+
         let mut hasher = Sha256::new();
         hasher.update(objective.as_bytes());
         let objective_hash = format!("{:x}", hasher.finalize());
@@ -132,7 +131,10 @@ impl KernelRun<Created> {
                     "CONTRACT_VERIFICATION".into(),
                 ],
             )
-        } else if lower.contains("decompose") || lower.contains("plan") || lower.contains("relational") {
+        } else if lower.contains("decompose")
+            || lower.contains("plan")
+            || lower.contains("relational")
+        {
             (
                 RoutingStrategy::GoalDecomposition,
                 vec![
@@ -198,11 +200,18 @@ impl KernelRun<BaselineCaptured> {
         worktrees_dir: Option<&Path>,
     ) -> Result<KernelRun<WorkspaceReady>, RepositoryRoleError> {
         let baseline_sha = self.starting_head.as_ref().ok_or_else(|| {
-            RepositoryRoleError::InvalidGitRepository("Baseline commit SHA missing for governed workspace".into())
+            RepositoryRoleError::InvalidGitRepository(
+                "Baseline commit SHA missing for governed workspace".into(),
+            )
         })?;
 
         let source = AuthoritativeSource::new(&self.target_path)?;
-        let ws = GovernedWorkspace::create_ephemeral(&self.run_id, &source, baseline_sha, worktrees_dir)?;
+        let ws = GovernedWorkspace::create_ephemeral(
+            &self.run_id,
+            &source,
+            baseline_sha,
+            worktrees_dir,
+        )?;
         let ws_path = ws.workspace_root.clone();
 
         Ok(KernelRun {
@@ -231,10 +240,7 @@ impl KernelRun<BaselineCaptured> {
         })
     }
 
-    pub fn prepare_audit_workspace(
-        mut self,
-        target_path: &Path,
-    ) -> KernelRun<WorkspaceReady> {
+    pub fn prepare_audit_workspace(mut self, target_path: &Path) -> KernelRun<WorkspaceReady> {
         self.workspace_path = Some(target_path.to_path_buf());
         KernelRun {
             run_id: self.run_id,
@@ -264,10 +270,7 @@ impl KernelRun<BaselineCaptured> {
 }
 
 impl KernelRun<WorkspaceReady> {
-    pub fn authorize_worker(
-        mut self,
-        worker_id: &str,
-    ) -> KernelRun<WorkerAuthorized> {
+    pub fn authorize_worker(mut self, worker_id: &str) -> KernelRun<WorkerAuthorized> {
         self.authorized_worker_id = Some(worker_id.to_string());
         KernelRun {
             run_id: self.run_id,
@@ -304,8 +307,14 @@ impl KernelRun<WorkerAuthorized> {
         requested_model: &str,
         python_executable: Option<&str>,
     ) -> Result<KernelRun<CandidateProduced>, Box<dyn std::error::Error>> {
-        let ws_path = self.workspace_path.as_ref().ok_or("Workspace path missing")?;
-        let worker_id = self.authorized_worker_id.as_deref().unwrap_or("worker_default");
+        let ws_path = self
+            .workspace_path
+            .as_ref()
+            .ok_or("Workspace path missing")?;
+        let worker_id = self
+            .authorized_worker_id
+            .as_deref()
+            .unwrap_or("worker_default");
         let invocation_id = format!("inv_{}_{}", self.task_id, self.current_attempt);
         let baseline = self.starting_head.as_deref().unwrap_or("UNKNOWN_BASELINE");
         let authorized_at = current_timestamp_rfc3339();
@@ -336,9 +345,9 @@ impl KernelRun<WorkerAuthorized> {
             _ => EvidenceModality::Structural,
         };
 
-        let prov_receipt = dispatch_res.provider_receipt.and_then(|pr| {
-            serde_json::from_value::<ProviderExecutionReceipt>(pr).ok()
-        });
+        let prov_receipt = dispatch_res
+            .provider_receipt
+            .and_then(|pr| serde_json::from_value::<ProviderExecutionReceipt>(pr).ok());
 
         let worker_rec = WorkerInvocationRecord {
             invocation_id: dispatch_res.invocation_id.clone(),
@@ -360,10 +369,17 @@ impl KernelRun<WorkerAuthorized> {
         let is_mutated = candidate_sha != baseline && dispatch_res.exit_status == "SUCCESS";
 
         let run_cand = if is_mutated && self.governed_workspace.is_some() {
-            self.record_governed_candidate(&candidate_sha, worker_rec, dispatch_res.files_changed.len())
+            self.record_governed_candidate(
+                &candidate_sha,
+                worker_rec,
+                dispatch_res.files_changed.len(),
+            )
         } else {
             self.worker_invocations.push(worker_rec);
-            self.record_external_candidate(&candidate_sha, "Worker execution produced zero valid governed mutations")
+            self.record_external_candidate(
+                &candidate_sha,
+                "Worker execution produced zero valid governed mutations",
+            )
         };
 
         Ok(run_cand)
@@ -375,11 +391,18 @@ impl KernelRun<WorkerAuthorized> {
         worker_record: WorkerInvocationRecord,
         mutations_count: usize,
     ) -> KernelRun<CandidateProduced> {
-        let parent_sha = self.starting_head.clone().unwrap_or_else(|| "UNKNOWN".into());
-        let ws_id = self.workspace_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
-        
-        let is_valid_governed = mutations_count > 0 
-            && candidate_sha != parent_sha 
+        let parent_sha = self
+            .starting_head
+            .clone()
+            .unwrap_or_else(|| "UNKNOWN".into());
+        let ws_id = self
+            .workspace_path
+            .as_ref()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default();
+
+        let is_valid_governed = mutations_count > 0
+            && candidate_sha != parent_sha
             && self.governed_workspace.is_some()
             && self.authorized_worker_id.is_some();
 
@@ -392,18 +415,23 @@ impl KernelRun<WorkerAuthorized> {
                 candidate_sha: candidate_sha.to_string(),
                 created_at: current_timestamp_rfc3339(),
             };
-            self.candidate_classification = Some(CandidateClassification::Governed(GovernedCandidate { lineage }));
+            self.candidate_classification =
+                Some(CandidateClassification::Governed(GovernedCandidate {
+                    lineage,
+                }));
         } else {
-            self.candidate_classification = Some(CandidateClassification::External(ExternalCandidate {
-                candidate_sha: candidate_sha.to_string(),
-                source_note: if candidate_sha == parent_sha {
-                    "Zero mutations produced: Candidate SHA is identical to starting baseline".into()
-                } else if self.governed_workspace.is_none() {
-                    "Candidate produced outside isolated GovernedWorkspace".into()
-                } else {
-                    "Invalid governed production parameters".into()
-                },
-            }));
+            self.candidate_classification =
+                Some(CandidateClassification::External(ExternalCandidate {
+                    candidate_sha: candidate_sha.to_string(),
+                    source_note: if candidate_sha == parent_sha {
+                        "Zero mutations produced: Candidate SHA is identical to starting baseline"
+                            .into()
+                    } else if self.governed_workspace.is_none() {
+                        "Candidate produced outside isolated GovernedWorkspace".into()
+                    } else {
+                        "Invalid governed production parameters".into()
+                    },
+                }));
         }
 
         self.worker_invocations.push(worker_record);
@@ -440,10 +468,11 @@ impl KernelRun<WorkerAuthorized> {
         candidate_sha: &str,
         source_note: &str,
     ) -> KernelRun<CandidateProduced> {
-        self.candidate_classification = Some(CandidateClassification::External(ExternalCandidate {
-            candidate_sha: candidate_sha.to_string(),
-            source_note: source_note.to_string(),
-        }));
+        self.candidate_classification =
+            Some(CandidateClassification::External(ExternalCandidate {
+                candidate_sha: candidate_sha.to_string(),
+                source_note: source_note.to_string(),
+            }));
         self.final_head = Some(candidate_sha.to_string());
 
         KernelRun {
@@ -507,10 +536,7 @@ impl KernelRun<CandidateProduced> {
 }
 
 impl KernelRun<Verified> {
-    pub fn retry_repair(
-        mut self,
-        failure_evidence: &str,
-    ) -> KernelRun<WorkerAuthorized> {
+    pub fn retry_repair(mut self, failure_evidence: &str) -> KernelRun<WorkerAuthorized> {
         let attempt_rec = ExecutionAttemptRecord {
             attempt_number: self.current_attempt,
             started_at: self.created_at.clone(),
@@ -555,13 +581,22 @@ impl KernelRun<Verified> {
 
     /// Evaluates verification, checks Law 6 objective sufficiency, performs atomic Git fast-forward promotion,
     /// and seals the cryptographically signed receipt.
-    pub fn promote_and_seal(
-        mut self,
-    ) -> (KernelRun<Promoted>, TenShadowsReceipt) {
-        let is_verified = self.verification.as_ref().map(|v| v.exit_code == 0 && v.tests_passed > 0 && v.verified_status == "PASS").unwrap_or(false);
-        let is_governed = self.candidate_classification.as_ref().map(|c| c.is_governed()).unwrap_or(false);
+    pub fn promote_and_seal(mut self) -> (KernelRun<Promoted>, TenShadowsReceipt) {
+        let is_verified = self
+            .verification
+            .as_ref()
+            .map(|v| v.exit_code == 0 && v.tests_passed > 0 && v.verified_status == "PASS")
+            .unwrap_or(false);
+        let is_governed = self
+            .candidate_classification
+            .as_ref()
+            .map(|c| c.is_governed())
+            .unwrap_or(false);
 
-        let has_empirical = self.worker_invocations.iter().any(|w| w.modality == EvidenceModality::Empirical);
+        let has_empirical = self
+            .worker_invocations
+            .iter()
+            .any(|w| w.modality == EvidenceModality::Empirical);
 
         let mut promotion_succeeded = false;
         let mut rejection_reason = None;
@@ -572,7 +607,9 @@ impl KernelRun<Verified> {
                     .ok()
                     .and_then(|s| s.capture_head());
 
-                if let (Some(ref cur), Some(ref start)) = (current_source_head.as_ref(), self.starting_head.as_ref()) {
+                if let (Some(ref cur), Some(ref start)) =
+                    (current_source_head.as_ref(), self.starting_head.as_ref())
+                {
                     if cur != start {
                         rejection_reason = Some(format!(
                             "Authoritative source diverged before promotion (expected '{}', found '{}').",
@@ -589,7 +626,8 @@ impl KernelRun<Verified> {
                                 promotion_succeeded = true;
                             }
                             _ => {
-                                rejection_reason = Some("Git fast-forward merge failed during promotion.".into());
+                                rejection_reason =
+                                    Some("Git fast-forward merge failed during promotion.".into());
                             }
                         }
                     }
@@ -600,31 +638,29 @@ impl KernelRun<Verified> {
         }
 
         // Law 6 Objective Sufficiency Evaluation
-        let (objective_satisfied, sufficiency_proof) = if let Some(ref mut contract) = self.objective_contract {
-            if let Some(ref ver) = self.verification {
-                if ver.verified_status == "PASS" && ver.exit_code == 0 {
-                    let tested = ver.tested_effect.as_deref().unwrap_or("");
-                    let spec_digest = ver.verifier_spec_digest.as_deref().unwrap_or("");
-                    for ob in &mut contract.obligations {
-                        let entailment = EvidenceEntailment::verify_entailment(
-                            spec_digest,
-                            ob,
-                            tested,
-                        );
+        let (objective_satisfied, sufficiency_proof) =
+            if let Some(ref mut contract) = self.objective_contract {
+                if let Some(ref ver) = self.verification {
+                    if ver.verified_status == "PASS" && ver.exit_code == 0 {
+                        let tested = ver.tested_effect.as_deref().unwrap_or("");
+                        let spec_digest = ver.verifier_spec_digest.as_deref().unwrap_or("");
+                        for ob in &mut contract.obligations {
+                            let entailment =
+                                EvidenceEntailment::verify_entailment(spec_digest, ob, tested);
 
-                        if entailment.is_applicable {
-                            ob.satisfy(&ver.test_digest, &entailment.justification);
-                        } else {
-                            ob.falsify(&entailment.justification);
+                            if entailment.is_applicable {
+                                ob.satisfy(&ver.test_digest, &entailment.justification);
+                            } else {
+                                ob.falsify(&entailment.justification);
+                            }
                         }
                     }
                 }
-            }
-            let proof = contract.evaluate_sufficiency();
-            (proof.is_satisfied, Some(proof))
-        } else {
-            (false, None)
-        };
+                let proof = contract.evaluate_sufficiency();
+                (proof.is_satisfied, Some(proof))
+            } else {
+                (false, None)
+            };
 
         let final_status = if is_verified && is_governed && promotion_succeeded {
             if objective_satisfied {
@@ -650,7 +686,10 @@ impl KernelRun<Verified> {
             claim_target_behaviorally_tested: is_verified,
             claim_semantic_obligations_satisfied: objective_satisfied,
             claim_objective_satisfied: objective_satisfied,
-            claim_completion_authorized: is_verified && is_governed && promotion_succeeded && objective_satisfied,
+            claim_completion_authorized: is_verified
+                && is_governed
+                && promotion_succeeded
+                && objective_satisfied,
         };
 
         let cand_class = self.candidate_classification.clone().unwrap_or_else(|| {

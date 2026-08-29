@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.extractor import strip_markdown_fences, safe_extract_target
-from loop_engine.receipts import atomic_two_phase_commit, ReceiptStore
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.extractor import safe_extract_target, strip_markdown_fences
+from loop_engine.receipts import ReceiptStore, atomic_two_phase_commit
 from loop_engine.verifiers.ast_gate import validate_ast_security
 from loop_engine.verifiers.test_gate import run_isolated_pytest
 
@@ -90,7 +90,10 @@ class CodeRunnerLoop(BaseLoop):
                     timeout_seconds=10.0,
                 )
                 if test_result["status"] != "PASS":
-                    return False, f"Subprocess Pytest Gate Failed:\n{test_result.get('stderr') or test_result.get('stdout')}"
+                    return (
+                        False,
+                        f"Subprocess Pytest Gate Failed:\n{test_result.get('stderr') or test_result.get('stdout')}",
+                    )
 
         return True, ""
 

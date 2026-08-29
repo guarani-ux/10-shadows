@@ -1,8 +1,9 @@
-from typing import Any, Dict, List, Tuple, Optional
-from loop_engine.herald.schema import MasterAVScriptBlueprint, AVTableRow, ValidatedCutDownScript
-from loop_engine.herald.linguistics import AntiAILinguisticGuard
+from typing import Any, Dict, List, Optional, Tuple
+
 from loop_engine.herald.cinematography import CinematographyValidator
 from loop_engine.herald.feedback import ScriptViolation, ValidationFeedback
+from loop_engine.herald.linguistics import AntiAILinguisticGuard
+from loop_engine.herald.schema import AVTableRow, MasterAVScriptBlueprint, ValidatedCutDownScript
 
 
 class DeterministicScriptValidator:
@@ -24,7 +25,7 @@ class DeterministicScriptValidator:
                 repair_strategy="Recalculate positive timecode boundaries.",
                 description=f"Row {row.row_index}: Invalid duration {duration}s.",
             )
-        
+
         allowed_words = duration * (target_wpm / 60.0)
         max_allowed_words = int(allowed_words * 1.15) + 1
         actual_words = row.spoken_words_count
@@ -43,7 +44,7 @@ class DeterministicScriptValidator:
                     f"exceeds binding target pacing ceiling ({max_allowed_words} words max for {duration:.1f}s at {target_wpm} WPM)."
                 ),
             )
-        
+
         min_allowed_words = max(int(allowed_words * 0.50), 2)
         if actual_words < min_allowed_words and duration >= 5.0:
             return False, ScriptViolation(
@@ -63,7 +64,9 @@ class DeterministicScriptValidator:
         return True, None
 
     @classmethod
-    def validate_cutdown(cls, cutdown: ValidatedCutDownScript, target_wpm: float = 150.0) -> Tuple[bool, List[ScriptViolation]]:
+    def validate_cutdown(
+        cls, cutdown: ValidatedCutDownScript, target_wpm: float = 150.0
+    ) -> Tuple[bool, List[ScriptViolation]]:
         violations: List[ScriptViolation] = []
         duration = cutdown.actual_duration_seconds
         if duration < 10.0 or duration > 60.0:
@@ -201,7 +204,20 @@ class DeterministicScriptValidator:
 
         # 3. CTA validation
         last_row = blueprint.av_table[-1] if blueprint.av_table else None
-        if not last_row or not any(cta_word in (last_row.spoken_audio.lower() + last_row.scene_name.lower()) for cta_word in ["cta", "call to action", "link", "visit", "join", "apply", "contact", "sign up", "register"]):
+        if not last_row or not any(
+            cta_word in (last_row.spoken_audio.lower() + last_row.scene_name.lower())
+            for cta_word in [
+                "cta",
+                "call to action",
+                "link",
+                "visit",
+                "join",
+                "apply",
+                "contact",
+                "sign up",
+                "register",
+            ]
+        ):
             violations.append(
                 ScriptViolation(
                     violation_code="MISSING_CTA",

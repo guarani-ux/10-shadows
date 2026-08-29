@@ -12,16 +12,16 @@ Features:
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sqlite3
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from loop_engine.relational.schema import (
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 

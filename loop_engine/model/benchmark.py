@@ -20,11 +20,12 @@ rather than downstream errors.
 
 from __future__ import annotations
 
-from enum import Enum
 import hashlib
 import random
 import time
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 from pydantic import BaseModel, Field
 
 from loop_engine.model.boundary import (
@@ -73,6 +74,7 @@ class BenchmarkTask(BaseModel):
     Standardized benchmark task definition with authoritative physical evaluator.
     Tasks without independent task-specific behavioral verifiers must be marked UNQUALIFIED.
     """
+
     task_id: str
     dimension: BenchmarkDimension
     objective: str
@@ -100,6 +102,7 @@ class TaskRunRecord(BaseModel):
     """
     Detailed physical recording of a single task execution with cryptographic reproducibility receipt.
     """
+
     task_id: str
     task_seed: Optional[int] = None
     dimension: BenchmarkDimension
@@ -135,7 +138,10 @@ class TaskRunRecord(BaseModel):
                 raise ValueError("EMPIRICAL_MODEL requires a valid ProviderExecutionReceipt.")
             if not isinstance(self.provider_receipt, ProviderExecutionReceipt):
                 raise ValueError("provider_receipt must be an instance of ProviderExecutionReceipt.")
-            if not self.provider_receipt.receipt_digest or self.provider_receipt.receipt_digest != self.provider_receipt.compute_digest():
+            if (
+                not self.provider_receipt.receipt_digest
+                or self.provider_receipt.receipt_digest != self.provider_receipt.compute_digest()
+            ):
                 raise ValueError("Corrupted ProviderExecutionReceipt digest.")
             if self.provider_receipt.provider_name != self.provider or self.provider_receipt.model_id != self.model_id:
                 raise ValueError("ProviderExecutionReceipt does not match record provider or model identity.")
@@ -165,6 +171,7 @@ class BenchmarkResult(BaseModel):
     """
     Aggregated benchmark results comparing two models under Naked vs Ten Shadows.
     """
+
     model_a_id: str
     model_b_id: str
     naked_score_a: float
@@ -189,7 +196,9 @@ class BenchmarkResult(BaseModel):
                 if r.evidence_modality != EvidenceModality.EMPIRICAL_MODEL:
                     raise ValueError("EMPIRICAL_MODEL benchmark result cannot contain non-empirical records.")
                 if r.provider_receipt is None:
-                    raise ValueError("All records in EMPIRICAL_MODEL benchmark result must have valid provider receipts.")
+                    raise ValueError(
+                        "All records in EMPIRICAL_MODEL benchmark result must have valid provider receipts."
+                    )
 
 
 def create_deterministic_knowledge_task(
@@ -321,11 +330,12 @@ def create_deterministic_knowledge_task(
         if transition_engine is not None:
             from loop_engine.authority import issue_proof_witness
             from loop_engine.transition import (
-                TransitionRequest,
                 TransitionRejection,
+                TransitionRequest,
                 compute_complete_claim_digest,
                 compute_governance_digest,
             )
+
             evidence_digest = hashlib.sha256(str(observed).encode("utf-8")).hexdigest()
             gov_digest = compute_governance_digest()
             candidate_digest = hashlib.sha256(code.encode("utf-8")).hexdigest()
@@ -492,13 +502,16 @@ class BenchmarkRunner:
     """
     Executes benchmark suites across naked vs Ten Shadows modes and computes elasticity.
     """
+
     def __init__(
         self,
         context_compiler: Optional[ContextCompiler] = None,
         resolver: Optional[InProcessDeficitResolver] = None,
     ):
         self.context_compiler = context_compiler or ContextCompiler(
-            procedures_registry={"ast_isolation_protocol": "1. Parse AST -> 2. Walk nodes -> 3. Bytecode compile -> 4. Run sterile pytest"}
+            procedures_registry={
+                "ast_isolation_protocol": "1. Parse AST -> 2. Walk nodes -> 3. Bytecode compile -> 4. Run sterile pytest"
+            }
         )
         self.resolver = resolver or InProcessDeficitResolver(
             knowledge_base={
@@ -592,7 +605,9 @@ class BenchmarkRunner:
         candidate_digest = hashlib.sha256(str(resp.candidate_payload if resp else "").encode("utf-8")).hexdigest()
         trace_digest = hashlib.sha256((eval_res.execution_trace or "").encode("utf-8")).hexdigest()
 
-        is_success = bool(eval_res.is_valid and qualification == EvidenceQualification.QUALIFIED and (resp and resp.is_success))
+        is_success = bool(
+            eval_res.is_valid and qualification == EvidenceQualification.QUALIFIED and (resp and resp.is_success)
+        )
         score = eval_res.score if is_success else 0.0
         is_qualified_success = bool(is_success and score > 0.0)
 
@@ -710,7 +725,9 @@ class BenchmarkRunner:
         duration = time.perf_counter() - start
 
         # Derive modality mechanically from validated receipt
-        winning_receipt = getattr(best_eval, "provider_receipt", None) or (resp.provider_receipt if (resp and resp.is_success) else None)
+        winning_receipt = getattr(best_eval, "provider_receipt", None) or (
+            resp.provider_receipt if (resp and resp.is_success) else None
+        )
         dummy_response = ModelResponse(
             task_id=task.task_id,
             candidate_payload=best_eval.payload,
@@ -762,9 +779,7 @@ class BenchmarkRunner:
             latency_seconds=duration,
             tokens_consumed=total_calls * 350,
             deficits_resolved=deficits_resolved,
-            failure_signatures_recorded=[
-                e.failure_signature for e in all_evals if e.failure_signature
-            ],
+            failure_signatures_recorded=[e.failure_signature for e in all_evals if e.failure_signature],
             provider_receipt=verified_receipt,
         )
 

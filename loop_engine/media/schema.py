@@ -1,22 +1,20 @@
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
 
 
 class EpistemicBlindspot(BaseModel):
     """Explicitly surfaced gap or anomaly in the video data."""
+
     time_window: str
-    anomaly_type: Literal[
-        "VISUAL_ONLY_GAP",
-        "UNRESOLVED_REFERENCE",
-        "AMBIGUOUS_STRUCTURE",
-        "NO_TRANSCRIPT_AVAILABLE"
-    ]
+    anomaly_type: Literal["VISUAL_ONLY_GAP", "UNRESOLVED_REFERENCE", "AMBIGUOUS_STRUCTURE", "NO_TRANSCRIPT_AVAILABLE"]
     description: str = Field(min_length=5)
     gap_duration_seconds: Optional[float] = None
 
 
 class GroundedScene(BaseModel):
     """An organic video segment with mandatory verbatim transcript grounding."""
+
     scene_index: int = Field(ge=1)
     time_window: str
     start_seconds: float
@@ -38,6 +36,7 @@ class GroundedScene(BaseModel):
 
 class VideoDeconstructionBlueprint(BaseModel):
     """The master verifiable deconstruction schema for any video format."""
+
     video_id: str
     title: str
     channel: str

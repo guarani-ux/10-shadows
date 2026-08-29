@@ -9,6 +9,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from loop_engine.ast_guard import (
@@ -31,7 +32,6 @@ from loop_engine.schema import (
     compute_tree_hash,
 )
 from loop_engine.verifier_gate import PhysicalVerifierGate
-
 
 
 class TestASTGuardCleanCode:
@@ -110,7 +110,7 @@ class TestASTGuardWorktreeScanning:
         worktree = tmp_path / "wt"
         worktree.mkdir()
         (worktree / "clean.py").write_text("def ok(): return 42\n", encoding="utf-8")
-        
+
         sub = worktree / "subpackage"
         sub.mkdir()
         (sub / "nested_bad.py").write_text("def bad(): return eval('10')\n", encoding="utf-8")
@@ -188,13 +188,10 @@ class TestPhysicalVerifierGateASTIntegration:
             state=State.CANDIDATE_SEALED,
         )
 
-
         db.record_proposal(manifest)
-
 
         # Execute verifier gate
         result = verifier.verify_candidate(manifest, candidate_wt)
         assert result.status == State.BLOCKED
         assert result.failure_classification == FailureClassification.GOVERNOR_FAILURE
         assert "AST Anti-Cheat" in result.execution_trace
-

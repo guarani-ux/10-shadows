@@ -13,7 +13,8 @@ Verifies all 8 required test scenarios:
 """
 
 import pytest
-from zero_trust_engine.auditor import PlanAuditor, AuditResult, Severity, FindingStatus
+
+from zero_trust_engine.auditor import AuditResult, FindingStatus, PlanAuditor, Severity
 
 
 @pytest.fixture
@@ -41,7 +42,10 @@ def test_subprocess_env_empty_rejected(auditor):
     """
     result = auditor.audit_plan(plan, scope={"language": "python", "subprocesses": True})
     assert result.outcome in (AuditResult.BLOCK, AuditResult.REVISE)
-    assert any("env={}" in f.failure_scenario or "environment" in f.name.lower() or "subproc" in f.name.lower() for f in result.findings)
+    assert any(
+        "env={}" in f.failure_scenario or "environment" in f.name.lower() or "subproc" in f.name.lower()
+        for f in result.findings
+    )
 
 
 # Test 3: Non-Python plan where Python-specific checks are marked NOT APPLICABLE
@@ -101,13 +105,18 @@ def test_sound_bounded_plan_receives_pass_with_limitations(auditor):
     - Integrated directly into pricing calculation entrypoint.
     - Idempotent promotion using state database manifest.
     """
-    result = auditor.audit_plan(plan, scope={"language": "python", "subprocesses": False, "network": False, "database": False})
+    result = auditor.audit_plan(
+        plan, scope={"language": "python", "subprocesses": False, "network": False, "database": False}
+    )
     assert result.outcome == AuditResult.PASS
     assert result.audit_passed_statement == (
         "PLAN AUDIT PASSED: No unresolved CRITICAL findings were identified within the declared audit scope. "
         "Implementation and operational verification remain required."
     )
-    assert "does not prove that the implementation is correct, secure, complete, operationally proven, or vulnerability-free" in result.mandatory_limitation
+    assert (
+        "does not prove that the implementation is correct, secure, complete, operationally proven, or vulnerability-free"
+        in result.mandatory_limitation
+    )
 
 
 # Test 8: Prohibited zero-vulnerability certification is NEVER emitted
@@ -127,7 +136,7 @@ def test_empty_and_incomplete_plan_rejected(auditor):
     assert auditor.audit_plan("").outcome == AuditResult.BLOCK
     assert auditor.audit_plan("   \n\t  ").outcome == AuditResult.BLOCK
     assert auditor.audit_plan("Fix the bug.").outcome == AuditResult.BLOCK
-    
+
     # Missing verification plan
     plan_no_tests = """
     # Quick Refactor
@@ -136,4 +145,3 @@ def test_empty_and_incomplete_plan_rejected(auditor):
     res = auditor.audit_plan(plan_no_tests)
     assert res.outcome in (AuditResult.BLOCK, AuditResult.REVISE)
     assert any("verification" in f.name.lower() for f in res.findings)
-

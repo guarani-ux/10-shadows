@@ -1,6 +1,7 @@
 """
 test_worker_dispatcher.py — Physical Unit & Adversarial Tests for Worker Dispatcher.
 """
+
 from __future__ import annotations
 
 import os
@@ -8,6 +9,7 @@ import subprocess
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
+
 import pytest
 
 from loop_engine.dispatcher.protocol import (
@@ -16,7 +18,7 @@ from loop_engine.dispatcher.protocol import (
     compute_authorization_token,
 )
 from loop_engine.dispatcher.worker_dispatcher import dispatch_worker
-from loop_engine.harness.git_worktree import AuthoritativeSourceProtectionError, PROJECT_ROOT
+from loop_engine.harness.git_worktree import PROJECT_ROOT, AuthoritativeSourceProtectionError
 
 
 @pytest.fixture
@@ -26,14 +28,23 @@ def disposable_workspace():
         ws_path = Path(tmpdir).resolve()
         subprocess.run(["git", "init"], cwd=str(ws_path), check=True, capture_output=True)
         subprocess.run(["git", "config", "user.name", "Test Worker"], cwd=str(ws_path), check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "worker@ten-shadows.local"], cwd=str(ws_path), check=True, capture_output=True)
+        subprocess.run(
+            ["git", "config", "user.email", "worker@ten-shadows.local"],
+            cwd=str(ws_path),
+            check=True,
+            capture_output=True,
+        )
 
         readme = ws_path / "README.md"
         readme.write_text("# Initial Workspace\n", encoding="utf-8")
         subprocess.run(["git", "add", "README.md"], cwd=str(ws_path), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "chore: initial commit"], cwd=str(ws_path), check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "chore: initial commit"], cwd=str(ws_path), check=True, capture_output=True
+        )
 
-        proc = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(ws_path), check=True, capture_output=True, text=True)
+        proc = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=str(ws_path), check=True, capture_output=True, text=True
+        )
         baseline_sha = proc.stdout.strip()
 
         yield ws_path, baseline_sha
@@ -42,14 +53,14 @@ def disposable_workspace():
 def test_deterministic_worker_dispatch_success(disposable_workspace):
     """Verifies that the deterministic provider successfully modifies the governed workspace."""
     ws_path, baseline_sha = disposable_workspace
-    
+
     run_id = "run_test_001"
     task_id = "task_001"
     inv_id = "inv_001"
     obj = "Implement standard feature"
     obj_hash = "hash_001"
     now = datetime.now(timezone.utc).isoformat()
-    
+
     token = compute_authorization_token(
         run_id=run_id,
         task_id=task_id,
@@ -155,10 +166,10 @@ def test_gemini_missing_credentials_fails_closed(disposable_workspace, monkeypat
     """Verifies that missing GEMINI_API_KEY causes clean failure without model inference."""
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
-    
+
     ws_path, baseline_sha = disposable_workspace
     now = datetime.now(timezone.utc).isoformat()
-    
+
     token = compute_authorization_token(
         run_id="run_gemini",
         task_id="task_gemini",

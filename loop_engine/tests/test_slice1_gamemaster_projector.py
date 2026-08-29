@@ -1,8 +1,10 @@
-import pytest
 import sqlite3
 from pathlib import Path
-from loop_engine.gamemaster.state_projector import SovereignStateProjector
+
+import pytest
+
 from loop_engine.gamemaster.hud_view import TerminalHUDView
+from loop_engine.gamemaster.state_projector import SovereignStateProjector
 from loop_engine.receipts import ReceiptStore
 
 
@@ -10,7 +12,7 @@ def test_truthful_state_projector_dynamic_receipts(tmp_path):
     """Proves that Game Master HUD reflects real SQLite receipts dynamically."""
     db_path = tmp_path / "scratch" / "receipts.db"
     store = ReceiptStore(db_path=db_path)
-    
+
     # Initially zero receipts
     projector = SovereignStateProjector(root_dir=tmp_path)
     hud_0 = projector.project_hud()
@@ -36,7 +38,7 @@ def test_truthful_state_projector_domain_status_detection(tmp_path):
     """Proves that domain status marks ABSENT if module and runner are missing."""
     projector = SovereignStateProjector(root_dir=tmp_path)
     hud = projector.project_hud()
-    
+
     # An empty directory must have 0 discovered test files and ABSENT domains
     assert hud.discovered_test_files == 0
     for d in hud.domains:

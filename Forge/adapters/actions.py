@@ -6,20 +6,34 @@ from typing import Any, Dict
 
 # Windows reserved device names
 _RESERVED_DEVICE_NAMES = {
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
+    "CON",
+    "PRN",
+    "AUX",
+    "NUL",
+    "COM1",
+    "COM2",
+    "COM3",
+    "COM4",
+    "COM5",
+    "COM6",
+    "COM7",
+    "COM8",
+    "COM9",
+    "LPT1",
+    "LPT2",
+    "LPT3",
+    "LPT4",
+    "LPT5",
+    "LPT6",
+    "LPT7",
+    "LPT8",
+    "LPT9",
 }
 
 
 class ActionAdapter(abc.ABC):
     @abc.abstractmethod
-    def execute(
-        self,
-        *,
-        authorization_id: str,
-        operation: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def execute(self, *, authorization_id: str, operation: Dict[str, Any]) -> Dict[str, Any]:
         """
         Executes an authorized external operation and returns output payload.
         """
@@ -33,19 +47,17 @@ class SandboxFileAdapter(ActionAdapter):
     device names, alternate data streams, and sibling prefix escapes.
     Requires verified authorization token before mutating disk state.
     """
+
     def __init__(self, sandbox_root: str | Path):
         self.sandbox_root = Path(sandbox_root).resolve()
         self.sandbox_root.mkdir(parents=True, exist_ok=True)
 
-    def execute(
-        self,
-        *,
-        authorization_id: str,
-        operation: Dict[str, Any]
-    ) -> Dict[str, Any]:
+    def execute(self, *, authorization_id: str, operation: Dict[str, Any]) -> Dict[str, Any]:
         # 1. Authorization Verification Gate
         if not authorization_id or authorization_id == "UNAUTHORIZED_ACTION":
-            raise PermissionError(f"Action execution denied: Invalid or missing authorization token '{authorization_id}'.")
+            raise PermissionError(
+                f"Action execution denied: Invalid or missing authorization token '{authorization_id}'."
+            )
 
         kind = operation.get("kind", "")
         target = operation.get("target", "")

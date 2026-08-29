@@ -1,8 +1,10 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.verifiers.ast_gate import (
-    validate_ast_security,
     inspect_file_ast,
+    validate_ast_security,
 )
 
 

@@ -5,9 +5,9 @@ Enforces scope determination, finding schemas, primary 10 Shadows dimensions,
 structural completeness checks, and anti-overclaiming constraints.
 """
 
+import re
 from dataclasses import dataclass, field
 from enum import Enum
-import re
 from typing import Any, Dict, List, Optional
 
 
@@ -94,25 +94,29 @@ class AuditReport:
         crit_count = sum(1 for f in self.findings if f.severity == Severity.CRITICAL)
         high_count = sum(1 for f in self.findings if f.severity == Severity.HIGH)
 
-        lines.extend([
-            f"Critical Findings: {crit_count}",
-            f"High Findings: {high_count}",
-            f"Unverified Assumptions: {len(self.unverified_assumptions)}",
-            f"Not-Applicable Dimensions: {len(self.not_applicable_dimensions)}",
-            f"Implementation-Dependent Controls: {len(self.implementation_dependent_controls)}",
-            f"Required Acceptance Evidence: {len(self.required_acceptance_evidence)}",
-            f"Residual Risks: {len(self.residual_risks)}",
-            "",
-        ])
+        lines.extend(
+            [
+                f"Critical Findings: {crit_count}",
+                f"High Findings: {high_count}",
+                f"Unverified Assumptions: {len(self.unverified_assumptions)}",
+                f"Not-Applicable Dimensions: {len(self.not_applicable_dimensions)}",
+                f"Implementation-Dependent Controls: {len(self.implementation_dependent_controls)}",
+                f"Required Acceptance Evidence: {len(self.required_acceptance_evidence)}",
+                f"Residual Risks: {len(self.residual_risks)}",
+                "",
+            ]
+        )
 
         if self.outcome in (AuditResult.PASS, AuditResult.CONDITIONAL_PASS) and self.audit_passed_statement:
             lines.append(self.audit_passed_statement)
             lines.append("")
 
-        lines.extend([
-            "Mandatory Audit Limitation:",
-            self.mandatory_limitation,
-        ])
+        lines.extend(
+            [
+                "Mandatory Audit Limitation:",
+                self.mandatory_limitation,
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -128,10 +132,27 @@ class PlanAuditor:
         stripped_plan = plan_text.strip()
         scope = scope or {}
         language = scope.get("language", "python").lower()
-        has_subprocesses = scope.get("subprocesses", True if "subprocess" in stripped_plan.lower() or language == "python" else False)
-        has_network = scope.get("network", True if "http" in stripped_plan.lower() or "api" in stripped_plan.lower() or "network" in stripped_plan.lower() else False)
-        has_database = scope.get("database", True if "sql" in stripped_plan.lower() or "database" in stripped_plan.lower() or "db" in stripped_plan.lower() else False)
-        has_filesystem = scope.get("filesystem", True if "file" in stripped_plan.lower() or "shutil" in stripped_plan.lower() or "path" in stripped_plan.lower() else False)
+        has_subprocesses = scope.get(
+            "subprocesses", True if "subprocess" in stripped_plan.lower() or language == "python" else False
+        )
+        has_network = scope.get(
+            "network",
+            True
+            if "http" in stripped_plan.lower() or "api" in stripped_plan.lower() or "network" in stripped_plan.lower()
+            else False,
+        )
+        has_database = scope.get(
+            "database",
+            True
+            if "sql" in stripped_plan.lower() or "database" in stripped_plan.lower() or "db" in stripped_plan.lower()
+            else False,
+        )
+        has_filesystem = scope.get(
+            "filesystem",
+            True
+            if "file" in stripped_plan.lower() or "shutil" in stripped_plan.lower() or "path" in stripped_plan.lower()
+            else False,
+        )
 
         scope_evals = {}
         na_dims = {}
@@ -157,7 +178,9 @@ class PlanAuditor:
 
         scope_evals["Production-Path Integrity"] = "APPLICABLE"
         scope_evals["Artifact Provenance & Consumption"] = "APPLICABLE"
-        scope_evals["Single Persistence Authority"] = "APPLICABLE" if has_database else "NOT APPLICABLE (Stateless / No DB)"
+        scope_evals["Single Persistence Authority"] = (
+            "APPLICABLE" if has_database else "NOT APPLICABLE (Stateless / No DB)"
+        )
         scope_evals["Promotion Authorization & Recovery"] = "APPLICABLE"
         scope_evals["Mock & Fallback Detection"] = "APPLICABLE"
         scope_evals["Test Oracle Efficacy"] = "APPLICABLE"
@@ -166,18 +189,20 @@ class PlanAuditor:
 
         # 2. Structural Completeness & Emptiness Gate
         if not stripped_plan or len(stripped_plan) < 30:
-            findings.append(Finding(
-                finding_id="FINDING-STRUC-001",
-                name="Empty Or Incomplete Plan Specification",
-                severity=Severity.CRITICAL,
-                status=FindingStatus.PLAN_GAP,
-                applicable_because="All plans must provide explicit architecture, scope, components, and verification details.",
-                failure_scenario="Plan is empty, trivial, or lacks technical specification.",
-                impact="Cannot evaluate system invariants; implementation would proceed unverified.",
-                required_plan_change="Provide a complete design document detailing components, dependencies, test oracles, and verification plan.",
-                required_verification="Submit complete plan document for adversarial audit.",
-                residual_risk="Unspecified scope boundaries.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-STRUC-001",
+                    name="Empty Or Incomplete Plan Specification",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.PLAN_GAP,
+                    applicable_because="All plans must provide explicit architecture, scope, components, and verification details.",
+                    failure_scenario="Plan is empty, trivial, or lacks technical specification.",
+                    impact="Cannot evaluate system invariants; implementation would proceed unverified.",
+                    required_plan_change="Provide a complete design document detailing components, dependencies, test oracles, and verification plan.",
+                    required_verification="Submit complete plan document for adversarial audit.",
+                    residual_risk="Unspecified scope boundaries.",
+                )
+            )
             return AuditReport(
                 outcome=AuditResult.BLOCK,
                 scope_evaluations=scope_evals,
@@ -189,93 +214,107 @@ class PlanAuditor:
 
         # Check 3: Missing Verification Plan
         if "test" not in plan_lower and "verification" not in plan_lower:
-            findings.append(Finding(
-                finding_id="FINDING-STRUC-002",
-                name="Missing Verification Plan",
-                severity=Severity.HIGH,
-                status=FindingStatus.PLAN_GAP,
-                applicable_because="Every plan must specify an executable verification strategy.",
-                failure_scenario="Code is written without automated test coverage or acceptance evidence.",
-                impact="Regressions and defects escape detection.",
-                required_plan_change="Add explicit verification plan containing positive and negative test cases.",
-                required_verification="Physical execution of automated test suite.",
-                residual_risk="Incomplete test oracle coverage.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-STRUC-002",
+                    name="Missing Verification Plan",
+                    severity=Severity.HIGH,
+                    status=FindingStatus.PLAN_GAP,
+                    applicable_because="Every plan must specify an executable verification strategy.",
+                    failure_scenario="Code is written without automated test coverage or acceptance evidence.",
+                    impact="Regressions and defects escape detection.",
+                    required_plan_change="Add explicit verification plan containing positive and negative test cases.",
+                    required_verification="Physical execution of automated test suite.",
+                    residual_risk="Incomplete test oracle coverage.",
+                )
+            )
 
         # Check 4: Production-Path Integrity
         if "not be updated in this phase" in plan_lower and ("entrypoint" in plan_lower or "main.py" in plan_lower):
-            findings.append(Finding(
-                finding_id="FINDING-PROD-001",
-                name="Production-Path Disconnect",
-                severity=Severity.CRITICAL,
-                status=FindingStatus.CONFIRMED,
-                applicable_because="System claims production functionality but leaves entrypoint unwired.",
-                failure_scenario="Changes are deployed as isolated dead code; production entrypoint cannot invoke new service.",
-                impact="Silent failure in production; downstream consumers receive stale or uninitialized components.",
-                required_plan_change="Wire authentication service directly into main.py production entrypoint and add integration test.",
-                required_verification="Physical execution of production entrypoint in verification suite.",
-                residual_risk="Entrypoint argument configuration errors.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-PROD-001",
+                    name="Production-Path Disconnect",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="System claims production functionality but leaves entrypoint unwired.",
+                    failure_scenario="Changes are deployed as isolated dead code; production entrypoint cannot invoke new service.",
+                    impact="Silent failure in production; downstream consumers receive stale or uninitialized components.",
+                    required_plan_change="Wire authentication service directly into main.py production entrypoint and add integration test.",
+                    required_verification="Physical execution of production entrypoint in verification suite.",
+                    residual_risk="Entrypoint argument configuration errors.",
+                )
+            )
 
         # Check 5: Subprocess env={} Hazard
         if has_subprocesses and ("env={}" in stripped_plan or "env = {}" in stripped_plan):
-            findings.append(Finding(
-                finding_id="FINDING-SUBPROC-001",
-                name="Fatal env={} Subprocess Isolation",
-                severity=Severity.CRITICAL,
-                status=FindingStatus.CONFIRMED,
-                applicable_because="Subprocess execution requires core OS runtime environment variables.",
-                failure_scenario="Subprocess invoked with env={} fails on Windows/Linux with RuntimeError: Could not determine home directory.",
-                impact="Subprocess crash loops and total verification failure.",
-                required_plan_change="Replace env={} with an explicit allowlist containing SYSTEMROOT, PATH, USERPROFILE, and TMP while stripping secrets.",
-                required_verification="Execute subprocess test inside clean test harness verifying successful start.",
-                residual_risk="Leakage of non-secret environment variables.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-SUBPROC-001",
+                    name="Fatal env={} Subprocess Isolation",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Subprocess execution requires core OS runtime environment variables.",
+                    failure_scenario="Subprocess invoked with env={} fails on Windows/Linux with RuntimeError: Could not determine home directory.",
+                    impact="Subprocess crash loops and total verification failure.",
+                    required_plan_change="Replace env={} with an explicit allowlist containing SYSTEMROOT, PATH, USERPROFILE, and TMP while stripping secrets.",
+                    required_verification="Execute subprocess test inside clean test harness verifying successful start.",
+                    residual_risk="Leakage of non-secret environment variables.",
+                )
+            )
 
         # Check 6: Route-Critical Mock Detection
         if "mock out the entire" in plan_lower or ("mock" in plan_lower and "all integration tests" in plan_lower):
-            findings.append(Finding(
-                finding_id="FINDING-MOCK-001",
-                name="Route-Critical Mock Masking Defect",
-                severity=Severity.CRITICAL,
-                status=FindingStatus.CONFIRMED,
-                applicable_because="Integration tests must verify physical communication with real dependencies.",
-                failure_scenario="Real gateway or database returns schema mismatch; mocked tests pass green while physical system crashes.",
-                impact="False sense of verification security; failure escapes to runtime.",
-                required_plan_change="Remove route-critical mocks for core pipeline. Use real ephemeral test instances or fixtures.",
-                required_verification="End-to-end integration test against real database/service in isolated sandbox.",
-                residual_risk="Network flakiness against real dependencies.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-MOCK-001",
+                    name="Route-Critical Mock Masking Defect",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Integration tests must verify physical communication with real dependencies.",
+                    failure_scenario="Real gateway or database returns schema mismatch; mocked tests pass green while physical system crashes.",
+                    impact="False sense of verification security; failure escapes to runtime.",
+                    required_plan_change="Remove route-critical mocks for core pipeline. Use real ephemeral test instances or fixtures.",
+                    required_verification="End-to-end integration test against real database/service in isolated sandbox.",
+                    residual_risk="Network flakiness against real dependencies.",
+                )
+            )
 
         # Check 7: Vacuous Test Assertions
         if "assert true" in plan_lower or ("assert cache is not none" in plan_lower and "100% test pass" in plan_lower):
-            findings.append(Finding(
-                finding_id="FINDING-TEST-001",
-                name="Vacuous Test Oracle",
-                severity=Severity.HIGH,
-                status=FindingStatus.CONFIRMED,
-                applicable_because="Test oracles must verify semantic invariants, not tautologies.",
-                failure_scenario="Cache implementation fails to evict or stores corrupt keys; trivial assert True test passes.",
-                impact="Defective code promoted to production without detection.",
-                required_plan_change="Add positive, negative, edge-case, and eviction tests with state assertions.",
-                required_verification="Demonstrate test failure against defective mock/fixture prior to implementation.",
-                residual_risk="Uncovered edge cases in high-concurrency scenarios.",
-            ))
+            findings.append(
+                Finding(
+                    finding_id="FINDING-TEST-001",
+                    name="Vacuous Test Oracle",
+                    severity=Severity.HIGH,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Test oracles must verify semantic invariants, not tautologies.",
+                    failure_scenario="Cache implementation fails to evict or stores corrupt keys; trivial assert True test passes.",
+                    impact="Defective code promoted to production without detection.",
+                    required_plan_change="Add positive, negative, edge-case, and eviction tests with state assertions.",
+                    required_verification="Demonstrate test failure against defective mock/fixture prior to implementation.",
+                    residual_risk="Uncovered edge cases in high-concurrency scenarios.",
+                )
+            )
 
         # Check 8: Interruption Recovery & Promotion
-        if "shutil.copyfile" in plan_lower and ("manually resolve" in plan_lower or "lacking recovery" in plan_lower or "crashes" in plan_lower):
-            findings.append(Finding(
-                finding_id="FINDING-PROM-001",
-                name="Non-Idempotent Promotion Without Crash Recovery",
-                severity=Severity.CRITICAL,
-                status=FindingStatus.CONFIRMED,
-                applicable_because="Promotion across filesystem and database must be crash-resilient.",
-                failure_scenario="Process killed mid-copy leaves partial file on disk with database in stale state.",
-                impact="Torn state and unrecoverable system corruption.",
-                required_plan_change="Implement Write-Ahead Log with PROMOTION_PENDING state and startup reconciliation.",
-                required_verification="Simulate interrupted promotion in test suite and assert automatic recovery on startup.",
-                residual_risk="Filesystem disk saturation during WAL creation.",
-            ))
+        if "shutil.copyfile" in plan_lower and (
+            "manually resolve" in plan_lower or "lacking recovery" in plan_lower or "crashes" in plan_lower
+        ):
+            findings.append(
+                Finding(
+                    finding_id="FINDING-PROM-001",
+                    name="Non-Idempotent Promotion Without Crash Recovery",
+                    severity=Severity.CRITICAL,
+                    status=FindingStatus.CONFIRMED,
+                    applicable_because="Promotion across filesystem and database must be crash-resilient.",
+                    failure_scenario="Process killed mid-copy leaves partial file on disk with database in stale state.",
+                    impact="Torn state and unrecoverable system corruption.",
+                    required_plan_change="Implement Write-Ahead Log with PROMOTION_PENDING state and startup reconciliation.",
+                    required_verification="Simulate interrupted promotion in test suite and assert automatic recovery on startup.",
+                    residual_risk="Filesystem disk saturation during WAL creation.",
+                )
+            )
 
         # Outcome determination
         has_critical = any(f.severity == Severity.CRITICAL for f in findings)

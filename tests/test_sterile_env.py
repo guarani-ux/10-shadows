@@ -7,6 +7,7 @@ prior to any subprocess invocation in 10 SHADOWS.
 
 import os
 from pathlib import Path
+
 import pytest
 
 from loop_engine.sterile_env import (
@@ -20,7 +21,7 @@ from loop_engine.sterile_env import (
 class TestSterileEnvironmentAllowlist:
     def test_sterile_env_contains_only_allowlisted_and_runtime_flags(self):
         env = build_sterile_environment()
-        
+
         allowed_set = set(ALLOWED_ENV_VARS) | {
             "PYTHONPATH",
             "PYTHONDONTWRITEBYTECODE",
@@ -71,6 +72,6 @@ class TestSterileEnvironmentAnchoring:
     def test_pythonpath_anchoring_to_worktree(self, tmp_path: Path):
         worktree = tmp_path / "custom_worktree"
         worktree.mkdir()
-        
+
         env = build_sterile_environment(worktree_path=worktree)
         assert env.get("PYTHONPATH") == str(worktree.resolve())

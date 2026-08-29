@@ -29,11 +29,12 @@ def validate_contract(definition_name: str, instance: Dict[str, Any]) -> bool:
     subschema = {
         "$schema": schema.get("$schema", "https://json-schema.org/draft/2020-12/schema"),
         "$defs": defs,
-        **defs[definition_name]
+        **defs[definition_name],
     }
 
     try:
         import jsonschema
+
         jsonschema.validate(instance=instance, schema=subschema)
         return True
     except ImportError:
@@ -79,7 +80,7 @@ def _fallback_validate(subschema: Dict[str, Any], instance: Any, defs: Dict[str,
     elif expected_type == "object":
         if not isinstance(instance, dict):
             raise ValueError(f"Expected object/dict, got {type(instance).__name__}")
-        
+
         required = subschema.get("required", [])
         for req in required:
             if req not in instance:

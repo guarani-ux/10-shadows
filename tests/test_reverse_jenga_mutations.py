@@ -5,7 +5,9 @@ Deliberately tests that mutating or bypassing governing invariants results in im
 """
 
 import hashlib
+
 import pytest
+
 from loop_engine.authority import ProofWitness, issue_proof_witness
 from loop_engine.disposition import ActionDisposition, evaluate_execution_disposition
 from loop_engine.kernel_db import KernelDatabase

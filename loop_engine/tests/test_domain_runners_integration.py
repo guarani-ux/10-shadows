@@ -1,9 +1,11 @@
-import pytest
 from pathlib import Path
-from loop_engine.runners.forge_runner import ForgeDomainRunner
-from loop_engine.runners.svris_runner import SvrisDomainRunner
+
+import pytest
+
 from loop_engine.governor import Governor
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.forge_runner import ForgeDomainRunner
+from loop_engine.runners.svris_runner import SvrisDomainRunner
 
 
 def test_forge_domain_runner_success(tmp_path):
@@ -58,4 +60,6 @@ def test_svris_domain_runner_catches_unsafe_code(tmp_path):
 
     assert result["status"] == "ABORTED"
     assert result["strikes_exhausted"] == 3
-    assert any("Banned execution call 'os.system()'" in entry["error"] for entry in result["negative_constraints_ledger"])
+    assert any(
+        "Banned execution call 'os.system()'" in entry["error"] for entry in result["negative_constraints_ledger"]
+    )

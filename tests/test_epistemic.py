@@ -13,15 +13,16 @@ Enforces Pirate King Constraints:
 """
 
 import pytest
+
 from loop_engine.authority import (
     ProofWitness,
     issue_proof_witness,
 )
 from loop_engine.epistemic import (
-    EvidenceOrigin,
-    EpistemicStatus,
     EpistemicDisposition,
+    EpistemicStatus,
     EvidenceEnvelope,
+    EvidenceOrigin,
     SemanticLaunderingError,
     canonical_json_digest,
     create_unverified_envelope,
@@ -118,7 +119,9 @@ class TestSemanticLaunderingRejection:
             source_id="mock_fixture",
         )
 
-        with pytest.raises(SemanticLaunderingError, match="Synthetic evidence cannot masquerade as physical observation"):
+        with pytest.raises(
+            SemanticLaunderingError, match="Synthetic evidence cannot masquerade as physical observation"
+        ):
             transform_envelope(
                 parent_envelope=parent,
                 new_payload={"mock_data": True},

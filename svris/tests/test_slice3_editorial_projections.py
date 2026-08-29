@@ -4,7 +4,9 @@ Strict value assertions and negative mutation traps.
 """
 
 import sqlite3
+
 import pytest
+
 from svris.core.db import get_connection, init_db
 from svris.core.editorial import create_insight, create_story_angle
 from svris.core.primitives import generate_script_primitive

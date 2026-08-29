@@ -8,11 +8,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 class PreflightCheckError(Exception):
     """Raised when environment or module dependencies fail admission checks."""
+
     pass
 
 
 class SpecTamperError(Exception):
     """Raised when an attempt is made to mutate sealed task objectives or constraints."""
+
     pass
 
 
@@ -63,7 +65,7 @@ def run_pre_flight(
     1. Validates disk write access in staging boundary.
     2. Verifies module dependencies via find_spec.
     3. Seals task_spec with canonical SHA-256 hash.
-    
+
     Returns sealed spec_hash. Raises PreflightCheckError on failure.
     """
     # 1. Disk probe

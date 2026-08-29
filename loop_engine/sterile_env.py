@@ -8,11 +8,12 @@ runtime isolation.
 """
 
 import os
-from pathlib import Path
 import re
+from pathlib import Path
 from typing import Dict, List, Optional
 
 from loop_engine.governance import load_canonical_governance
+
 
 def get_allowed_env_vars() -> List[str]:
     """Retrieves authoritative allowlist from canonical governance.yaml."""
@@ -37,14 +38,13 @@ def get_allowed_env_vars() -> List[str]:
             "WINDIR",
         ]
 
+
 # Canonical allowlist of OS variables permitted to cross subprocess boundaries
 ALLOWED_ENV_VARS: List[str] = get_allowed_env_vars()
 
 
 # Sensitive keyword pattern to scrub even if accidentally matched
-SECRET_PATTERN = re.compile(
-    r"(?i)(key|secret|token|pass|auth|credential|cert|private|session|bearer|cookie)"
-)
+SECRET_PATTERN = re.compile(r"(?i)(key|secret|token|pass|auth|credential|cert|private|session|bearer|cookie)")
 
 
 def is_secret_env_var(var_name: str) -> bool:
@@ -60,7 +60,7 @@ def build_sterile_environment(
 ) -> Dict[str, str]:
     """
     Constructs a sterile, ring-fenced subprocess environment dictionary.
-    
+
     Invariants:
     1. Only allowlisted OS environment variables are included.
     2. Any variable name matching SECRET_PATTERN is proactively scrubbed.
@@ -70,7 +70,7 @@ def build_sterile_environment(
     6. PYTHONPATH is explicitly anchored to worktree_path (or PROJECT_ROOT).
     """
     clean_env: Dict[str, str] = {}
-    
+
     # Filter host environment
     for var in ALLOWED_ENV_VARS:
         if is_secret_env_var(var):

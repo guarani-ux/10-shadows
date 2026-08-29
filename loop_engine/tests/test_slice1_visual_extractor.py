@@ -1,14 +1,14 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.media.visual_extractor import EphemeralKeyframeExtractor
 
 
 def test_visual_extractor_cleanup(tmp_path):
     extractor = EphemeralKeyframeExtractor(keyframes_dir=tmp_path)
 
-    mock_scenes = [
-        {"scene_index": 1, "start_seconds": 5.0, "time_window": "0:00 - 0:30"}
-    ]
+    mock_scenes = [{"scene_index": 1, "start_seconds": 5.0, "time_window": "0:00 - 0:30"}]
 
     # Test with real short library video
     res = extractor.extract_scene_keyframes(

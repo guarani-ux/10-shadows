@@ -2,6 +2,7 @@
 worker_dispatcher.py — Autonomous Worker Dispatcher for 10 SHADOWS.
 Bridges the Trusted Kernel and Model Providers across a language-neutral protocol boundary.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,15 +21,14 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from loop_engine.dispatcher.protocol import (
     WorkerAuthorization,
-    WorkerExecutionResult,
     WorkerEvidenceModality,
+    WorkerExecutionResult,
 )
 from loop_engine.dispatcher.providers.base import WorkerProviderAdapter
 from loop_engine.dispatcher.providers.deterministic_provider import DeterministicWorkerAdapter
 from loop_engine.dispatcher.providers.gemini_provider import GeminiWorkerAdapter
 from loop_engine.dispatcher.providers.shadow_provider import ShadowDomainWorkerAdapter
 from loop_engine.harness.git_worktree import assert_not_authoritative_source
-
 
 PROVIDER_REGISTRY: Dict[str, Type[WorkerProviderAdapter]] = {
     "deterministic": DeterministicWorkerAdapter,
@@ -48,7 +48,7 @@ def dispatch_worker(auth: WorkerAuthorization) -> WorkerExecutionResult:
     Validates authorization, enforces workspace containment, and invokes provider adapter.
     """
     workspace_path = Path(auth.governed_workspace_path).resolve()
-    
+
     # 1. Authoritative Source Protection Guard
     assert_not_authoritative_source(workspace_path, "worker_dispatch")
 
@@ -94,7 +94,9 @@ def dispatch_worker(auth: WorkerAuthorization) -> WorkerExecutionResult:
             output_digest=hashlib.sha256(b"forged_authorization").hexdigest(),
             workspace_before_sha=auth.baseline_sha,
             workspace_after_sha=auth.baseline_sha,
-            errors=["Security violation: Worker authorization token verification failed (forged or tampered authorization)."],
+            errors=[
+                "Security violation: Worker authorization token verification failed (forged or tampered authorization)."
+            ],
             completion_status="REJECTED",
         )
 

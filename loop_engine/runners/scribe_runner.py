@@ -1,22 +1,22 @@
+import hashlib
 import json
 import uuid
-import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
+from loop_engine.artifacts import StructuredSourceArtifact
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference
+from loop_engine.context import RunContext
+from loop_engine.receipts import ReceiptStore
 from loop_engine.scribe.memory_store import ScribeMemoryStore
 from loop_engine.scribe.pattern_miner import ScribePatternMiner
-from loop_engine.receipts import ReceiptStore
-from loop_engine.context import RunContext
-from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference
-from loop_engine.artifacts import StructuredSourceArtifact
 
 
 class ScribeDomainRunner(BaseLoop):
     """
     Shadow 6 (The Scribe) Domain Runner.
-    
+
     Autonomous loop for ingesting verified blueprints into the relational knowledge
     graph, synthesizing cross-video patterns, conditioning source material,
     and emitting WAL-stamped StructuredSourceArtifacts.
@@ -85,7 +85,9 @@ class ScribeDomainRunner(BaseLoop):
                 task_id = f"scribe_{raw_input.get('video_id', raw_input.get('project_id', uuid.uuid4().hex[:8]))}"
                 payload = raw_input
                 if "mode" not in payload:
-                    payload["mode"] = "BLUEPRINT_INDEXING" if "scenes" in payload else "CANONICAL_OBJECTIVE_CONDITIONING"
+                    payload["mode"] = (
+                        "BLUEPRINT_INDEXING" if "scenes" in payload else "CANONICAL_OBJECTIVE_CONDITIONING"
+                    )
         else:
             raise ValueError(f"Unsupported Scribe input type: {type(raw_input)}")
 
@@ -155,7 +157,9 @@ class ScribeDomainRunner(BaseLoop):
                 verified_facts=facts,
                 explicit_unknowns=unknowns,
                 historical_pacing_benchmarks=stats,
-                identified_blindspots=self.miner.extract_blindspot_inventory() if hasattr(self.miner, "extract_blindspot_inventory") else [],
+                identified_blindspots=self.miner.extract_blindspot_inventory()
+                if hasattr(self.miner, "extract_blindspot_inventory")
+                else [],
                 provenance={"source_commit": getattr(self.run_context, "source_commit", "HEAD")},
             )
 

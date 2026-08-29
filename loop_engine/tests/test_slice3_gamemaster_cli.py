@@ -1,6 +1,8 @@
-import pytest
 import subprocess
 import sys
+
+import pytest
+
 from loop_engine.gamemaster.cli import run_cli
 
 

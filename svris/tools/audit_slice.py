@@ -41,7 +41,7 @@ def run_ast_audit(target_dir: str) -> bool:
 
 
 def run_database_integrity_audit(schema_path: str) -> bool:
-    print(f"[AUDIT GATE 2] DDL Schema & SQLite PRAGMA Integrity Check...")
+    print("[AUDIT GATE 2] DDL Schema & SQLite PRAGMA Integrity Check...")
     with open(schema_path, "r", encoding="utf-8") as f:
         schema_sql = f.read()
 
@@ -72,7 +72,7 @@ def run_database_integrity_audit(schema_path: str) -> bool:
 
 def run_test_suite_in_sandbox(test_file: str) -> bool:
     print(f"[AUDIT GATE 3] Sandboxed Test Execution on '{test_file}'...")
-    
+
     ring_fenced_env = {
         "PATH": os.environ.get("PATH", ""),
         "SYSTEMROOT": os.environ.get("SYSTEMROOT", ""),
@@ -90,12 +90,14 @@ def run_test_suite_in_sandbox(test_file: str) -> bool:
         sys.executable,
         "-m",
         "pytest",
-        "-p", "no:logfire",
-        "-p", "no:langsmith",
+        "-p",
+        "no:logfire",
+        "-p",
+        "no:langsmith",
         "-v",
         test_file,
     ]
-    
+
     proc = subprocess.run(
         cmd,
         cwd=REPO_ROOT,
@@ -113,7 +115,7 @@ def run_test_suite_in_sandbox(test_file: str) -> bool:
 
 
 def emit_physical_receipt(slice_name: str, output_receipt_path: str) -> str:
-    print(f"[AUDIT GATE 4] Emitting Physical Disk Receipt...")
+    print("[AUDIT GATE 4] Emitting Physical Disk Receipt...")
     receipt_data = {
         "slice": slice_name,
         "audited_at": datetime.now(timezone.utc).isoformat(),
@@ -140,9 +142,9 @@ def main():
     slice_name = sys.argv[1] if len(sys.argv) > 1 else "slice0"
     target_test = sys.argv[2] if len(sys.argv) > 2 else "svris/tests/test_slice0_p0_hardening.py"
 
-    print(f"==================================================")
+    print("==================================================")
     print(f"  RING-FENCED INDEPENDENT AUDITOR: {slice_name.upper()}")
-    print(f"==================================================")
+    print("==================================================")
 
     if not run_ast_audit("svris"):
         sys.exit(1)
@@ -156,10 +158,10 @@ def main():
     receipt_path = f"svris/receipts/{slice_name}.receipt.json"
     receipt_hash = emit_physical_receipt(slice_name, receipt_path)
 
-    print(f"==================================================")
+    print("==================================================")
     print(f"  AUDIT PASSED: {slice_name.upper()} SIGNED OFF")
     print(f"  Receipt SHA256: {receipt_hash}")
-    print(f"==================================================")
+    print("==================================================")
     sys.exit(0)
 
 

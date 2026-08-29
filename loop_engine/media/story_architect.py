@@ -2,8 +2,9 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from youtube_transcript_api import YouTubeTranscriptApi
+
 import yt_dlp
+from youtube_transcript_api import YouTubeTranscriptApi
 
 
 class VideoStoryArchitect:
@@ -35,11 +36,7 @@ class VideoStoryArchitect:
         for e in fetched:
             t = e.text.replace("\ufffd", " ").replace("\n", " ").strip()
             if t and t != "[Music]":
-                cleaned.append({
-                    "start": round(e.start, 1),
-                    "end": round(e.start + e.duration, 1),
-                    "text": t
-                })
+                cleaned.append({"start": round(e.start, 1), "end": round(e.start + e.duration, 1), "text": t})
         return {
             "title": meta.get("title", ""),
             "channel": meta.get("uploader", ""),
@@ -70,21 +67,18 @@ class VideoStoryArchitect:
             "duration_formatted": f"{duration // 60}m {duration % 60}s",
             "full_dialogue": full_dialogue,
             "story_quadrants": {
-                "act_1_the_hook": {
-                    "time": f"0:00 - {int(duration * 0.25)}s",
-                    "text": " ".join(s["text"] for s in q1)
-                },
+                "act_1_the_hook": {"time": f"0:00 - {int(duration * 0.25)}s", "text": " ".join(s["text"] for s in q1)},
                 "act_2_the_grind": {
                     "time": f"{int(duration * 0.25)}s - {int(duration * 0.50)}s",
-                    "text": " ".join(s["text"] for s in q2)
+                    "text": " ".join(s["text"] for s in q2),
                 },
                 "act_3_the_climax_or_obstacle": {
                     "time": f"{int(duration * 0.50)}s - {int(duration * 0.75)}s",
-                    "text": " ".join(s["text"] for s in q3)
+                    "text": " ".join(s["text"] for s in q3),
                 },
                 "act_4_the_transformation_and_payoff": {
                     "time": f"{int(duration * 0.75)}s - {duration}s",
-                    "text": " ".join(s["text"] for s in q4)
-                }
-            }
+                    "text": " ".join(s["text"] for s in q4),
+                },
+            },
         }

@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 class ScribeMemoryStore:
     """
     Shadow 6 (The Scribe) Memory & Knowledge Engine.
-    
+
     SQLite WAL-backed relational store for indexing, querying,
     and cross-referencing narrative blueprints, hook patterns,
     and epistemic anomalies across arbitrary videos.
@@ -154,14 +154,13 @@ class ScribeMemoryStore:
 
             video_dict = dict(row)
             scenes = [
-                dict(r) for r in conn.execute(
+                dict(r)
+                for r in conn.execute(
                     "SELECT * FROM scenes WHERE video_id = ? ORDER BY scene_index ASC", (video_id,)
                 ).fetchall()
             ]
             blindspots = [
-                dict(r) for r in conn.execute(
-                    "SELECT * FROM blindspots WHERE video_id = ?", (video_id,)
-                ).fetchall()
+                dict(r) for r in conn.execute("SELECT * FROM blindspots WHERE video_id = ?", (video_id,)).fetchall()
             ]
 
             video_dict["scenes"] = scenes

@@ -17,9 +17,9 @@ from loop_engine.relational.graph_db import RelationalGraphStore
 from loop_engine.relational.schema import (
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 
@@ -84,7 +84,9 @@ class RelationalProjectionEngine:
         ver_data = receipt_dict.get("verification")
         if ver_data:
             ver_id = ver_data.get("verifier_id", f"ver_{task_id}")
-            ver_status = EpistemicStatus.VERIFIED if ver_data.get("verified_status") == "PASS" else EpistemicStatus.INVALIDATED
+            ver_status = (
+                EpistemicStatus.VERIFIED if ver_data.get("verified_status") == "PASS" else EpistemicStatus.INVALIDATED
+            )
             ver_node = RelationalNode(
                 node_id=ver_id,
                 node_type=NodeType.VERIFIER,

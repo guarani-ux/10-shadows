@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ten-shadows"
+version = "3.0.0"
+description = "Deterministic Relational Architecture, Sovereign Kernel, and Epistemic Operating System"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Ten Shadows Core Team" }
+]
+dependencies = [
+    "pydantic>=2.0.0",
+    "PyYAML>=6.0.0",
+    "jsonschema>=4.0.0",
+    "yt-dlp>=2024.0.0",
+    "youtube-transcript-api>=0.6.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests", "loop_engine/tests", "svris/tests", "Forge/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-q --tb=short"
+markers = [
+    "unit: Isolated unit tests for functions and pure data structures",
+    "integration: Cross-component and boundary integration tests",
+    "adversarial: Adversarial authority, custody, and boundary falsification tests",
+    "property: Invariant and property-based verification tests",
+    "mutation: Mutation and sensitivity analysis tests",
+    "walking_skeleton: Deterministic cross-domain execution walking skeletons",
+    "relational: Graph relational intelligence and truth maintenance tests",
+    "slow: Long-running or resource-intensive tests",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = [
+    "E501",  # line length handled by formatter
+    "F401",  # allow unused imports in __init__ and compatibility layers
+    "F841",  # allow local variables assigned for debugging/inspection
+    "E402",  # module import not at top (due to sys.path manipulation in scripts/entrypoints)
+    "W293",  # blank line contains whitespace in multiline docstrings
+    "W291",  # trailing whitespace in SQL multiline strings
+    "E731",  # lambda expression assignment in tests
+    "E741",  # single character variable names
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["loop_engine", "Forge", "svris", "zero_trust_engine"]

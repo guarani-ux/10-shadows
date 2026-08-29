@@ -5,6 +5,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -33,6 +34,7 @@ class RunContext(BaseModel):
     Guarantees full cryptographic traceability from high-level canonical objective
     down to atomic worktree mutations and machine-signed receipts.
     """
+
     run_id: str
     parent_run_id: Optional[str] = None
     task_id: str
@@ -74,11 +76,7 @@ class RunContext(BaseModel):
         run_id = f"run_{task_id}_{suffix}" if not parent_run_id else f"child_{shadow_id}_{task_id}_{suffix}"
 
         # Resolve physical Git commit SHA if not explicitly provided or if default "HEAD"
-        resolved_commit = (
-            source_commit
-            if source_commit and source_commit != "HEAD"
-            else resolve_physical_commit_sha()
-        )
+        resolved_commit = source_commit if source_commit and source_commit != "HEAD" else resolve_physical_commit_sha()
 
         # Deterministic SHA-256 computation (zero timestamp entropy)
         if isinstance(raw_objective, (dict, list)):

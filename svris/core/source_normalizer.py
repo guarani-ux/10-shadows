@@ -6,8 +6,8 @@ Deterministic normalization of URLs, content hashing, and metadata sanitization.
 import hashlib
 import re
 from datetime import datetime, timezone
-from urllib.parse import urlparse, urlunparse, parse_qsl, urlencode
-from typing import Dict, Optional, Any
+from typing import Any, Dict, Optional
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 
 def compute_sha256(content: str) -> str:
@@ -35,9 +35,7 @@ def normalize_url(raw_url: Optional[str]) -> Optional[str]:
     # Remove tracking query parameters
     tracking_prefixes = ("utm_", "fbclid", "gclid", "ref", "mc_eid")
     query_tuples = parse_qsl(parsed.query, keep_blank_values=False)
-    filtered_query = [
-        (k, v) for k, v in query_tuples if not any(k.lower().startswith(p) for p in tracking_prefixes)
-    ]
+    filtered_query = [(k, v) for k, v in query_tuples if not any(k.lower().startswith(p) for p in tracking_prefixes)]
     new_query = urlencode(filtered_query)
 
     # Clean path (strip trailing slashes if not root)

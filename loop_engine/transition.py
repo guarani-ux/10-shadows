@@ -17,12 +17,12 @@ Enforces:
 6. Atomic Persistence: Commits transition receipts into KernelDatabase WAL under internal authority token.
 """
 
-from dataclasses import dataclass, field
 import hashlib
 import json
-from pathlib import Path
 import secrets
 import time
+from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, Optional, Set, Union
 
 from loop_engine.authority import InvalidWitnessError, ProofWitness
@@ -36,21 +36,25 @@ _INTERNAL_TRANSITION_TOKEN = secrets.token_hex(32)
 
 class TransitionError(Exception):
     """Base exception for transition failures."""
+
     pass
 
 
 class IllegalStateTransitionError(TransitionError):
     """Raised when an illegal state transition is requested."""
+
     pass
 
 
 class ReplayAttackError(TransitionError):
     """Raised when an already spent witness ID is submitted."""
+
     pass
 
 
 class PrivilegedStateMutationProhibitedError(TransitionError):
     """Raised when an unauthenticated caller attempts direct privileged state mutation."""
+
     pass
 
 
@@ -88,17 +92,18 @@ class TransitionRequest:
     """
     Formal complete request submitted to the PrivilegedTransitionEngine.
     """
+
     task_id: str
     from_state: State
     to_state: State
-    subject_identity: str         # Candidate commit SHA / Artifact digest
+    subject_identity: str  # Candidate commit SHA / Artifact digest
     candidate_tree_sha: str
     spec_hash: str
     acceptance_test_digest: str
-    evidence_digest: str          # Physical execution digest / test digest
-    authority_scope: str          # e.g. "PHYSICAL_VERIFICATION", "PROMOTION"
-    witness: ProofWitness         # Cryptographic witness issued by TCB
-    governance_hash: str          # SHA256 of canonical governance.yaml
+    evidence_digest: str  # Physical execution digest / test digest
+    authority_scope: str  # e.g. "PHYSICAL_VERIFICATION", "PROMOTION"
+    witness: ProofWitness  # Cryptographic witness issued by TCB
+    governance_hash: str  # SHA256 of canonical governance.yaml
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -107,6 +112,7 @@ class TransitionReceipt:
     """
     Cryptographic proof receipt emitted exclusively upon successful state transition.
     """
+
     receipt_id: str
     task_id: str
     from_state: State
@@ -143,6 +149,7 @@ class TransitionRejection:
     """
     Formal rejection record emitted when a transition request is denied.
     """
+
     rejection_id: str
     task_id: str
     from_state: State
@@ -162,12 +169,11 @@ class PrivilegedTransitionEngine:
             self.kernel_db = kernel_db
         else:
             from loop_engine.kernel_db import KernelDatabase
+
             self.kernel_db = KernelDatabase()
         self._spent_witness_ids: Set[str] = set()
 
-    def execute_transition(
-        self, request: TransitionRequest
-    ) -> Union[TransitionReceipt, TransitionRejection]:
+    def execute_transition(self, request: TransitionRequest) -> Union[TransitionReceipt, TransitionRejection]:
         """
         Validates transition legality, cryptographic binding to the complete material claim,
         anti-replay, and governance hash, then atomically commits the new state.
@@ -204,7 +210,9 @@ class PrivilegedTransitionEngine:
                 from_state=request.from_state,
                 requested_state=request.to_state,
                 reason="Governance digest mismatch: request was signed under outdated or tampered governance configuration.",
-                disposition=EpistemicDisposition.GOVERNANCE_MISMATCH if hasattr(EpistemicDisposition, "GOVERNANCE_MISMATCH") else EpistemicDisposition.SEMANTIC_BINDING_DEFICIT,
+                disposition=EpistemicDisposition.GOVERNANCE_MISMATCH
+                if hasattr(EpistemicDisposition, "GOVERNANCE_MISMATCH")
+                else EpistemicDisposition.SEMANTIC_BINDING_DEFICIT,
             )
 
         # 4. Cryptographically Validate ProofWitness Binding to the COMPLETE Material Claim

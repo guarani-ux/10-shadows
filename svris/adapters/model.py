@@ -6,8 +6,11 @@ while maintaining 100% backward-compatible extract_claims(...) API.
 """
 
 from typing import Any, Dict, List
+
 from loop_engine.model.boundary import (
     ModelAdapter as CanonicalModelAdapter,
+)
+from loop_engine.model.boundary import (
     ModelRequest,
     ModelResponse,
 )
@@ -17,6 +20,7 @@ class BaseModelAdapter(CanonicalModelAdapter):
     """
     SVRIS BaseModelAdapter base class, bridging to canonical ModelAdapter.
     """
+
     @property
     def model_id(self) -> str:
         return "svris-model-base"

@@ -4,29 +4,31 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+
 from pydantic import BaseModel, Field
 
-from loop_engine.base import BaseLoop, STAGING_ROOT, force_remove_readonly
+from loop_engine.base import STAGING_ROOT, BaseLoop, force_remove_readonly
 from loop_engine.context import RunContext
+from loop_engine.kernel_db import KernelDatabase
 from loop_engine.preflight import (
-    canonical_spec_hash,
-    run_pre_flight,
-    assert_spec_untampered,
     PreflightCheckError,
     SpecTamperError,
+    assert_spec_untampered,
+    canonical_spec_hash,
+    run_pre_flight,
 )
-from loop_engine.kernel_db import KernelDatabase
 from loop_engine.schema import FailureClassification
-
 
 
 class StrikeCeilingExceededError(Exception):
     """Raised when an autonomous execution loop fails 3 consecutive verification attempts."""
+
     pass
 
 
 class OscillationDetectedError(Exception):
     """Raised when a retry produces a mathematically identical candidate to a prior failed attempt."""
+
     pass
 
 
@@ -34,6 +36,7 @@ class StepExecutionResult(BaseModel):
     """
     Structured outcome of a single Shadow step execution under the StepGovernor.
     """
+
     status: Literal["SUCCESS", "FAILED", "ABORTED", "ESCALATED"]
     task_id: str
     run_id: str
@@ -54,19 +57,21 @@ class StepExecutionResult(BaseModel):
 
 from loop_engine.governance import (
     GovernanceConfig,
-    load_canonical_governance,
     GovernanceConfigurationError,
+    load_canonical_governance,
 )
+
 
 class GovernanceOverrideProhibitedError(TypeError):
     """Raised when a caller attempts to manually override canonical strike governance."""
+
     pass
 
 
 class StepGovernor:
     """
     Step-Level Governor and Anti-Oscillation Engine.
-    
+
     Owns:
     - Single-step attempt counting (1..max_strikes) strictly governed by canonical governance.yaml.
     - Ephemeral staging workspace allocation and isolated destruction.
@@ -113,8 +118,6 @@ class StepGovernor:
         inst.kernel_db = kernel_db or KernelDatabase()
         return inst
 
-
-
     def compact_error_trace(self, raw_error: str) -> str:
         """Compacts verbose error tracebacks to preserve root-cause failure data within token budget."""
         if not raw_error:
@@ -122,7 +125,7 @@ class StepGovernor:
         lines = raw_error.strip().splitlines()
         if len(lines) <= self.max_error_lines:
             return "\n".join(lines)
-        return "\n".join(lines[-self.max_error_lines:])
+        return "\n".join(lines[-self.max_error_lines :])
 
     def run_step(
         self,
@@ -147,7 +150,7 @@ class StepGovernor:
         task_id = task_spec.get("task_id", f"task_{int(time.time())}")
         shadow_id = getattr(loop, "shadow_id", 0)
         domain_code = getattr(loop, "domain_code", "unmapped")
-        
+
         # Context management
         child_context: Optional[RunContext] = None
         if parent_context:
@@ -166,6 +169,7 @@ class StepGovernor:
         staging_dir = STAGING_ROOT / run_id
         if staging_dir.exists():
             import shutil
+
             shutil.rmtree(staging_dir, onerror=force_remove_readonly)
         staging_dir.mkdir(parents=True, exist_ok=True)
 
@@ -247,7 +251,10 @@ class StepGovernor:
 
                 # 5. Deterministic Failure Injection Seam (Testing Hook)
                 if forced_failure_attempt == attempt:
-                    passed, error_msg = False, (forced_failure_msg or f"Forced Failure Seam triggered on attempt {attempt}")
+                    passed, error_msg = (
+                        False,
+                        (forced_failure_msg or f"Forced Failure Seam triggered on attempt {attempt}"),
+                    )
                 else:
                     passed, error_msg = loop.verify(candidate_path, task_spec)
 
@@ -318,6 +325,7 @@ class StepGovernor:
         finally:
             if staging_dir.exists():
                 import shutil
+
                 shutil.rmtree(staging_dir, onerror=force_remove_readonly)
 
 
@@ -326,6 +334,7 @@ class Governor(StepGovernor):
     """
     Maintains 100% backward compatibility for all existing Governor tests.
     """
+
     def run_loop(
         self,
         loop: BaseLoop,
@@ -364,9 +373,7 @@ class RetryGovernor:
         if attempts_used < 0:
             raise ValueError(f"attempts_used must be non-negative (>= 0), got {attempts_used}.")
         if attempts_used > max_attempts:
-            raise ValueError(
-                f"attempts_used ({attempts_used}) cannot exceed max_attempts ({max_attempts})."
-            )
+            raise ValueError(f"attempts_used ({attempts_used}) cannot exceed max_attempts ({max_attempts}).")
 
         self._max_attempts: int = max_attempts
         self._attempts_used: int = attempts_used
@@ -411,7 +418,6 @@ class RetryGovernor:
         return f"RetryGovernor(max_attempts={self._max_attempts}, attempts_used={self._attempts_used})"
 
 
-
 class TokenBucketRateLimiter:
     """
     Thread-safe Token Bucket Rate Limiter.
@@ -420,6 +426,7 @@ class TokenBucketRateLimiter:
 
     def __init__(self, capacity: float, refill_rate: float):
         import threading
+
         if capacity <= 0:
             raise ValueError("Capacity must be strictly positive.")
         if refill_rate <= 0:
@@ -495,4 +502,3 @@ class GovernorEngine:
 
     def is_aborted(self, task_id: str) -> bool:
         return self.get_strike_count(task_id) >= self.max_strikes
-

@@ -1,6 +1,7 @@
 import pytest
-from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
+
 from loop_engine.herald.generator import IntelligentAVScriptGenerator
+from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
 from loop_engine.herald.renderer import MasterAVMarkdownRenderer
 
 

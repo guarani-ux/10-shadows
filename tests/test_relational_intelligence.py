@@ -11,8 +11,9 @@ Tests:
 6. Adversarial Challenges & Required Failure Cases.
 """
 
-from pathlib import Path
 import tempfile
+from pathlib import Path
+
 import pytest
 
 from loop_engine.relational import (
@@ -23,12 +24,12 @@ from loop_engine.relational import (
     DependencyScheduler,
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalGraphStore,
     RelationalMotif,
     RelationalNode,
     RelationalProjectionEngine,
+    RelationType,
     StructuralTransferEngine,
     TruthMaintenanceEngine,
 )
@@ -129,19 +130,51 @@ def test_dependency_scheduler_topological_order_and_parallel_frontiers(temp_grap
 
     # Create task nodes: A -> (B, C) -> D
     nodes = [
-        RelationalNode(node_id="A", node_type=NodeType.SUBPROBLEM, label="Task A", epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalNode(node_id="B", node_type=NodeType.SUBPROBLEM, label="Task B", epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalNode(node_id="C", node_type=NodeType.SUBPROBLEM, label="Task C", epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalNode(node_id="D", node_type=NodeType.SUBPROBLEM, label="Task D", epistemic_status=EpistemicStatus.PROPOSED),
+        RelationalNode(
+            node_id="A", node_type=NodeType.SUBPROBLEM, label="Task A", epistemic_status=EpistemicStatus.PROPOSED
+        ),
+        RelationalNode(
+            node_id="B", node_type=NodeType.SUBPROBLEM, label="Task B", epistemic_status=EpistemicStatus.PROPOSED
+        ),
+        RelationalNode(
+            node_id="C", node_type=NodeType.SUBPROBLEM, label="Task C", epistemic_status=EpistemicStatus.PROPOSED
+        ),
+        RelationalNode(
+            node_id="D", node_type=NodeType.SUBPROBLEM, label="Task D", epistemic_status=EpistemicStatus.PROPOSED
+        ),
     ]
     for n in nodes:
         store.upsert_node(n)
 
     edges = [
-        RelationalEdge(edge_id="e1", source_id="B", target_id="A", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalEdge(edge_id="e2", source_id="C", target_id="A", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalEdge(edge_id="e3", source_id="D", target_id="B", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalEdge(edge_id="e4", source_id="D", target_id="C", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
+        RelationalEdge(
+            edge_id="e1",
+            source_id="B",
+            target_id="A",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
+        RelationalEdge(
+            edge_id="e2",
+            source_id="C",
+            target_id="A",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
+        RelationalEdge(
+            edge_id="e3",
+            source_id="D",
+            target_id="B",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
+        RelationalEdge(
+            edge_id="e4",
+            source_id="D",
+            target_id="C",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
     ]
     for e in edges:
         store.upsert_edge(e)
@@ -172,12 +205,28 @@ def test_dependency_scheduler_cycle_detection(temp_graph_store):
     scheduler = DependencyScheduler(store)
 
     nodes = [
-        RelationalNode(node_id="X", node_type=NodeType.SUBPROBLEM, label="Task X", epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalNode(node_id="Y", node_type=NodeType.SUBPROBLEM, label="Task Y", epistemic_status=EpistemicStatus.PROPOSED),
+        RelationalNode(
+            node_id="X", node_type=NodeType.SUBPROBLEM, label="Task X", epistemic_status=EpistemicStatus.PROPOSED
+        ),
+        RelationalNode(
+            node_id="Y", node_type=NodeType.SUBPROBLEM, label="Task Y", epistemic_status=EpistemicStatus.PROPOSED
+        ),
     ]
     edges = [
-        RelationalEdge(edge_id="e_xy", source_id="X", target_id="Y", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
-        RelationalEdge(edge_id="e_yx", source_id="Y", target_id="X", relation_type=RelationType.DEPENDS_ON, epistemic_status=EpistemicStatus.PROPOSED),
+        RelationalEdge(
+            edge_id="e_xy",
+            source_id="X",
+            target_id="Y",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
+        RelationalEdge(
+            edge_id="e_yx",
+            source_id="Y",
+            target_id="X",
+            relation_type=RelationType.DEPENDS_ON,
+            epistemic_status=EpistemicStatus.PROPOSED,
+        ),
     ]
 
     with pytest.raises(CyclicDependencyError):
@@ -192,16 +241,41 @@ def test_truth_maintenance_cascading_invalidation(temp_graph_store):
     store = temp_graph_store
     jtms = TruthMaintenanceEngine(store)
 
-    root_hypo = RelationalNode(node_id="hypo_01", node_type=NodeType.CLAIM, label="Root Hypothesis", epistemic_status=EpistemicStatus.VERIFIED)
-    cand_node = RelationalNode(node_id="cand_01", node_type=NodeType.CANDIDATE, label="Candidate Code", epistemic_status=EpistemicStatus.QUALIFIED)
-    downstream_claim = RelationalNode(node_id="claim_01", node_type=NodeType.CLAIM, label="Result Claim", epistemic_status=EpistemicStatus.VERIFIED)
+    root_hypo = RelationalNode(
+        node_id="hypo_01", node_type=NodeType.CLAIM, label="Root Hypothesis", epistemic_status=EpistemicStatus.VERIFIED
+    )
+    cand_node = RelationalNode(
+        node_id="cand_01",
+        node_type=NodeType.CANDIDATE,
+        label="Candidate Code",
+        epistemic_status=EpistemicStatus.QUALIFIED,
+    )
+    downstream_claim = RelationalNode(
+        node_id="claim_01", node_type=NodeType.CLAIM, label="Result Claim", epistemic_status=EpistemicStatus.VERIFIED
+    )
 
     store.upsert_node(root_hypo)
     store.upsert_node(cand_node)
     store.upsert_node(downstream_claim)
 
-    store.upsert_edge(RelationalEdge(edge_id="e_hc", source_id=cand_node.node_id, target_id=root_hypo.node_id, relation_type=RelationType.DERIVED_FROM, epistemic_status=EpistemicStatus.VERIFIED))
-    store.upsert_edge(RelationalEdge(edge_id="e_cd", source_id=downstream_claim.node_id, target_id=cand_node.node_id, relation_type=RelationType.DERIVED_FROM, epistemic_status=EpistemicStatus.VERIFIED))
+    store.upsert_edge(
+        RelationalEdge(
+            edge_id="e_hc",
+            source_id=cand_node.node_id,
+            target_id=root_hypo.node_id,
+            relation_type=RelationType.DERIVED_FROM,
+            epistemic_status=EpistemicStatus.VERIFIED,
+        )
+    )
+    store.upsert_edge(
+        RelationalEdge(
+            edge_id="e_cd",
+            source_id=downstream_claim.node_id,
+            target_id=cand_node.node_id,
+            relation_type=RelationType.DERIVED_FROM,
+            epistemic_status=EpistemicStatus.VERIFIED,
+        )
+    )
 
     # Falsify root hypothesis
     invalidated_ids = jtms.retract_and_cascade("hypo_01", "Adversarial test proved assumption false")
@@ -223,7 +297,12 @@ def test_substrate_law_4_evidence_monotonicity_upgrade_rejection(temp_graph_stor
     store = temp_graph_store
     jtms = TruthMaintenanceEngine(store)
 
-    ev_node = RelationalNode(node_id="ev_raw", node_type=NodeType.EVIDENCE, label="Raw Observation", epistemic_status=EpistemicStatus.OBSERVED)
+    ev_node = RelationalNode(
+        node_id="ev_raw",
+        node_type=NodeType.EVIDENCE,
+        label="Raw Observation",
+        epistemic_status=EpistemicStatus.OBSERVED,
+    )
     store.upsert_node(ev_node)
 
     # Attempting to upgrade OBSERVED -> AUTHORITATIVE without observation must raise
@@ -313,16 +392,36 @@ def test_failure_01_wrong_initial_decomposition(temp_graph_store):
     wrong_sub = RelationalNode(node_id="sub_wrong", node_type=NodeType.SUBPROBLEM, label="Regex Based Parser")
     store.upsert_node(obj)
     store.upsert_node(wrong_sub)
-    store.upsert_edge(RelationalEdge(edge_id="e_decomp_1", source_id=obj.node_id, target_id=wrong_sub.node_id, relation_type=RelationType.DECOMPOSES_INTO))
+    store.upsert_edge(
+        RelationalEdge(
+            edge_id="e_decomp_1",
+            source_id=obj.node_id,
+            target_id=wrong_sub.node_id,
+            relation_type=RelationType.DECOMPOSES_INTO,
+        )
+    )
 
     # Invalidate wrong decomposition
     jtms.retract_and_cascade("sub_wrong", "Regex parser cannot handle recursive grammar")
     assert store.get_node("sub_wrong").epistemic_status == EpistemicStatus.INVALIDATED
 
     # Replace with correct AST parser decomposition
-    correct_sub = RelationalNode(node_id="sub_correct", node_type=NodeType.SUBPROBLEM, label="AST Recursive Parser", epistemic_status=EpistemicStatus.QUALIFIED)
+    correct_sub = RelationalNode(
+        node_id="sub_correct",
+        node_type=NodeType.SUBPROBLEM,
+        label="AST Recursive Parser",
+        epistemic_status=EpistemicStatus.QUALIFIED,
+    )
     store.upsert_node(correct_sub)
-    store.upsert_edge(RelationalEdge(edge_id="e_decomp_2", source_id=obj.node_id, target_id=correct_sub.node_id, relation_type=RelationType.DECOMPOSES_INTO, epistemic_status=EpistemicStatus.QUALIFIED))
+    store.upsert_edge(
+        RelationalEdge(
+            edge_id="e_decomp_2",
+            source_id=obj.node_id,
+            target_id=correct_sub.node_id,
+            relation_type=RelationType.DECOMPOSES_INTO,
+            epistemic_status=EpistemicStatus.QUALIFIED,
+        )
+    )
     assert store.get_node("sub_correct").epistemic_status == EpistemicStatus.QUALIFIED
 
 
@@ -415,7 +514,7 @@ def test_failure_12_structural_transfer_fails_qualification(temp_graph_store):
     prop = proposals[0]
     # Transfer Proposal is only PROPOSED, cannot certify itself
     assert prop.transfer_status == EpistemicStatus.PROPOSED
-    
+
     # Qualification check: Realtime streaming violates batch latency constraints
     def qualify_transfer(p):
         return False, "Domain constraint violation: Batch processing motif cannot satisfy <10ms streaming SLA."
@@ -423,4 +522,3 @@ def test_failure_12_structural_transfer_fails_qualification(temp_graph_store):
     is_valid, reason = qualify_transfer(prop)
     assert not is_valid
     assert "streaming SLA" in reason
-

@@ -11,26 +11,27 @@ Features:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
-from typing import Any, Dict, List, Optional, Set, Tuple
 import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from loop_engine.relational.graph_db import RelationalGraphStore
 from loop_engine.relational.schema import (
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 
 @dataclass(frozen=True)
 class RelationalMotif:
     """A recurring topological pattern of nodes and relationships."""
+
     motif_id: str
     name: str
     source_domain: str
@@ -43,6 +44,7 @@ class RelationalMotif:
 @dataclass(frozen=True)
 class TransferProposal:
     """A proposed cross-domain transfer candidate."""
+
     proposal_id: str
     matched_motif: RelationalMotif
     target_objective_id: str

@@ -16,11 +16,11 @@ Enforces Pirate King Negative Constraints:
 30. No Inability to Know Its Own Boundary
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
 import hashlib
 import json
 import time
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Dict, Generic, List, Optional, Sequence, Tuple, TypeVar, Union
 
 from loop_engine.authority import (
@@ -34,32 +34,33 @@ T = TypeVar("T")
 
 class EvidenceOrigin(str, Enum):
     PHYSICAL_OBSERVATION = "PHYSICAL_OBSERVATION"  # Empirical observation from real environment
-    SYNTHETIC_FIXTURE = "SYNTHETIC_FIXTURE"        # Test fixture or simulated input
-    MODEL_INFERENCE = "MODEL_INFERENCE"            # Unverified model generation or prior
-    DERIVED_TRANSFORM = "DERIVED_TRANSFORM"        # Deterministic transformation of prior envelope
-    DECLARED_SPEC = "DECLARED_SPEC"                # Intent / spec declaration
+    SYNTHETIC_FIXTURE = "SYNTHETIC_FIXTURE"  # Test fixture or simulated input
+    MODEL_INFERENCE = "MODEL_INFERENCE"  # Unverified model generation or prior
+    DERIVED_TRANSFORM = "DERIVED_TRANSFORM"  # Deterministic transformation of prior envelope
+    DECLARED_SPEC = "DECLARED_SPEC"  # Intent / spec declaration
 
 
 class EpistemicStatus(str, Enum):
-    VERIFIED = "VERIFIED"          # Physically proven via independent verifier gate with ProofWitness
-    INFERRED = "INFERRED"          # Plausible deduction from established evidence
-    HYPOTHESIS = "HYPOTHESIS"      # Working assumption or unverified proposal
-    UNKNOWN = "UNKNOWN"            # Explicit lack of knowledge or capability
+    VERIFIED = "VERIFIED"  # Physically proven via independent verifier gate with ProofWitness
+    INFERRED = "INFERRED"  # Plausible deduction from established evidence
+    HYPOTHESIS = "HYPOTHESIS"  # Working assumption or unverified proposal
+    UNKNOWN = "UNKNOWN"  # Explicit lack of knowledge or capability
     CONTRADICTED = "CONTRADICTED"  # Falsified by physical evidence
 
 
 class EpistemicDisposition(str, Enum):
-    SATISFIED = "SATISFIED"                                     # Proven against requirement
-    CONDITIONALLY_SUPPORTED = "CONDITIONALLY_SUPPORTED"         # Proven only against synthetic harness
-    SEMANTIC_BINDING_DEFICIT = "SEMANTIC_BINDING_DEFICIT"       # Output produced but ungrounded in intent
-    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"             # Missing physical observations
-    CAPABILITY_DEFICIT = "CAPABILITY_DEFICIT"                   # Required capability is missing
-    EXTERNAL_AUTHORITY_REQUIRED = "EXTERNAL_AUTHORITY_REQUIRED" # Needs human / sovereign signoff
-    UNRESOLVED = "UNRESOLVED"                                   # Explicit uncomputable or unknown
+    SATISFIED = "SATISFIED"  # Proven against requirement
+    CONDITIONALLY_SUPPORTED = "CONDITIONALLY_SUPPORTED"  # Proven only against synthetic harness
+    SEMANTIC_BINDING_DEFICIT = "SEMANTIC_BINDING_DEFICIT"  # Output produced but ungrounded in intent
+    INSUFFICIENT_EVIDENCE = "INSUFFICIENT_EVIDENCE"  # Missing physical observations
+    CAPABILITY_DEFICIT = "CAPABILITY_DEFICIT"  # Required capability is missing
+    EXTERNAL_AUTHORITY_REQUIRED = "EXTERNAL_AUTHORITY_REQUIRED"  # Needs human / sovereign signoff
+    UNRESOLVED = "UNRESOLVED"  # Explicit uncomputable or unknown
 
 
 class SemanticLaunderingError(Exception):
     """Raised when an envelope transformation attempts to illegally upgrade epistemic status or origin."""
+
     pass
 
 
@@ -75,6 +76,7 @@ class EvidenceEnvelope(Generic[T]):
     Immutable, cryptographic container wrapping any artifact payload with its
     epistemic status, origin, DAG parent hashes, and disposition.
     """
+
     payload: T
     origin: EvidenceOrigin
     status: EpistemicStatus
@@ -92,7 +94,9 @@ class EvidenceEnvelope(Generic[T]):
 
     def to_dict(self) -> Dict[str, Any]:
         return {
-            "payload": self.payload if isinstance(self.payload, (dict, list, str, int, float, bool, type(None))) else str(self.payload),
+            "payload": self.payload
+            if isinstance(self.payload, (dict, list, str, int, float, bool, type(None)))
+            else str(self.payload),
             "origin": self.origin.value,
             "status": self.status.value,
             "source_id": self.source_id,
@@ -276,17 +280,21 @@ def transform_envelope(
         target_disposition = EpistemicDisposition.UNRESOLVED
 
     # Lattice Invariant 2: Synthetic cannot upgrade to Physical
-    if any(p.origin == EvidenceOrigin.SYNTHETIC_FIXTURE for p in parents) and target_origin == EvidenceOrigin.PHYSICAL_OBSERVATION:
+    if (
+        any(p.origin == EvidenceOrigin.SYNTHETIC_FIXTURE for p in parents)
+        and target_origin == EvidenceOrigin.PHYSICAL_OBSERVATION
+    ):
         raise SemanticLaunderingError(
             f"Synthetic evidence cannot masquerade as physical observation in transformation at '{new_source_id}'."
         )
 
     # Lattice Invariant 3: Upgrading to VERIFIED requires authentic ProofWitness
     has_unverified_parent = any(
-        p.status in (EpistemicStatus.INFERRED, EpistemicStatus.HYPOTHESIS, EpistemicStatus.UNKNOWN)
-        for p in parents
+        p.status in (EpistemicStatus.INFERRED, EpistemicStatus.HYPOTHESIS, EpistemicStatus.UNKNOWN) for p in parents
     )
-    if (has_unverified_parent or primary_parent.status != EpistemicStatus.VERIFIED) and target_status == EpistemicStatus.VERIFIED:
+    if (
+        has_unverified_parent or primary_parent.status != EpistemicStatus.VERIFIED
+    ) and target_status == EpistemicStatus.VERIFIED:
         if witness is None:
             raise SemanticLaunderingError(
                 f"Semantic laundering detected: Cannot promote unverified parent to 'VERIFIED' "

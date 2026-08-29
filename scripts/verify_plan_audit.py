@@ -26,7 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 try:
-    from zero_trust_engine.auditor import PlanAuditor, AuditResult, Severity
+    from zero_trust_engine.auditor import AuditResult, PlanAuditor, Severity
 except ImportError:
     PlanAuditor = None
     AuditResult = None
@@ -149,7 +149,11 @@ def verify_plan(payload: dict) -> dict:
 
     # Outcome evaluation: BLOCK or REVISE must be denied
     if report.outcome == AuditResult.BLOCK:
-        crit_findings = [f.name for f in report.findings if f.severity == Severity.CRITICAL or getattr(f.severity, "value", "") == "CRITICAL"]
+        crit_findings = [
+            f.name
+            for f in report.findings
+            if f.severity == Severity.CRITICAL or getattr(f.severity, "value", "") == "CRITICAL"
+        ]
         return {
             "decision": "deny",
             "reason": (
@@ -160,7 +164,9 @@ def verify_plan(payload: dict) -> dict:
         }
 
     if report.outcome == AuditResult.REVISE:
-        high_findings = [f.name for f in report.findings if f.severity == Severity.HIGH or getattr(f.severity, "value", "") == "HIGH"]
+        high_findings = [
+            f.name for f in report.findings if f.severity == Severity.HIGH or getattr(f.severity, "value", "") == "HIGH"
+        ]
         return {
             "decision": "deny",
             "reason": (
@@ -171,8 +177,14 @@ def verify_plan(payload: dict) -> dict:
         }
 
     # Direct check on unresolved critical/high findings
-    unresolved_crit = [f.name for f in report.findings if f.severity == Severity.CRITICAL or getattr(f.severity, "value", "") == "CRITICAL"]
-    unresolved_high = [f.name for f in report.findings if f.severity == Severity.HIGH or getattr(f.severity, "value", "") == "HIGH"]
+    unresolved_crit = [
+        f.name
+        for f in report.findings
+        if f.severity == Severity.CRITICAL or getattr(f.severity, "value", "") == "CRITICAL"
+    ]
+    unresolved_high = [
+        f.name for f in report.findings if f.severity == Severity.HIGH or getattr(f.severity, "value", "") == "HIGH"
+    ]
     if unresolved_crit or unresolved_high:
         return {
             "decision": "deny",
@@ -197,10 +209,14 @@ def main():
         raw_input = sys.stdin.read()
         if not raw_input.strip():
             # If no input provided, fail closed
-            print(json.dumps({
-                "decision": "deny",
-                "reason": "PRE-TOOL AUDIT GATE REJECTION: Missing hook input payload.",
-            }))
+            print(
+                json.dumps(
+                    {
+                        "decision": "deny",
+                        "reason": "PRE-TOOL AUDIT GATE REJECTION: Missing hook input payload.",
+                    }
+                )
+            )
             return
 
         payload = json.loads(raw_input)

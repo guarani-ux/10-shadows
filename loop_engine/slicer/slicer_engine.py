@@ -1,13 +1,14 @@
 import re
 import uuid
 from typing import Any, Dict, List, Optional
-from loop_engine.slicer.schema import VerticalSliceTask, SliceDAG
+
+from loop_engine.slicer.schema import SliceDAG, VerticalSliceTask
 
 
 class AutonomousSlicerEngine:
     """
     Shadow 7 (The Slicer) Autonomous Goal Decomposer.
-    
+
     Deconstructs high-level human objectives into deterministic,
     topologically sorted 3-slice engineering DAGs.
     """
@@ -46,7 +47,10 @@ class AutonomousSlicerEngine:
             target_module=f"loop_engine/{pkg}/schema.py",
             target_test=f"loop_engine/tests/test_slice2_{pkg}_schema.py",
             dependencies=[slice_1.slice_id],
-            invariants=["All output fields must have non-empty validations", "Must surface explicit epistemic blindspots"],
+            invariants=[
+                "All output fields must have non-empty validations",
+                "Must surface explicit epistemic blindspots",
+            ],
         )
 
         slice_3 = VerticalSliceTask(

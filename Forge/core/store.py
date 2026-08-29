@@ -17,7 +17,7 @@ def utc_now_iso() -> str:
 
 
 def canonical_json(data: Any) -> str:
-    return json.dumps(data, sort_keys=True, separators=(',', ':'))
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
 def compute_record_hash(parent_hash: Optional[str], record_data: Dict[str, Any]) -> str:
@@ -25,9 +25,16 @@ def compute_record_hash(parent_hash: Optional[str], record_data: Dict[str, Any])
     return hashlib.sha256(base.encode("utf-8")).hexdigest()
 
 
+from loop_engine.config import FORGE_DB_PATH, SCRATCH_DIR
+
+
 class ForgeStore:
-    def __init__(self, db_path: str | Path = "forge.db"):
-        self.db_path = str(db_path)
+    def __init__(self, db_path: Optional[str | Path] = None):
+        if db_path is None:
+            SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
+            self.db_path = str(FORGE_DB_PATH)
+        else:
+            self.db_path = str(db_path)
         self._init_db()
 
     @contextlib.contextmanager
@@ -115,14 +122,14 @@ class ForgeStore:
         request: Dict[str, Any],
         status: str = "PENDING",
         task_spec: Optional[Dict[str, Any]] = None,
-        route: Optional[Dict[str, Any]] = None
+        route: Optional[Dict[str, Any]] = None,
     ) -> None:
         record_payload = {
             "run_id": run_id,
             "request": request,
             "status": status,
             "task_spec": task_spec,
-            "route": route
+            "route": route,
         }
         rec_hash = compute_record_hash(None, record_payload)
         with self._get_connection() as conn:
@@ -143,8 +150,8 @@ class ForgeStore:
                     json.dumps(task_spec) if task_spec else None,
                     json.dumps(route) if route else None,
                     status,
-                    rec_hash
-                )
+                    rec_hash,
+                ),
             )
 
     def get_run(self, run_id: str) -> Optional[Dict[str, Any]]:
@@ -158,7 +165,7 @@ class ForgeStore:
                     "task_spec": json.loads(row["task_spec_json"]) if row["task_spec_json"] else None,
                     "route": json.loads(row["route_json"]) if row["route_json"] else None,
                     "status": row["status"],
-                    "record_hash": row["record_hash"]
+                    "record_hash": row["record_hash"],
                 }
             return None
 
@@ -170,7 +177,7 @@ class ForgeStore:
         artifact_type: str,
         version: str,
         spec: Dict[str, Any],
-        content_path: Optional[str] = None
+        content_path: Optional[str] = None,
     ) -> None:
         with self._get_connection() as conn:
             conn.execute(
@@ -178,15 +185,7 @@ class ForgeStore:
                 INSERT INTO artifacts (artifact_id, task_id, artifact_type, version, spec_json, content_path, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    artifact_id,
-                    task_id,
-                    artifact_type,
-                    version,
-                    json.dumps(spec),
-                    content_path,
-                    utc_now_iso()
-                )
+                (artifact_id, task_id, artifact_type, version, json.dumps(spec), content_path, utc_now_iso()),
             )
 
     def get_artifact(self, artifact_id: str) -> Optional[Dict[str, Any]]:
@@ -200,14 +199,16 @@ class ForgeStore:
                     "version": row["version"],
                     "spec": json.loads(row["spec_json"]),
                     "content_path": row["content_path"],
-                    "created_at": row["created_at"]
+                    "created_at": row["created_at"],
                 }
             return None
 
     # --- Transactions & Attempts with Optimistic CAS & Hash Chaining ---
     def record_transaction(self, transaction_id: str, task_id: str, state: str = "OPEN") -> None:
         now = utc_now_iso()
-        rec_hash = compute_record_hash(None, {"transaction_id": transaction_id, "task_id": task_id, "state": state, "revision": 1})
+        rec_hash = compute_record_hash(
+            None, {"transaction_id": transaction_id, "task_id": task_id, "state": state, "revision": 1}
+        )
         with self._get_connection() as conn:
             conn.execute(
                 """
@@ -219,7 +220,7 @@ class ForgeStore:
                     revision=transactions.revision + 1,
                     record_hash=excluded.record_hash
                 """,
-                (transaction_id, task_id, state, now, now, rec_hash)
+                (transaction_id, task_id, state, now, now, rec_hash),
             )
 
     def update_transaction_cas(self, transaction_id: str, expected_revision: int, new_state: str) -> bool:
@@ -230,7 +231,9 @@ class ForgeStore:
                 return False
 
             parent_hash = row["record_hash"]
-            new_hash = compute_record_hash(parent_hash, {"transaction_id": transaction_id, "state": new_state, "revision": expected_revision + 1})
+            new_hash = compute_record_hash(
+                parent_hash, {"transaction_id": transaction_id, "state": new_state, "revision": expected_revision + 1}
+            )
 
             cursor = conn.execute(
                 """
@@ -238,7 +241,7 @@ class ForgeStore:
                 SET state = ?, updated_at = ?, revision = revision + 1, parent_hash = ?, record_hash = ?
                 WHERE transaction_id = ? AND revision = ?
                 """,
-                (new_state, now, parent_hash, new_hash, transaction_id, expected_revision)
+                (new_state, now, parent_hash, new_hash, transaction_id, expected_revision),
             )
             return cursor.rowcount > 0
 
@@ -249,20 +252,16 @@ class ForgeStore:
                 return dict(row)
             return None
 
-    def record_attempt(self, attempt_id: str, transaction_id: str, state: str, proposal: Optional[Dict[str, Any]] = None) -> None:
+    def record_attempt(
+        self, attempt_id: str, transaction_id: str, state: str, proposal: Optional[Dict[str, Any]] = None
+    ) -> None:
         with self._get_connection() as conn:
             conn.execute(
                 """
                 INSERT INTO attempts (attempt_id, transaction_id, state, proposal_json, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (
-                    attempt_id,
-                    transaction_id,
-                    state,
-                    json.dumps(proposal) if proposal else None,
-                    utc_now_iso()
-                )
+                (attempt_id, transaction_id, state, json.dumps(proposal) if proposal else None, utc_now_iso()),
             )
 
     # --- Authorizations ---
@@ -273,7 +272,7 @@ class ForgeStore:
         attempt_id: str,
         operation_hash: str,
         idempotency_key: str,
-        state: str = "AUTHORIZED"
+        state: str = "AUTHORIZED",
     ) -> None:
         with self._get_connection() as conn:
             conn.execute(
@@ -281,15 +280,7 @@ class ForgeStore:
                 INSERT INTO authorizations (authorization_id, transaction_id, attempt_id, operation_hash, idempotency_key, state, issued_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    authorization_id,
-                    transaction_id,
-                    attempt_id,
-                    operation_hash,
-                    idempotency_key,
-                    state,
-                    utc_now_iso()
-                )
+                (authorization_id, transaction_id, attempt_id, operation_hash, idempotency_key, state, utc_now_iso()),
             )
 
     def get_authorization_by_idempotency_key(self, idempotency_key: str) -> Optional[Dict[str, Any]]:
@@ -307,18 +298,13 @@ class ForgeStore:
                 SET state = 'CONSUMED', consumed_at = ?
                 WHERE authorization_id = ? AND state = 'AUTHORIZED'
                 """,
-                (utc_now_iso(), authorization_id)
+                (utc_now_iso(), authorization_id),
             )
             return cursor.rowcount > 0
 
     # --- Learnings ---
     def record_learning(
-        self,
-        learning_id: str,
-        task_id: str,
-        promotion: str,
-        record: Dict[str, Any],
-        execution_id: Optional[str] = None
+        self, learning_id: str, task_id: str, promotion: str, record: Dict[str, Any], execution_id: Optional[str] = None
     ) -> None:
         with self._get_connection() as conn:
             conn.execute(
@@ -326,14 +312,7 @@ class ForgeStore:
                 INSERT INTO learnings (learning_id, task_id, execution_id, promotion, record_json, created_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    learning_id,
-                    task_id,
-                    execution_id,
-                    promotion,
-                    json.dumps(record),
-                    utc_now_iso()
-                )
+                (learning_id, task_id, execution_id, promotion, json.dumps(record), utc_now_iso()),
             )
 
     def get_learnings_for_task(self, task_id: str) -> List[Dict[str, Any]]:
@@ -346,7 +325,7 @@ class ForgeStore:
                     "execution_id": r["execution_id"],
                     "promotion": r["promotion"],
                     "record": json.loads(r["record_json"]),
-                    "created_at": r["created_at"]
+                    "created_at": r["created_at"],
                 }
                 for r in rows
             ]

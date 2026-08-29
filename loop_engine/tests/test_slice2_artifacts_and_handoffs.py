@@ -1,18 +1,19 @@
 import json
-import pytest
 from pathlib import Path
 
+import pytest
+
 from loop_engine.artifacts import (
-    StructuredSourceArtifact,
+    ArtifactRecord,
+    ArtifactRegistry,
     MasterAVScriptArtifact,
     ProductionPlanDAGArtifact,
-    ArtifactRegistry,
-    ArtifactRecord,
+    StructuredSourceArtifact,
 )
 from loop_engine.canonical_objective import EvidenceReference, UnknownReference
-from loop_engine.herald.schema import StrategicIntent, TechnicalScope, AVTableRow, ValidatedCutDownScript
-from loop_engine.slicer.schema import VerticalSliceTask
+from loop_engine.herald.schema import AVTableRow, StrategicIntent, TechnicalScope, ValidatedCutDownScript
 from loop_engine.kernel_db import KernelDatabase
+from loop_engine.slicer.schema import VerticalSliceTask
 
 
 def test_typed_semantic_handoff_schemas_and_hashing():

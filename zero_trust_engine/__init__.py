@@ -5,12 +5,12 @@ Enforces structural completeness, risk checks, and anti-overclaiming invariants.
 """
 
 from zero_trust_engine.auditor import (
-    PlanAuditor,
-    AuditResult,
     AuditReport,
-    Severity,
+    AuditResult,
     Finding,
     FindingStatus,
+    PlanAuditor,
+    Severity,
 )
 
 __all__ = [
@@ -21,4 +21,3 @@ __all__ = [
     "Finding",
     "FindingStatus",
 ]
-

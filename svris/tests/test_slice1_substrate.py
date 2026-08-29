@@ -5,9 +5,11 @@ Strict value assertions and negative mutation traps.
 
 import os
 import sqlite3
+
 import pytest
-from svris.core.db import get_connection, init_db, CASUpdateError
-from svris.core.source_normalizer import normalize_source, normalize_url, compute_sha256
+
+from svris.core.db import CASUpdateError, get_connection, init_db
+from svris.core.source_normalizer import compute_sha256, normalize_source, normalize_url
 
 
 @pytest.fixture

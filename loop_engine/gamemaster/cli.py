@@ -1,9 +1,10 @@
 import argparse
 import sys
 from pathlib import Path
+
 from loop_engine.base import PROJECT_ROOT
-from loop_engine.gamemaster.state_projector import SovereignStateProjector
 from loop_engine.gamemaster.hud_view import TerminalHUDView
+from loop_engine.gamemaster.state_projector import SovereignStateProjector
 
 
 def run_cli():

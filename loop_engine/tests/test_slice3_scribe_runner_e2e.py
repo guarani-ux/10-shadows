@@ -1,9 +1,11 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
+from loop_engine.governor import Governor
+from loop_engine.receipts import ReceiptStore
 from loop_engine.runners.scribe_runner import ScribeDomainRunner
 from loop_engine.scribe.memory_store import ScribeMemoryStore
-from loop_engine.receipts import ReceiptStore
-from loop_engine.governor import Governor
 
 
 def test_scribe_domain_runner_e2e(tmp_path):
@@ -13,7 +15,6 @@ def test_scribe_domain_runner_e2e(tmp_path):
 
     runner = ScribeDomainRunner(memory_store=store, receipt_store=receipt_store)
     gov = Governor()
-
 
     mock_blueprint = {
         "video_id": "test_e2e_scribe",

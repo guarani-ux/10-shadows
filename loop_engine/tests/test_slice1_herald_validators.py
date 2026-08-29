@@ -1,14 +1,15 @@
 import pytest
 from pydantic import ValidationError
-from loop_engine.herald.linguistics import AntiAILinguisticGuard
+
 from loop_engine.herald.cinematography import CinematographyValidator
 from loop_engine.herald.input_contract import ProductionConstraints
+from loop_engine.herald.linguistics import AntiAILinguisticGuard
 from loop_engine.herald.schema import (
+    AVTableRow,
     MasterAVScriptBlueprint,
     StrategicIntent,
     TechnicalScope,
     ValidatedCutDownScript,
-    AVTableRow,
 )
 
 
@@ -19,7 +20,9 @@ def test_anti_ai_guard_rejects_em_dashes():
 
 
 def test_anti_ai_guard_rejects_banned_buzzwords():
-    valid, violations = AntiAILinguisticGuard.validate_text("Let us delve into this tapestry to revolutionize our work.")
+    valid, violations = AntiAILinguisticGuard.validate_text(
+        "Let us delve into this tapestry to revolutionize our work."
+    )
     assert valid is False
     assert any("delve" in v for v in violations)
     assert any("tapestry" in v for v in violations)

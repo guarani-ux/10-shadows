@@ -1,14 +1,15 @@
 import subprocess
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from loop_engine.harness.git_worktree import (
-    GitWorktreeHarness,
-    AuthoritativeSourceProtectionError,
     PROJECT_ROOT,
-    run_git,
+    AuthoritativeSourceProtectionError,
+    GitWorktreeHarness,
     is_authoritative_source,
+    run_git,
 )
 
 
@@ -30,17 +31,26 @@ def test_authoritative_repo_head_remains_unchanged_during_worktree_runs():
     with tempfile.TemporaryDirectory() as tmp_repo:
         repo_path = Path(tmp_repo).resolve()
         subprocess.run(["git", "init"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test Harness"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@ten-shadows.local"], cwd=str(repo_path), check=True, capture_output=True)
-        
+        subprocess.run(
+            ["git", "config", "user.name", "Test Harness"], cwd=str(repo_path), check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@ten-shadows.local"],
+            cwd=str(repo_path),
+            check=True,
+            capture_output=True,
+        )
+
         baseline_file = repo_path / "spec.txt"
         baseline_file.write_text("baseline spec v1", encoding="utf-8")
         subprocess.run(["git", "add", "spec.txt"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "chore: baseline commit A"], cwd=str(repo_path), check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "chore: baseline commit A"], cwd=str(repo_path), check=True, capture_output=True
+        )
 
         with tempfile.TemporaryDirectory() as wt_dir:
             harness = GitWorktreeHarness(repo_root=repo_path, worktrees_dir=Path(wt_dir))
-            
+
             # Execute multiple sandboxes
             wt1, b1 = harness.create_sandbox("task_pass")
             (wt1 / "change1.txt").write_text("governed change 1", encoding="utf-8")
@@ -62,7 +72,9 @@ def test_authoritative_repo_head_remains_unchanged_during_worktree_runs():
     # 4. Strict Immutability Invariants
     assert head_after == head_before, f"Authoritative HEAD diverged! Before: {head_before}, After: {head_after}"
     assert status_after == status_before, f"Authoritative working tree dirtied! Status: {status_after}"
-    assert branches_after == branches_before, f"Authoritative branches leaked! Before: {branches_before}, After: {branches_after}"
+    assert branches_after == branches_before, (
+        f"Authoritative branches leaked! Before: {branches_before}, After: {branches_after}"
+    )
 
     # 5. Assert no candidate files leaked into authoritative root
     candidate_files = list(PROJECT_ROOT.glob("candidate_*.txt"))

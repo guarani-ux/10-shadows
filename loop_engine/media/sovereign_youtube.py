@@ -1,6 +1,6 @@
 import re
-import urllib.request
 import urllib.parse
+import urllib.request
 import xml.etree.ElementTree as ET
 from html import unescape
 from pathlib import Path
@@ -74,13 +74,15 @@ class SovereignYouTubeEngine:
             start = float(elem.attrib.get("start", 0.0))
             dur = float(elem.attrib.get("dur", 0.0))
             words = len(raw_text.split())
-            segments.append({
-                "start": round(start, 2),
-                "end": round(start + dur, 2),
-                "duration": round(dur, 2),
-                "text": raw_text,
-                "words": words,
-            })
+            segments.append(
+                {
+                    "start": round(start, 2),
+                    "end": round(start + dur, 2),
+                    "duration": round(dur, 2),
+                    "text": raw_text,
+                    "words": words,
+                }
+            )
         return segments
 
     def analyze_pacing_and_anomalies(self, segments: List[Dict[str, Any]]) -> Dict[str, Any]:
@@ -122,31 +124,37 @@ class SovereignYouTubeEngine:
 
                 # Silence pause > 3.5s indicates scene shift or visual b-roll
                 if gap >= 3.5:
-                    anomalies.append({
-                        "anomaly_type": "VISUAL_ONLY_GAP",
-                        "time_window": f"{seg['end']}s - {next_seg['start']}s",
-                        "gap_duration": gap,
-                        "description": "Extended non-verbal pause. Likely visual demonstration, b-roll, or music transition.",
-                    })
+                    anomalies.append(
+                        {
+                            "anomaly_type": "VISUAL_ONLY_GAP",
+                            "time_window": f"{seg['end']}s - {next_seg['start']}s",
+                            "gap_duration": gap,
+                            "description": "Extended non-verbal pause. Likely visual demonstration, b-roll, or music transition.",
+                        }
+                    )
                     # Close current natural scene
-                    scenes.append({
-                        "time_window": f"{current_scene_start}s - {seg['end']}s",
-                        "words": current_scene_words,
-                        "text": " ".join(current_scene_texts),
-                        "anchor_quote": current_scene_texts[0],
-                    })
+                    scenes.append(
+                        {
+                            "time_window": f"{current_scene_start}s - {seg['end']}s",
+                            "words": current_scene_words,
+                            "text": " ".join(current_scene_texts),
+                            "anchor_quote": current_scene_texts[0],
+                        }
+                    )
                     current_scene_start = next_seg["start"]
                     current_scene_texts = []
                     current_scene_words = 0
 
         # Append final scene
         if current_scene_texts:
-            scenes.append({
-                "time_window": f"{current_scene_start}s - {segments[-1]['end']}s",
-                "words": current_scene_words,
-                "text": " ".join(current_scene_texts),
-                "anchor_quote": current_scene_texts[0],
-            })
+            scenes.append(
+                {
+                    "time_window": f"{current_scene_start}s - {segments[-1]['end']}s",
+                    "words": current_scene_words,
+                    "text": " ".join(current_scene_texts),
+                    "anchor_quote": current_scene_texts[0],
+                }
+            )
 
         return {
             "total_words": total_words,

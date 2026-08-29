@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
+from loop_engine.base import PROJECT_ROOT, BaseLoop
 from loop_engine.receipts import ReceiptStore
 from loop_engine.verifiers.ast_gate import inspect_file_ast, validate_ast_security
 

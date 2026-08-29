@@ -1,6 +1,7 @@
 """Incremental Topic Refresh and Delta Analyzer."""
 
-from typing import Dict, Any, List
+from typing import Any, Dict, List
+
 from svris.core.db import get_connection
 
 

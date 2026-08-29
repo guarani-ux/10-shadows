@@ -1,9 +1,10 @@
 """Provenance Verification, Quote Span Proof, and State Promotion Gate."""
 
-import json
 import hashlib
+import json
 from datetime import datetime, timezone
 from typing import Optional
+
 from svris.core.db import get_connection
 from svris.core.extractor import CandidateClaim, ProvenanceError
 from svris.core.policy import VerificationPolicy
@@ -11,6 +12,7 @@ from svris.core.policy import VerificationPolicy
 
 class QuoteMismatchError(Exception):
     """Raised when quote_text does not identically match the raw snapshot characters."""
+
     pass
 
 
@@ -37,12 +39,17 @@ def verify_and_promote_claim(db_path: str, candidate: CandidateClaim) -> str:
     # 2. Verify physical quote span against snapshot if provided
     quote_verified = False
     quote_sha256 = None
-    if candidate.snapshot_id and candidate.quote_text is not None and candidate.quote_start is not None and candidate.quote_end is not None:
+    if (
+        candidate.snapshot_id
+        and candidate.quote_text is not None
+        and candidate.quote_start is not None
+        and candidate.quote_end is not None
+    ):
         cur.execute("SELECT raw_text FROM source_snapshots WHERE snapshot_id = ?", (candidate.snapshot_id,))
         snap_row = cur.fetchone()
         if snap_row:
             raw_text = snap_row["raw_text"]
-            expected_slice = raw_text[candidate.quote_start:candidate.quote_end]
+            expected_slice = raw_text[candidate.quote_start : candidate.quote_end]
             if candidate.quote_text != expected_slice:
                 conn.close()
                 raise QuoteMismatchError(

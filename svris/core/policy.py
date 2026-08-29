@@ -4,7 +4,7 @@ Replaces model confidence with mechanical verification rules based on trust tier
 exact quote evidence spans, and independent support.
 """
 
-from typing import Dict, Any, Tuple
+from typing import Any, Dict, Tuple
 
 
 class VerificationPolicy:

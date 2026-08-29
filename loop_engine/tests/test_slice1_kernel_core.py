@@ -1,11 +1,13 @@
 import time
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.canonical_objective import (
     CanonicalObjective,
+    ConstraintSet,
     EvidenceReference,
     UnknownReference,
-    ConstraintSet,
 )
 from loop_engine.context import RunContext, resolve_physical_commit_sha
 from loop_engine.kernel_db import KernelDatabase

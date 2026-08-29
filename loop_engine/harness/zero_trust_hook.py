@@ -11,7 +11,7 @@ def evaluate_tool_call(tool_name: str, tool_args: dict) -> tuple[bool, str]:
     Evaluates proposed tool execution against Zero-Trust Governance:
     1. Blocks direct production Python writes in parent context.
     2. Blocks direct pytest commands in parent context.
-    
+
     Returns (is_allowed: bool, reason: str).
     """
     # 1. Inspect File Writes / Edits
@@ -25,17 +25,14 @@ def evaluate_tool_call(tool_name: str, tool_args: dict) -> tuple[bool, str]:
                 (PROJECT_ROOT / ".agents").resolve(),
                 (PROJECT_ROOT / "loop_engine" / "tests").resolve(),
             ]
-            
+
             resolved_target = path_obj.resolve()
-            
+
             # If target is inside loop_engine core or Forge/svris production code
             is_production_code = (
-                resolved_target.suffix == ".py" and
-                any(
-                    p in resolved_target.parts
-                    for p in ["loop_engine", "Forge", "svris"]
-                ) and
-                "tests" not in resolved_target.parts
+                resolved_target.suffix == ".py"
+                and any(p in resolved_target.parts for p in ["loop_engine", "Forge", "svris"])
+                and "tests" not in resolved_target.parts
             )
 
             if is_production_code:

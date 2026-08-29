@@ -36,7 +36,7 @@ class DecompositionCoverageEvaluator:
         known_inputs: Optional[Set[str]] = None,
     ) -> DecompositionProof:
         obj_hash = hashlib.sha256(objective_id.encode("utf-8")).hexdigest()
-        
+
         produced_outputs = set(known_inputs) if known_inputs is not None else set()
 
         mapped_ops = [op.operation_id for op in operations]
@@ -63,9 +63,8 @@ class DecompositionCoverageEvaluator:
 
             # Check inputs are reachably supplied either from initial environment or upstream dependencies
             for inp in op.inputs:
-                is_supplied = (
-                    inp in produced_outputs
-                    or any(inp in op_map[dep].outputs for dep in op.dependencies if dep in op_map)
+                is_supplied = inp in produced_outputs or any(
+                    inp in op_map[dep].outputs for dep in op.dependencies if dep in op_map
                 )
                 if not is_supplied:
                     dependency_complete = False
@@ -100,7 +99,8 @@ class DecompositionCoverageEvaluator:
             if is_op_verified:
                 verified_ops_count += 1
             elif any(
-                dep_op.operation_id for dep_op in operations
+                dep_op.operation_id
+                for dep_op in operations
                 if op.operation_id in dep_op.dependencies
                 and any(
                     vc.bound_operation_id == dep_op.operation_id
@@ -117,11 +117,7 @@ class DecompositionCoverageEvaluator:
             if canonical_requirements
             else 1.0
         )
-        verification_coverage = (
-            verified_ops_count / len(operations)
-            if operations
-            else 1.0
-        )
+        verification_coverage = verified_ops_count / len(operations) if operations else 1.0
 
         # 5. Closure Status Determination
         if operation_deficits:

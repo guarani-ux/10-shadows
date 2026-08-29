@@ -3,28 +3,25 @@ loop_engine/schema.py
 Typed state models, cryptographic hash bindings, and failure classifications for 10 SHADOWS.
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
 import hashlib
 import json
 import os
 import platform
 import sys
+from dataclasses import dataclass, field
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-
-
 from loop_engine.epistemic import (
-    EvidenceOrigin,
-    EpistemicStatus,
     EpistemicDisposition,
+    EpistemicStatus,
     EvidenceEnvelope,
+    EvidenceOrigin,
     SemanticLaunderingError,
     create_envelope,
     transform_envelope,
 )
-
 
 
 class State(str, Enum):
@@ -45,23 +42,26 @@ LEGAL_STATE_TRANSITIONS: Dict[State, List[State]] = {
     State.VERIFIED: [State.PROMOTION_PENDING, State.VERIFYING],
     State.REJECTED: [State.VERIFYING, State.CANDIDATE_SEALED],
     State.BLOCKED: [State.VERIFYING, State.CANDIDATE_SEALED],
-    State.PROMOTION_PENDING: [State.PROMOTED, State.POST_PROMOTION_VERIFIED, State.VERIFIED, State.REJECTED],  # Can advance on reconcile or rollback to VERIFIED
+    State.PROMOTION_PENDING: [
+        State.PROMOTED,
+        State.POST_PROMOTION_VERIFIED,
+        State.VERIFIED,
+        State.REJECTED,
+    ],  # Can advance on reconcile or rollback to VERIFIED
     State.PROMOTED: [State.POST_PROMOTION_VERIFIED, State.REJECTED],
     State.POST_PROMOTION_VERIFIED: [],
 }
 
 
-
-
 class FailureClassification(str, Enum):
-    CANDIDATE_FAILURE = "CANDIDATE_FAILURE"      # Implementation bug (consumes strike)
-    REGRESSION_FAILURE = "REGRESSION_FAILURE"    # Broke existing test (consumes strike)
-    SPEC_FAILURE = "SPEC_FAILURE"                # Ambiguous or invalid spec (no strike)
+    CANDIDATE_FAILURE = "CANDIDATE_FAILURE"  # Implementation bug (consumes strike)
+    REGRESSION_FAILURE = "REGRESSION_FAILURE"  # Broke existing test (consumes strike)
+    SPEC_FAILURE = "SPEC_FAILURE"  # Ambiguous or invalid spec (no strike)
     ENVIRONMENT_FAILURE = "ENVIRONMENT_FAILURE"  # OOM, socket, platform error (no strike)
-    NETWORK_FAILURE = "NETWORK_FAILURE"          # Transient upstream API error (no strike)
-    PERMISSION_FAILURE = "PERMISSION_FAILURE"    # Permission / auth failure (no strike)
-    FLAKY_FAILURE = "FLAKY_FAILURE"              # Non-deterministic failure (no strike)
-    GOVERNOR_FAILURE = "GOVERNOR_FAILURE"        # Harness / anti-tamper abort (no strike)
+    NETWORK_FAILURE = "NETWORK_FAILURE"  # Transient upstream API error (no strike)
+    PERMISSION_FAILURE = "PERMISSION_FAILURE"  # Permission / auth failure (no strike)
+    FLAKY_FAILURE = "FLAKY_FAILURE"  # Non-deterministic failure (no strike)
+    GOVERNOR_FAILURE = "GOVERNOR_FAILURE"  # Harness / anti-tamper abort (no strike)
 
 
 @dataclass(frozen=True)
@@ -96,7 +96,6 @@ class EnvironmentFingerprint:
         )
 
 
-
 @dataclass
 class ProposalManifest:
     task_id: str
@@ -129,7 +128,6 @@ class VerificationReceipt:
     execution_trace: Optional[str] = None
     epistemic_disposition: Optional[str] = "SATISFIED"
     timestamp: Optional[float] = None
-
 
 
 @dataclass
@@ -181,7 +179,7 @@ def compute_env_fingerprint() -> EnvironmentFingerprint:
     filtered_env = {k: os.environ.get(k, "") for k in env_keys}
     env_serialized = json.dumps(filtered_env, sort_keys=True)
     env_hash = hashlib.sha256(env_serialized.encode("utf-8")).hexdigest()
-    
+
     return EnvironmentFingerprint(
         python_version=sys.version.split()[0],
         platform_system=platform.system(),

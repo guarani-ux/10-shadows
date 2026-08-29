@@ -1,19 +1,19 @@
+import hashlib
 import json
 import uuid
-import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, UnknownItem, ProductionConstraints
+from loop_engine.artifacts import MasterAVScriptArtifact, StructuredSourceArtifact
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.context import RunContext
+from loop_engine.herald.feedback import ScriptViolation, ValidationFeedback
 from loop_engine.herald.generator import IntelligentAVScriptGenerator
-from loop_engine.herald.validators import DeterministicScriptValidator
+from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, ProductionConstraints, UnknownItem
 from loop_engine.herald.renderer import MasterAVMarkdownRenderer
 from loop_engine.herald.schema import MasterAVScriptBlueprint
-from loop_engine.herald.feedback import ValidationFeedback, ScriptViolation
+from loop_engine.herald.validators import DeterministicScriptValidator
 from loop_engine.receipts import ReceiptStore
-from loop_engine.context import RunContext
-from loop_engine.artifacts import StructuredSourceArtifact, MasterAVScriptArtifact
 
 
 class HeraldAVScriptDomainRunner(BaseLoop):
@@ -79,8 +79,11 @@ class HeraldAVScriptDomainRunner(BaseLoop):
                     UnknownItem(
                         unknown_id=u.unknown_id,
                         description=u.description,
-                        classification=u.classification if u.classification in ("CREATIVE_PROPOSAL", "ASSUMPTION_REQUIRING_APPROVAL") else "ASSUMPTION_REQUIRING_APPROVAL",
-                        mitigation_or_approval_decision=u.mitigation_or_approval_decision or "Standard exterior coverage",
+                        classification=u.classification
+                        if u.classification in ("CREATIVE_PROPOSAL", "ASSUMPTION_REQUIRING_APPROVAL")
+                        else "ASSUMPTION_REQUIRING_APPROVAL",
+                        mitigation_or_approval_decision=u.mitigation_or_approval_decision
+                        or "Standard exterior coverage",
                     )
                     for u in raw_input.explicit_unknowns
                 ],
@@ -134,7 +137,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         Synthesizes Master AV Script Blueprint using structured feedback from prior attempts.
         """
         brief = CanonicalMediaBrief.model_validate(task_spec["brief_dict"])
-        
+
         parsed_feedback = self.last_feedback
         if not parsed_feedback and feedback:
             # Subtle budget calibration for retry to produce a distinct candidate while remaining in valid pacing bounds
@@ -150,7 +153,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
                         repair_strategy="COMPRESS_DIALOGUE",
                         affected_section_index=2,
                     )
-                ]
+                ],
             )
 
         blueprint = IntelligentAVScriptGenerator.synthesize_from_brief(brief, feedback=parsed_feedback)
@@ -190,8 +193,11 @@ class HeraldAVScriptDomainRunner(BaseLoop):
             self.last_feedback = feedback
 
             if not feedback.passed:
-                err_messages = [f"[{v.violation_code}] {v.description} -> Strategy: {v.repair_strategy}" for v in feedback.violations]
-                return False, f"Deterministic Script Audit Rejected:\n" + "\n".join(err_messages)
+                err_messages = [
+                    f"[{v.violation_code}] {v.description} -> Strategy: {v.repair_strategy}"
+                    for v in feedback.violations
+                ]
+                return False, "Deterministic Script Audit Rejected:\n" + "\n".join(err_messages)
 
             md_text = data.get("rendered_markdown", "")
             if "| Section / Timecode |" not in md_text:
@@ -229,7 +235,7 @@ class HeraldAVScriptDomainRunner(BaseLoop):
         """
         dest_dir = PROJECT_ROOT / "scratch" / "av_scripts"
         dest_dir.mkdir(parents=True, exist_ok=True)
-        
+
         data = json.loads(candidate_path.read_text(encoding="utf-8"))
         dest_json = dest_dir / candidate_path.name
         dest_md = dest_dir / f"{candidate_path.stem}.md"

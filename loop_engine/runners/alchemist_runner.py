@@ -1,18 +1,18 @@
-import json
-import uuid
 import hashlib
+import json
 import shutil
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.alchemist.trace_parser import CrashTraceParser
 from loop_engine.alchemist.repair_strategy import RepairStrategyEngine, SurgicalPatch
-from loop_engine.verifiers.ast_gate import inspect_file_ast
-from loop_engine.verifiers.test_gate import run_isolated_pytest
+from loop_engine.alchemist.trace_parser import CrashTraceParser
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.context import RunContext
 from loop_engine.harness.git_worktree import GitWorktreeHarness
 from loop_engine.receipts import ReceiptStore
-from loop_engine.context import RunContext
+from loop_engine.verifiers.ast_gate import inspect_file_ast
+from loop_engine.verifiers.test_gate import run_isolated_pytest
 
 
 class RealAlchemistSelfHealingEngine(BaseLoop):
@@ -115,7 +115,10 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
 
             lines = original_text.splitlines()
             if not (1 <= patch.target_line <= len(lines)):
-                return False, f"Alchemist Repair Rejected: Target line {patch.target_line} out of bounds (1..{len(lines)})."
+                return (
+                    False,
+                    f"Alchemist Repair Rejected: Target line {patch.target_line} out of bounds (1..{len(lines)}).",
+                )
 
             patched_lines = list(lines)
             patched_lines[patch.target_line - 1] = patch.suggested_replacement
@@ -134,7 +137,7 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
                 wt_source = worktree_path / rel_source
             except ValueError:
                 wt_source = worktree_path / "scratch" / "alchemist_sandbox" / orig_path.name
-            
+
             wt_source.parent.mkdir(parents=True, exist_ok=True)
             wt_source.write_text(patched_text, encoding="utf-8")
 
@@ -153,7 +156,7 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
                     wt_test = worktree_path / rel_test
                 except ValueError:
                     wt_test = worktree_path / "scratch" / "alchemist_sandbox" / orig_test_path.name
-                
+
                 wt_test.parent.mkdir(parents=True, exist_ok=True)
                 test_raw = orig_test_path.read_text(encoding="utf-8")
                 rewritten_test = test_raw.replace(str(orig_path.parent), str(wt_source.parent))
@@ -198,7 +201,7 @@ class RealAlchemistSelfHealingEngine(BaseLoop):
         """
         data = json.loads(candidate_path.read_text(encoding="utf-8"))
         target_file_path = Path(task_spec.get("source_file") or data["patch"]["target_file"])
-        
+
         if "patched_content" in data:
             target_file_path.write_text(data["patched_content"], encoding="utf-8")
 

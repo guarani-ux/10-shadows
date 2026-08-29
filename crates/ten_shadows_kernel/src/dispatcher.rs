@@ -22,10 +22,16 @@ pub enum DispatchError {
 impl fmt::Display for DispatchError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            DispatchError::DispatcherProcessFailed(s) => write!(f, "DISPATCHER PROCESS FAILED: {}", s),
+            DispatchError::DispatcherProcessFailed(s) => {
+                write!(f, "DISPATCHER PROCESS FAILED: {}", s)
+            }
             DispatchError::MalformedAuthorization(s) => write!(f, "MALFORMED AUTHORIZATION: {}", s),
-            DispatchError::TokenVerificationFailed(s) => write!(f, "TOKEN VERIFICATION FAILED: {}", s),
-            DispatchError::WorkspaceEscapeDetected(s) => write!(f, "WORKSPACE ESCAPE DETECTED: {}", s),
+            DispatchError::TokenVerificationFailed(s) => {
+                write!(f, "TOKEN VERIFICATION FAILED: {}", s)
+            }
+            DispatchError::WorkspaceEscapeDetected(s) => {
+                write!(f, "WORKSPACE ESCAPE DETECTED: {}", s)
+            }
             DispatchError::InvocationMismatch(s) => write!(f, "INVOCATION MISMATCH: {}", s),
             DispatchError::Timeout(s) => write!(f, "WORKER TIMEOUT: {}", s),
         }
@@ -59,6 +65,7 @@ pub struct WorkerAuthorization {
 }
 
 impl WorkerAuthorization {
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         run_id: &str,
         task_id: &str,
@@ -121,7 +128,13 @@ impl WorkerAuthorization {
     ) -> String {
         let raw = format!(
             "{}:{}:{}:{}:{}:{}:{}",
-            run_id, task_id, invocation_id, objective_hash, baseline_sha, governed_workspace_path, attempt_number
+            run_id,
+            task_id,
+            invocation_id,
+            objective_hash,
+            baseline_sha,
+            governed_workspace_path,
+            attempt_number
         );
         let mut hasher = Sha256::new();
         hasher.update(raw.as_bytes());
@@ -204,9 +217,13 @@ impl WorkerDispatcher {
             ));
         }
 
-        let millis = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_millis();
+        let millis = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis();
         let tmp_dir = std::env::temp_dir().join("10_shadows_ipc");
-        fs::create_dir_all(&tmp_dir).map_err(|e| DispatchError::DispatcherProcessFailed(e.to_string()))?;
+        fs::create_dir_all(&tmp_dir)
+            .map_err(|e| DispatchError::DispatcherProcessFailed(e.to_string()))?;
 
         let auth_path = tmp_dir.join(format!("auth_{}_{}.json", auth.invocation_id, millis));
         let out_path = tmp_dir.join(format!("result_{}_{}.json", auth.invocation_id, millis));
@@ -230,7 +247,9 @@ impl WorkerDispatcher {
             .current_dir(&repo_root)
             .env("PYTHONPATH", &repo_root)
             .output()
-            .map_err(|e| DispatchError::DispatcherProcessFailed(format!("Failed to spawn dispatcher: {}", e)))?;
+            .map_err(|e| {
+                DispatchError::DispatcherProcessFailed(format!("Failed to spawn dispatcher: {}", e))
+            })?;
 
         // Cleanup auth request file
         let _ = fs::remove_file(&auth_path);
@@ -245,15 +264,19 @@ impl WorkerDispatcher {
         }
 
         if !out_path.exists() {
-            return Err(DispatchError::DispatcherProcessFailed("Dispatcher produced no result JSON file".into()));
+            return Err(DispatchError::DispatcherProcessFailed(
+                "Dispatcher produced no result JSON file".into(),
+            ));
         }
 
-        let result_json = fs::read_to_string(&out_path)
-            .map_err(|e| DispatchError::DispatcherProcessFailed(format!("Cannot read result JSON: {}", e)))?;
+        let result_json = fs::read_to_string(&out_path).map_err(|e| {
+            DispatchError::DispatcherProcessFailed(format!("Cannot read result JSON: {}", e))
+        })?;
         let _ = fs::remove_file(&out_path);
 
-        let result: WorkerExecutionResult = serde_json::from_str(&result_json)
-            .map_err(|e| DispatchError::DispatcherProcessFailed(format!("Failed to parse result JSON: {}", e)))?;
+        let result: WorkerExecutionResult = serde_json::from_str(&result_json).map_err(|e| {
+            DispatchError::DispatcherProcessFailed(format!("Failed to parse result JSON: {}", e))
+        })?;
 
         // Invariant checks on returned result
         if result.run_id != auth.run_id || result.invocation_id != auth.invocation_id {

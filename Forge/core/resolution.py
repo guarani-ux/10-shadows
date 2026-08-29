@@ -51,9 +51,13 @@ class GroundedSatisfactionResolver:
         resolved_bindings: Dict[str, CapabilityBinding] = {}
         induced_operations: List[RequiredOperation] = []
         deficits: List[ResolutionDeficit] = []
-        
+
         evidence_pool = available_evidence or {}
-        authority_pool = available_authority if available_authority is not None else {"SANDBOX_FILE_WRITE", "SUBPROCESS_EXECUTE", "LOCAL_IO"}
+        authority_pool = (
+            available_authority
+            if available_authority is not None
+            else {"SANDBOX_FILE_WRITE", "SUBPROCESS_EXECUTE", "LOCAL_IO"}
+        )
         produced_outputs: Set[str] = set(available_inputs)
 
         for obligation in obligations:
@@ -92,10 +96,17 @@ class GroundedSatisfactionResolver:
             # If no strict match by exact input/output/effect, try matching by effect type + output contract
             if not candidate_matches and obligation.required_effect_type:
                 candidate_matches = [
-                    cap for cap in self.registry._capabilities.values()
+                    cap
+                    for cap in self.registry._capabilities.values()
                     if cap.is_authorized_for_execution
-                    and (cap.provenance.get("effect_type") == obligation.required_effect_type or obligation.required_effect_type in [op.value for op in cap.operations_supported])
-                    and (not obligation.required_output_contract or all(k in cap.output_contracts for k in obligation.required_output_contract.keys()))
+                    and (
+                        cap.provenance.get("effect_type") == obligation.required_effect_type
+                        or obligation.required_effect_type in [op.value for op in cap.operations_supported]
+                    )
+                    and (
+                        not obligation.required_output_contract
+                        or all(k in cap.output_contracts for k in obligation.required_output_contract.keys())
+                    )
                 ]
 
             if not candidate_matches:
@@ -143,16 +154,26 @@ class GroundedSatisfactionResolver:
             # 5. Evidence Grounding & Strict Class Verification
             missing_evidence: List[str] = []
             for ev_req in obligation.required_evidence + [
-                EvidenceRequirement(evidence_id=e, claim_or_decision_supported=e, required_evidence_class=EvidenceClass.VERIFIED_FACT)
+                EvidenceRequirement(
+                    evidence_id=e, claim_or_decision_supported=e, required_evidence_class=EvidenceClass.VERIFIED_FACT
+                )
                 for e in selected_cap.evidence_requirements
             ]:
                 if ev_req.evidence_id not in evidence_pool:
                     missing_evidence.append(ev_req.evidence_id)
                 else:
                     actual_ev = evidence_pool[ev_req.evidence_id]
-                    actual_class = actual_ev.get("evidence_class") if isinstance(actual_ev, dict) else getattr(actual_ev, "confidence", None)
+                    actual_class = (
+                        actual_ev.get("evidence_class")
+                        if isinstance(actual_ev, dict)
+                        else getattr(actual_ev, "confidence", None)
+                    )
                     actual_val = actual_class.value if isinstance(actual_class, EvidenceClass) else str(actual_class)
-                    req_val = ev_req.required_evidence_class.value if isinstance(ev_req.required_evidence_class, EvidenceClass) else str(ev_req.required_evidence_class)
+                    req_val = (
+                        ev_req.required_evidence_class.value
+                        if isinstance(ev_req.required_evidence_class, EvidenceClass)
+                        else str(ev_req.required_evidence_class)
+                    )
                     if actual_val == "UNVERIFIED_MODEL_PRIOR" or actual_val != req_val:
                         missing_evidence.append(f"{ev_req.evidence_id} (expected {req_val}, got {actual_val})")
 
@@ -181,12 +202,14 @@ class GroundedSatisfactionResolver:
                 continue
 
             # 7. Bind Capability & Mechanically Induce RequiredOperation
-            cap_manifest_hash = compute_digest({
-                "cap_id": selected_cap.capability_id,
-                "version": selected_cap.version,
-                "in": selected_cap.input_contracts,
-                "out": selected_cap.output_contracts,
-            })
+            cap_manifest_hash = compute_digest(
+                {
+                    "cap_id": selected_cap.capability_id,
+                    "version": selected_cap.version,
+                    "in": selected_cap.input_contracts,
+                    "out": selected_cap.output_contracts,
+                }
+            )
 
             binding = CapabilityBinding(
                 obligation_id=obligation.obligation_id,
@@ -198,12 +221,14 @@ class GroundedSatisfactionResolver:
             resolved_bindings[obligation.obligation_id] = binding
 
             op_id = f"op_{obligation.obligation_id}"
-            obl_hash = compute_digest({
-                "id": obligation.obligation_id,
-                "effect": obligation.required_effect_type,
-                "in": obligation.required_input_contract,
-                "out": obligation.required_output_contract,
-            })
+            obl_hash = compute_digest(
+                {
+                    "id": obligation.obligation_id,
+                    "effect": obligation.required_effect_type,
+                    "in": obligation.required_input_contract,
+                    "out": obligation.required_output_contract,
+                }
+            )
 
             induced_op = RequiredOperation(
                 operation_id=op_id,
@@ -226,13 +251,15 @@ class GroundedSatisfactionResolver:
             for out in selected_cap.output_contracts.keys():
                 produced_outputs.add(out)
 
-        is_resolved = (len(deficits) == 0 and len(resolved_bindings) == len(obligations))
-        resolution_hash = compute_digest({
-            "resolved": is_resolved,
-            "obligations": [o.obligation_id for o in obligations],
-            "ops": [op.operation_id for op in induced_operations],
-            "deficits": [d.deficit_type for d in deficits],
-        })
+        is_resolved = len(deficits) == 0 and len(resolved_bindings) == len(obligations)
+        resolution_hash = compute_digest(
+            {
+                "resolved": is_resolved,
+                "obligations": [o.obligation_id for o in obligations],
+                "ops": [op.operation_id for op in induced_operations],
+                "deficits": [d.deficit_type for d in deficits],
+            }
+        )
 
         return ResolutionProof(
             is_resolved=is_resolved,

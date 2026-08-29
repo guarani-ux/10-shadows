@@ -1,8 +1,10 @@
-import pytest
 from pathlib import Path
-from loop_engine.runners.code_runner import CodeRunnerLoop
+
+import pytest
+
 from loop_engine.governor import Governor
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.code_runner import CodeRunnerLoop
 
 
 def test_code_runner_end_to_end_success(tmp_path):
@@ -60,10 +62,13 @@ def test_code_runner_with_subprocess_test_gate(tmp_path):
 
     # Create a pytest file that verifies the tool
     test_file = tmp_path / "test_tool.py"
-    test_file.write_text("""
+    test_file.write_text(
+        """
 def test_tool():
     assert 2 * 2 == 4
-""", encoding="utf-8")
+""",
+        encoding="utf-8",
+    )
 
     dest_file = tmp_path / "validated_tool.py"
 

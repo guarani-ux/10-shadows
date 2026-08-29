@@ -3,21 +3,21 @@ import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.media.schema import (
+    EpistemicBlindspot,
+    GroundedScene,
+    VideoDeconstructionBlueprint,
+)
 from loop_engine.media.semantic_chunker import SemanticChunker
 from loop_engine.media.sovereign_media_engine import SovereignMediaEngine
-from loop_engine.media.schema import (
-    VideoDeconstructionBlueprint,
-    GroundedScene,
-    EpistemicBlindspot,
-)
 from loop_engine.receipts import ReceiptStore
 
 
 class HeraldMediaRunner(BaseLoop):
     """
     Shadow 3 (The Herald) & Shadow 4 (The Scout) Domain Runner.
-    
+
     Autonomous loop for deconstructing YouTube videos into verified,
     grounded narrative blueprints with explicit epistemic anomaly detection.
     """

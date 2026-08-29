@@ -4,11 +4,12 @@ Strict value assertions and negative mutation traps.
 """
 
 import pytest
-from svris.core.db import get_connection, init_db
-from svris.core.extractor import extract_candidate_claims, CandidateClaim
-from svris.core.verifier import verify_and_promote_claim, ProvenanceError
-from svris.core.contradiction import detect_and_register_contradictions
+
 from svris.adapters.model import MockModelAdapter
+from svris.core.contradiction import detect_and_register_contradictions
+from svris.core.db import get_connection, init_db
+from svris.core.extractor import CandidateClaim, extract_candidate_claims
+from svris.core.verifier import ProvenanceError, verify_and_promote_claim
 
 
 @pytest.fixture

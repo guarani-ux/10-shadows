@@ -63,10 +63,18 @@ pub enum SubstrateLawError {
 impl fmt::Display for SubstrateLawError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            SubstrateLawError::AuthorityViolation(s) => write!(f, "LAW 1 (AUTHORITY) VIOLATION: {}", s),
-            SubstrateLawError::ProvenanceViolation(s) => write!(f, "LAW 2 (PROVENANCE) VIOLATION: {}", s),
-            SubstrateLawError::IndependenceViolation(s) => write!(f, "LAW 3 (INDEPENDENCE) VIOLATION: {}", s),
-            SubstrateLawError::MonotonicityViolation(s) => write!(f, "LAW 4 (MONOTONICITY) VIOLATION: {}", s),
+            SubstrateLawError::AuthorityViolation(s) => {
+                write!(f, "LAW 1 (AUTHORITY) VIOLATION: {}", s)
+            }
+            SubstrateLawError::ProvenanceViolation(s) => {
+                write!(f, "LAW 2 (PROVENANCE) VIOLATION: {}", s)
+            }
+            SubstrateLawError::IndependenceViolation(s) => {
+                write!(f, "LAW 3 (INDEPENDENCE) VIOLATION: {}", s)
+            }
+            SubstrateLawError::MonotonicityViolation(s) => {
+                write!(f, "LAW 4 (MONOTONICITY) VIOLATION: {}", s)
+            }
         }
     }
 }

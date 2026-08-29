@@ -1,29 +1,38 @@
 from typing import Any, Dict, List, Literal, Optional
+
 from pydantic import BaseModel, Field, field_validator
-from loop_engine.herald.linguistics import AntiAILinguisticGuard
+
 from loop_engine.herald.cinematography import CinematographyValidator
-from loop_engine.herald.input_contract import EvidenceItem, UnknownItem, ProductionConstraints
+from loop_engine.herald.input_contract import EvidenceItem, ProductionConstraints, UnknownItem
+from loop_engine.herald.linguistics import AntiAILinguisticGuard
 
 
 class AVTableRow(BaseModel):
     """A single row in the Master 3-Column AV Script Table."""
+
     row_index: int = Field(ge=1)
     scene_name: str = Field(min_length=2)
     time_window: str = Field(description="e.g. '0:00 - 0:15'")
     start_seconds: float = Field(ge=0.0)
     end_seconds: float = Field(ge=0.0)
-    
+
     # Column 2: Spoken Human Audio & SFX
     spoken_audio: str = Field(min_length=5, description="Spoken voiceover, dialogue, music cues, and sound effects")
     spoken_words_count: int = Field(ge=0)
     pacing_wpm: float = Field(ge=0.0)
 
     # Column 3: Cinematographic Video & Visual Directions
-    video_direction: str = Field(min_length=10, description="Framing, camera move, lighting ratio, focal length, on-screen text")
+    video_direction: str = Field(
+        min_length=10, description="Framing, camera move, lighting ratio, focal length, on-screen text"
+    )
 
     # Traceability & Evidence Grounding
-    grounded_evidence_ids: List[str] = Field(default_factory=list, description="IDs of verified evidence supporting this scene")
-    associated_unknown_ids: List[str] = Field(default_factory=list, description="IDs of explicit assumptions/unknowns in this scene")
+    grounded_evidence_ids: List[str] = Field(
+        default_factory=list, description="IDs of verified evidence supporting this scene"
+    )
+    associated_unknown_ids: List[str] = Field(
+        default_factory=list, description="IDs of explicit assumptions/unknowns in this scene"
+    )
 
     @field_validator("end_seconds")
     @classmethod
@@ -53,10 +62,11 @@ class AVTableRow(BaseModel):
 class ValidatedCutDownScript(BaseModel):
     """
     Section 2: Production-Grade Modular Cut-Down Script.
-    
+
     Complete, standalone 15-30s vertical script with full audio,
     vertical 9:16 cinematography, platform-specific CTA, and duration validation.
     """
+
     cutdown_id: str
     short_title: str
     target_platform: Literal["YouTube Shorts", "Instagram Reels", "TikTok", "LinkedIn Video"]
@@ -67,13 +77,16 @@ class ValidatedCutDownScript(BaseModel):
     spoken_audio: str = Field(min_length=10)
     spoken_words_count: int
     pacing_wpm: float
-    vertical_video_direction: str = Field(min_length=10, description="9:16 vertical framing, camera move, safe-zone graphics")
+    vertical_video_direction: str = Field(
+        min_length=10, description="9:16 vertical framing, camera move, safe-zone graphics"
+    )
     platform_cta: str = Field(min_length=5)
     strategic_purpose: str
 
 
 class StrategicIntent(BaseModel):
     """Section 1: Organizational Goal Alignment & Strategic Persona."""
+
     project_title: str = Field(min_length=3)
     organizational_goal: str = Field(min_length=10)
     target_audience_persona: str = Field(min_length=10)
@@ -84,6 +97,7 @@ class StrategicIntent(BaseModel):
 
 class TechnicalScope(BaseModel):
     """Section 2: Production Constraints & Technical Scope."""
+
     target_runtime_seconds: int = Field(ge=10, le=3600)
     target_runtime_formatted: str
     target_pacing_wpm: float = Field(ge=10.0, le=300.0)
@@ -95,6 +109,7 @@ class TechnicalScope(BaseModel):
 
 class MasterAVScriptBlueprint(BaseModel):
     """The complete 3-Section Production-Ready AV Script Document with Evidence Preservation."""
+
     script_id: str
     strategic_intent: StrategicIntent
     technical_scope: TechnicalScope

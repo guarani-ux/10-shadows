@@ -12,10 +12,11 @@ Proves:
 
 import hashlib
 import json
-from pathlib import Path
-import pytest
 import secrets
 import subprocess
+from pathlib import Path
+
+import pytest
 
 from loop_engine.authority import issue_proof_witness
 from loop_engine.epistemic import EpistemicDisposition
@@ -32,13 +33,13 @@ from loop_engine.schema import (
     compute_test_digest,
 )
 from loop_engine.transition import (
+    _INTERNAL_TRANSITION_TOKEN,
     PrivilegedTransitionEngine,
-    TransitionRequest,
     TransitionReceipt,
     TransitionRejection,
+    TransitionRequest,
     compute_complete_claim_digest,
     compute_governance_digest,
-    _INTERNAL_TRANSITION_TOKEN,
 )
 from loop_engine.verifier_gate import PhysicalVerifierGate
 
@@ -68,19 +69,31 @@ class TestLoadBearingTransitionSeam:
         db.record_proposal(manifest)
 
         # 1. Attempt direct update to VERIFIED
-        with pytest.raises(PrivilegedStateMutationProhibitedError, match="Direct database mutation to privileged state 'VERIFIED' is prohibited"):
+        with pytest.raises(
+            PrivilegedStateMutationProhibitedError,
+            match="Direct database mutation to privileged state 'VERIFIED' is prohibited",
+        ):
             db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.VERIFIED)
 
         # 2. Attempt direct update to PROMOTION_PENDING
-        with pytest.raises(PrivilegedStateMutationProhibitedError, match="Direct database mutation to privileged state 'PROMOTION_PENDING' is prohibited"):
+        with pytest.raises(
+            PrivilegedStateMutationProhibitedError,
+            match="Direct database mutation to privileged state 'PROMOTION_PENDING' is prohibited",
+        ):
             db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.PROMOTION_PENDING)
 
         # 3. Attempt direct update to PROMOTED
-        with pytest.raises(PrivilegedStateMutationProhibitedError, match="Direct database mutation to privileged state 'PROMOTED' is prohibited"):
+        with pytest.raises(
+            PrivilegedStateMutationProhibitedError,
+            match="Direct database mutation to privileged state 'PROMOTED' is prohibited",
+        ):
             db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.PROMOTED)
 
         # 4. Attempt direct update to POST_PROMOTION_VERIFIED
-        with pytest.raises(PrivilegedStateMutationProhibitedError, match="Direct database mutation to privileged state 'POST_PROMOTION_VERIFIED' is prohibited"):
+        with pytest.raises(
+            PrivilegedStateMutationProhibitedError,
+            match="Direct database mutation to privileged state 'POST_PROMOTION_VERIFIED' is prohibited",
+        ):
             db.transition_proposal_state(task_id, State.CANDIDATE_SEALED, State.POST_PROMOTION_VERIFIED)
 
     def test_valid_privileged_transition_lifecycle(self, tmp_path: Path):
@@ -285,7 +298,7 @@ class TestLoadBearingTransitionSeam:
         subprocess.run(["git", "config", "user.email", "bot@zero.trust"], cwd=repo_dir, check=True)
 
         (repo_dir / "calculator.py").write_text("def add(a, b):\n    return a + b\n", encoding="utf-8")
-        
+
         fixtures_dir = repo_dir / "canonical_fixtures"
         fixtures_dir.mkdir()
         (fixtures_dir / "test_app.py").write_text(
@@ -296,8 +309,12 @@ class TestLoadBearingTransitionSeam:
         subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
         subprocess.run(["git", "commit", "-m", "candidate commit"], cwd=repo_dir, check=True)
 
-        commit_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
-        tree_sha = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+        commit_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        tree_sha = subprocess.run(
+            ["git", "rev-parse", "HEAD^{tree}"], cwd=repo_dir, capture_output=True, text=True, check=True
+        ).stdout.strip()
 
         db = KernelDatabase(db_path=tmp_path / "kernel.db")
         manifest = ProposalManifest(
@@ -323,7 +340,6 @@ class TestLoadBearingTransitionSeam:
         # 1. Normal verification passes when seam is ENABLED
         res_normal = vg.verify_candidate(manifest, candidate_worktree=repo_dir)
         assert res_normal.status == State.VERIFIED
-
 
         # 2. Disable PrivilegedTransitionEngine with raising stub
         def raising_stub(*args, **kwargs):

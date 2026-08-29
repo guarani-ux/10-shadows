@@ -8,6 +8,7 @@ Validates:
 """
 
 from pathlib import Path
+
 import pytest
 
 from forge.core.closure import AntiCheatingViolation, ClosureGate
@@ -30,13 +31,13 @@ from forge.core.substrate import (
     CapabilityManifest,
     EvidenceClass,
     EvidenceRequirement,
-    ObligationAuthority,
     ObjectiveAdequacyState,
+    ObligationAuthority,
     OperatorType,
+    RequiredOperation,
     RequirementDisposition,
     RequirementOrigin,
     RequirementTrace,
-    RequiredOperation,
     SatisfactionObligation,
     VerificationContract,
 )
@@ -53,6 +54,7 @@ def clean_engine():
 # 14 PERMANENT PROPERTY TESTS
 # =============================================================================
 
+
 def test_prop_1_no_benchmark_vocabulary_in_production_gsr():
     """Property 1: Tripwire proving zero benchmark/domain vocabulary hardcoded in production GSR."""
     resolution_file = Path("Forge/core/resolution.py")
@@ -60,9 +62,19 @@ def test_prop_1_no_benchmark_vocabulary_in_production_gsr():
     content = resolution_file.read_text(encoding="utf-8") + obligations_file.read_text(encoding="utf-8")
 
     banned_keywords = [
-        "shear", "stress", "modulus", "pharmacokinetic", "clearance",
-        "elimination", "half_life", "dosage", "warehouse", "pallet",
-        "quantum", "alien", "rfc"
+        "shear",
+        "stress",
+        "modulus",
+        "pharmacokinetic",
+        "clearance",
+        "elimination",
+        "half_life",
+        "dosage",
+        "warehouse",
+        "pallet",
+        "quantum",
+        "alien",
+        "rfc",
     ]
     for kw in banned_keywords:
         assert kw not in content.lower(), f"Benchmark keyword '{kw}' found in production GSR code."
@@ -102,27 +114,31 @@ def test_prop_3_root_input_sovereignty(clean_engine):
     assert success is True
 
     # Case A: Execute without supplying load and cross_section -> INPUT_DEFICIT
-    res_missing = clean_engine.run({
-        "intent": raw_intent,
-        "contract": {
-            "effect_type": "CALCULATE",
-            "inputs": {"load": "float", "cross_section": "float"},
-            "outputs": {"yield_ratio": "float"},
-        },
-    })
+    res_missing = clean_engine.run(
+        {
+            "intent": raw_intent,
+            "contract": {
+                "effect_type": "CALCULATE",
+                "inputs": {"load": "float", "cross_section": "float"},
+                "outputs": {"yield_ratio": "float"},
+            },
+        }
+    )
     assert res_missing["status"] == "RESOLUTION_DEFICIT"
     assert res_missing["deficit_type"] == "INPUT_DEFICIT"
 
     # Case B: Execute with explicitly supplied root inputs -> SUCCESS
-    res_supplied = clean_engine.run({
-        "intent": raw_intent,
-        "contract": {
-            "effect_type": "CALCULATE",
-            "inputs": {"load": "float", "cross_section": "float"},
-            "outputs": {"yield_ratio": "float"},
-        },
-        "source_data": {"load": 500.0, "cross_section": 10.0},
-    })
+    res_supplied = clean_engine.run(
+        {
+            "intent": raw_intent,
+            "contract": {
+                "effect_type": "CALCULATE",
+                "inputs": {"load": "float", "cross_section": "float"},
+                "outputs": {"yield_ratio": "float"},
+            },
+            "source_data": {"load": 500.0, "cross_section": 10.0},
+        }
+    )
     assert res_supplied["status"] == "SUCCESS"
     assert res_supplied["result"]["final_state"]["yield_ratio"] == 50.0
 
@@ -229,9 +245,7 @@ def test_prop_8_evidence_class_strictness():
         bound_capability_id="forge_sandbox_file_adapter",
     )
     # Supply DOCUMENTED_METRIC instead of required EMPIRICAL_TEST
-    pool = {
-        "ev_test": {"evidence_class": EvidenceClass.DOCUMENTED_METRIC.value}
-    }
+    pool = {"ev_test": {"evidence_class": EvidenceClass.DOCUMENTED_METRIC.value}}
     report = gate.evaluate_closure(operations=[op], verified_evidence_pool=pool)
     assert report.is_closed is False
     assert len(report.evidence_deficits) == 1
@@ -261,6 +275,7 @@ def test_prop_9_compiler_cannot_reselect():
 def test_prop_10_side_effect_authorization():
     """Property 10: Unauthorized side effects are blocked before disk mutation occurs."""
     from forge.adapters.actions import SandboxFileAdapter
+
     adapter = SandboxFileAdapter(Path("sandbox"))
     with pytest.raises(PermissionError):
         adapter.execute(
@@ -287,6 +302,7 @@ def test_prop_11_text_and_json_ingress_parity(clean_engine):
 def test_prop_12_forge_domain_runner_cannot_bypass_gsr():
     """Property 12: Shadow 1 ForgeDomainRunner cannot bypass GSR."""
     from loop_engine.runners.forge_runner import ForgeDomainRunner
+
     runner = ForgeDomainRunner()
     norm = runner.normalize("Execute unknown subharmonic frequency modulation.")
     assert norm["code"] == ""
@@ -317,29 +333,33 @@ def test_prop_13_real_task_a_to_b_transfer(clean_engine):
     assert success is True
 
     # Execute Task A through normal ingress
-    res_a = clean_engine.run({
-        "intent": task_a_intent,
-        "contract": {
-            "effect_type": "CALCULATE",
-            "inputs": {"a": "float", "b": "float", "c": "float", "d": "float"},
-            "outputs": {"determinant": "float"},
-        },
-        "source_data": {"a": 2.0, "b": 1.0, "c": 1.0, "d": 2.0},
-    })
+    res_a = clean_engine.run(
+        {
+            "intent": task_a_intent,
+            "contract": {
+                "effect_type": "CALCULATE",
+                "inputs": {"a": "float", "b": "float", "c": "float", "d": "float"},
+                "outputs": {"determinant": "float"},
+            },
+            "source_data": {"a": 2.0, "b": 1.0, "c": 1.0, "d": 2.0},
+        }
+    )
     assert res_a["status"] == "SUCCESS"
     assert res_a["result"]["final_state"]["determinant"] == 3.0
 
     # Task B: Foreign task entering normal ingress without prior knowledge
     task_b_intent = "Calculate determinant of 2x2 matrix."
-    res_b = clean_engine.run({
-        "intent": task_b_intent,
-        "contract": {
-            "effect_type": "CALCULATE",
-            "inputs": {"a": "float", "b": "float", "c": "float", "d": "float"},
-            "outputs": {"determinant": "float"},
-        },
-        "source_data": {"a": 5.0, "b": 3.0, "c": 2.0, "d": 4.0},
-    })
+    res_b = clean_engine.run(
+        {
+            "intent": task_b_intent,
+            "contract": {
+                "effect_type": "CALCULATE",
+                "inputs": {"a": "float", "b": "float", "c": "float", "d": "float"},
+                "outputs": {"determinant": "float"},
+            },
+            "source_data": {"a": 5.0, "b": 3.0, "c": 2.0, "d": 4.0},
+        }
+    )
     assert res_b["status"] == "SUCCESS"
     assert res_b["result"]["final_state"]["determinant"] == 14.0
 
@@ -355,6 +375,7 @@ def test_prop_14_representation_break_without_sentinel_word(clean_engine):
 # =============================================================================
 # 5 DOMAIN TRACES (Normal Ingress)
 # =============================================================================
+
 
 def test_domain_trace_1_control_task(clean_engine):
     """Domain 1: Control Task — Topological DAG decomposition and AST verification."""
@@ -377,15 +398,17 @@ def test_domain_trace_2_knowledge_contradiction(clean_engine):
         {"claim": "The server latency is 5ms", "confidence": "VERIFIED_FACT"},
         {"claim": "The server latency is 50ms", "confidence": "VERIFIED_FACT"},
     ]
-    res = clean_engine.run({
-        "intent": "Detect contradictions across claims.",
-        "contract": {
-            "effect_type": "CONTRADICTION_DETECTION",
-            "inputs": {"claims": "List[Dict[str, Any]]"},
-            "outputs": {"contradictions": "List[Dict[str, Any]]", "has_conflict": "bool"},
-        },
-        "source_data": {"claims": claims},
-    })
+    res = clean_engine.run(
+        {
+            "intent": "Detect contradictions across claims.",
+            "contract": {
+                "effect_type": "CONTRADICTION_DETECTION",
+                "inputs": {"claims": "List[Dict[str, Any]]"},
+                "outputs": {"contradictions": "List[Dict[str, Any]]", "has_conflict": "bool"},
+            },
+            "source_data": {"claims": claims},
+        }
+    )
     assert res["status"] == "SUCCESS"
     assert res["result"]["final_state"]["has_conflict"] is True
 
@@ -411,31 +434,35 @@ def test_domain_trace_3_foreign_scientific_calculation(clean_engine):
     )
     assert success is True
 
-    res = clean_engine.run({
-        "intent": "Calculate shear stress from force and area.",
-        "contract": {
-            "effect_type": "CALCULATION",
-            "inputs": {"force": "float", "area": "float"},
-            "outputs": {"shear_stress_mpa": "float"},
-            "transformation_rule": "force / area",
-        },
-        "source_data": {"force": 2000.0, "area": 4.0},
-    })
+    res = clean_engine.run(
+        {
+            "intent": "Calculate shear stress from force and area.",
+            "contract": {
+                "effect_type": "CALCULATION",
+                "inputs": {"force": "float", "area": "float"},
+                "outputs": {"shear_stress_mpa": "float"},
+                "transformation_rule": "force / area",
+            },
+            "source_data": {"force": 2000.0, "area": 4.0},
+        }
+    )
     assert res["status"] == "SUCCESS"
     assert res["result"]["final_state"]["shear_stress_mpa"] == 500.0
 
 
 def test_domain_trace_4_logistics_state_mutation(clean_engine):
     """Domain 4: State Mutation — Physical sandbox file write."""
-    res = clean_engine.run({
-        "intent": "Commit state payload to output.txt in sandbox.",
-        "contract": {
-            "effect_type": "STATE_MUTATION",
-            "inputs": {"target": "str", "payload": "Any"},
-            "outputs": {"committed": "bool"},
-        },
-        "source_data": {"target": "output.txt", "payload": {"status": "ACTIVE_LOGISTICS"}},
-    })
+    res = clean_engine.run(
+        {
+            "intent": "Commit state payload to output.txt in sandbox.",
+            "contract": {
+                "effect_type": "STATE_MUTATION",
+                "inputs": {"target": "str", "payload": "Any"},
+                "outputs": {"committed": "bool"},
+            },
+            "source_data": {"target": "output.txt", "payload": {"status": "ACTIVE_LOGISTICS"}},
+        }
+    )
     assert res["status"] == "SUCCESS"
     assert res["result"]["final_state"]["committed"] is True
 
@@ -461,15 +488,17 @@ def test_domain_trace_5_held_out_acoustic_physics(clean_engine):
     )
     assert success is True
 
-    res = clean_engine.run({
-        "intent": "Calculate room reverberation decay time.",
-        "contract": {
-            "effect_type": "CALCULATION",
-            "inputs": {"room_volume": "float", "total_absorption": "float"},
-            "outputs": {"rt60_seconds": "float"},
-            "transformation_rule": "0.161 * room_volume / total_absorption",
-        },
-        "source_data": {"room_volume": 500.0, "total_absorption": 80.5},
-    })
+    res = clean_engine.run(
+        {
+            "intent": "Calculate room reverberation decay time.",
+            "contract": {
+                "effect_type": "CALCULATION",
+                "inputs": {"room_volume": "float", "total_absorption": "float"},
+                "outputs": {"rt60_seconds": "float"},
+                "transformation_rule": "0.161 * room_volume / total_absorption",
+            },
+            "source_data": {"room_volume": 500.0, "total_absorption": 80.5},
+        }
+    )
     assert res["status"] == "SUCCESS"
     assert round(res["result"]["final_state"]["rt60_seconds"], 2) == 1.0

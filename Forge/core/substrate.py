@@ -7,15 +7,16 @@ lifecycles, obligation authorities, capability kinds, evidence classifications,
 semantic contracts, candidate bindings, applicability proofs, and immutable provenance links.
 """
 
-from dataclasses import dataclass, field
-from enum import Enum
 import hashlib
 import json
+from dataclasses import dataclass, field
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 
 def canonical_json(data: Any) -> str:
     """Computes deterministic canonical JSON string with sorted keys and compact separators."""
+
     def _default(o: Any) -> Any:
         if isinstance(o, Enum):
             return o.value
@@ -35,6 +36,7 @@ def compute_digest(data: Any) -> str:
 
 class OperatorType(str, Enum):
     """Initial atomic operator basis derived strictly from executable capabilities."""
+
     INGEST = "INGEST"
     EXTRACT = "EXTRACT"
     COMPARE = "COMPARE"
@@ -52,44 +54,51 @@ class OperatorType(str, Enum):
 
 class EvidenceClass(str, Enum):
     """Rigorous epistemic evidence taxonomy."""
-    VERIFIED_FACT = "VERIFIED_FACT"            # Physically established by verifier or root provenance
-    DOCUMENTED_METRIC = "DOCUMENTED_METRIC"    # Empirical benchmark or telemetry measurement
-    DIRECT_QUOTE = "DIRECT_QUOTE"              # Unaltered source quotation
-    EMPIRICAL_TEST = "EMPIRICAL_TEST"          # Machine-signed test execution receipt
-    SOURCE_PROVIDED = "SOURCE_PROVIDED"        # Explicitly supplied in input (NOT externally verified fact)
+
+    VERIFIED_FACT = "VERIFIED_FACT"  # Physically established by verifier or root provenance
+    DOCUMENTED_METRIC = "DOCUMENTED_METRIC"  # Empirical benchmark or telemetry measurement
+    DIRECT_QUOTE = "DIRECT_QUOTE"  # Unaltered source quotation
+    EMPIRICAL_TEST = "EMPIRICAL_TEST"  # Machine-signed test execution receipt
+    SOURCE_PROVIDED = "SOURCE_PROVIDED"  # Explicitly supplied in input (NOT externally verified fact)
     UNVERIFIED_MODEL_PRIOR = "UNVERIFIED_MODEL_PRIOR"  # Latent LLM memory (ZERO authority for closure)
 
 
 class CapabilityLifecycleState(str, Enum):
     """7-stage capability authorization lifecycle."""
-    CANDIDATE = "CANDIDATE"                                  # Initial unverified code proposal
-    SYNTACTICALLY_VALID = "SYNTACTICALLY_VALID"              # AST parsed, compile() passes
-    ISOLATED_TESTED = "ISOLATED_TESTED"                      # Passes sterile sandbox test suite
-    VERIFIED_FOR_TASK = "VERIFIED_FOR_TASK"                  # Authorized for single task execution
-    PROVISIONALLY_AVAILABLE = "PROVISIONALLY_AVAILABLE"      # Staged for multi-task evaluation
-    REUSE_VERIFIED = "REUSE_VERIFIED"                        # Successfully transferred to foreign task
-    PROMOTED = "PROMOTED"                                    # Fully promoted persistent system capability
+
+    CANDIDATE = "CANDIDATE"  # Initial unverified code proposal
+    SYNTACTICALLY_VALID = "SYNTACTICALLY_VALID"  # AST parsed, compile() passes
+    ISOLATED_TESTED = "ISOLATED_TESTED"  # Passes sterile sandbox test suite
+    VERIFIED_FOR_TASK = "VERIFIED_FOR_TASK"  # Authorized for single task execution
+    PROVISIONALLY_AVAILABLE = "PROVISIONALLY_AVAILABLE"  # Staged for multi-task evaluation
+    REUSE_VERIFIED = "REUSE_VERIFIED"  # Successfully transferred to foreign task
+    PROMOTED = "PROMOTED"  # Fully promoted persistent system capability
 
 
 class CapabilityKind(str, Enum):
     """Classification of capability implementation authority."""
-    REAL_PHYSICAL_ADAPTER = "REAL_PHYSICAL_ADAPTER"          # Bound to real physical subsystem / disk / kernel / DB
+
+    REAL_PHYSICAL_ADAPTER = "REAL_PHYSICAL_ADAPTER"  # Bound to real physical subsystem / disk / kernel / DB
     VERIFIED_EXTERNAL_ADAPTER = "VERIFIED_EXTERNAL_ADAPTER"  # Bound to verified external tool / process
-    NON_AUTHORITATIVE_TEST_DOUBLE = "NON_AUTHORITATIVE_TEST_DOUBLE"  # Test stub / mock (FORBIDDEN for production closure)
-    UNAVAILABLE = "UNAVAILABLE"                              # Deficit marker
+    NON_AUTHORITATIVE_TEST_DOUBLE = (
+        "NON_AUTHORITATIVE_TEST_DOUBLE"  # Test stub / mock (FORBIDDEN for production closure)
+    )
+    UNAVAILABLE = "UNAVAILABLE"  # Deficit marker
 
 
 class ObligationAuthority(str, Enum):
     """Authority taxonomy for SatisfactionObligations."""
-    SOURCE_GROUNDED = "SOURCE_GROUNDED"                      # Derived directly from raw human source intent
-    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"                    # Derived from architectural TCB invariants
-    VERIFIED_DOMAIN_DERIVED = "VERIFIED_DOMAIN_DERIVED"      # Derived from a verified registered domain model
-    MODEL_HYPOTHESIS = "MODEL_HYPOTHESIS"                    # Proposed by LLM (ZERO closure authority by itself)
-    HUMAN_APPROVED = "HUMAN_APPROVED"                        # Explicitly gated and authorized by human
+
+    SOURCE_GROUNDED = "SOURCE_GROUNDED"  # Derived directly from raw human source intent
+    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"  # Derived from architectural TCB invariants
+    VERIFIED_DOMAIN_DERIVED = "VERIFIED_DOMAIN_DERIVED"  # Derived from a verified registered domain model
+    MODEL_HYPOTHESIS = "MODEL_HYPOTHESIS"  # Proposed by LLM (ZERO closure authority by itself)
+    HUMAN_APPROVED = "HUMAN_APPROVED"  # Explicitly gated and authorized by human
 
 
 class ObjectiveAdequacyState(str, Enum):
     """Upstream intent coverage and epistemic validity state."""
+
     ADEQUATE_FOR_EXECUTION = "ADEQUATE_FOR_EXECUTION"
     SOURCE_UNCOVERED = "SOURCE_UNCOVERED"
     SOURCE_AMBIGUOUS = "SOURCE_AMBIGUOUS"
@@ -99,6 +108,7 @@ class ObjectiveAdequacyState(str, Enum):
 
 class RequirementDisposition(str, Enum):
     """Disposition of each raw intent clause."""
+
     PRESERVED = "PRESERVED"
     NORMALIZED = "NORMALIZED"
     DEFERRED = "DEFERRED"
@@ -109,6 +119,7 @@ class RequirementDisposition(str, Enum):
 
 class RequirementOrigin(str, Enum):
     """Origin classification for requirements in CanonicalObjective."""
+
     SOURCE_EXPLICIT = "SOURCE_EXPLICIT"
     SYSTEM_INVARIANT = "SYSTEM_INVARIANT"
     DOMAIN_DERIVED = "DOMAIN_DERIVED"
@@ -117,27 +128,30 @@ class RequirementOrigin(str, Enum):
 
 class SemanticBindingStatus(str, Enum):
     """Lifecycle status of candidate semantic interpretations."""
-    PROPOSED = "PROPOSED"                                    # Unverified candidate interpretation
-    GROUNDED = "GROUNDED"                                    # Verified by independent authority in KernelDatabase
-    AMBIGUOUS = "AMBIGUOUS"                                  # Multiple conflicting interpretations with no deciding authority
-    UNSUPPORTED = "UNSUPPORTED"                              # No authority grounds this interpretation
+
+    PROPOSED = "PROPOSED"  # Unverified candidate interpretation
+    GROUNDED = "GROUNDED"  # Verified by independent authority in KernelDatabase
+    AMBIGUOUS = "AMBIGUOUS"  # Multiple conflicting interpretations with no deciding authority
+    UNSUPPORTED = "UNSUPPORTED"  # No authority grounds this interpretation
     DOMAIN_AUTHORITY_REQUIRED = "DOMAIN_AUTHORITY_REQUIRED"  # Requires kernel-registered domain authority
-    HUMAN_AUTHORITY_REQUIRED = "HUMAN_AUTHORITY_REQUIRED"    # Requires explicit human decision receipt
+    HUMAN_AUTHORITY_REQUIRED = "HUMAN_AUTHORITY_REQUIRED"  # Requires explicit human decision receipt
 
 
 class SemanticAuthoritySource(str, Enum):
     """Legal sources of semantic applicability authority."""
-    SOURCE_EXPLICIT_CONTRACT = "SOURCE_EXPLICIT_CONTRACT"    # Explicit machine-readable contract at ingress
+
+    SOURCE_EXPLICIT_CONTRACT = "SOURCE_EXPLICIT_CONTRACT"  # Explicit machine-readable contract at ingress
     VERIFIED_DOMAIN_AUTHORITY = "VERIFIED_DOMAIN_AUTHORITY"  # Registered in KernelDatabase with valid evidence
-    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"                    # Hardcoded architectural TCB invariant
-    EXPLICIT_HUMAN_APPROVAL = "EXPLICIT_HUMAN_APPROVAL"      # Approved by human gate bound to exact hash
-    AUTHORITATIVE_EXTERNAL_EVIDENCE = "AUTHORITATIVE_EXTERNAL_EVIDENCE" # Machine-signed evidence establishing R -> S
+    SYSTEM_INVARIANT = "SYSTEM_INVARIANT"  # Hardcoded architectural TCB invariant
+    EXPLICIT_HUMAN_APPROVAL = "EXPLICIT_HUMAN_APPROVAL"  # Approved by human gate bound to exact hash
+    AUTHORITATIVE_EXTERNAL_EVIDENCE = "AUTHORITATIVE_EXTERNAL_EVIDENCE"  # Machine-signed evidence establishing R -> S
     UNVERIFIED_MODEL_PROPOSAL = "UNVERIFIED_MODEL_PROPOSAL"  # Zero closure authority
 
 
 @dataclass(frozen=True)
 class ContractField:
     """Typed schema definition for semantic input/output fields."""
+
     type_name: str
     required: bool = True
     unit: Optional[str] = None
@@ -148,6 +162,7 @@ class ContractField:
 @dataclass(frozen=True)
 class SemanticContract:
     """Canonical representation of a semantic transformation contract."""
+
     effect_type: str
     inputs: Dict[str, ContractField]
     outputs: Dict[str, ContractField]
@@ -159,21 +174,24 @@ class SemanticContract:
 
     @property
     def contract_hash(self) -> str:
-        return compute_digest({
-            "effect_type": self.effect_type,
-            "inputs": {k: v.__dict__ for k, v in self.inputs.items()},
-            "outputs": {k: v.__dict__ for k, v in self.outputs.items()},
-            "transformation_rule": self.transformation_rule,
-            "evidence": [e.evidence_id for e in self.evidence_requirements],
-            "authority": list(self.authority_requirements),
-            "verification_spec": self.verification_spec,
-            "schema_version": self.schema_version,
-        })
+        return compute_digest(
+            {
+                "effect_type": self.effect_type,
+                "inputs": {k: v.__dict__ for k, v in self.inputs.items()},
+                "outputs": {k: v.__dict__ for k, v in self.outputs.items()},
+                "transformation_rule": self.transformation_rule,
+                "evidence": [e.evidence_id for e in self.evidence_requirements],
+                "authority": list(self.authority_requirements),
+                "verification_spec": self.verification_spec,
+                "schema_version": self.schema_version,
+            }
+        )
 
 
 @dataclass(frozen=True)
 class CandidateSemanticBinding:
     """Candidate interpretation of a requirement (ZERO authority by definition)."""
+
     binding_hash: str
     requirement_hash: str
     source_requirement_id: str
@@ -185,6 +203,7 @@ class CandidateSemanticBinding:
 @dataclass(frozen=True)
 class SemanticApplicabilityProof:
     """Proof of semantic applicability resolved from KernelDatabase custody."""
+
     proof_id: str
     binding_hash: str
     requirement_hash: str
@@ -224,15 +243,17 @@ class CanonicalRequirement:
 
     def __post_init__(self):
         if not self.requirement_hash:
-            self.requirement_hash = compute_digest({
-                "id": self.requirement_id,
-                "desc": self.description,
-                "origin": self.origin.value,
-                "clause_id": self.source_clause_id,
-                "domain_cap": self.required_domain_capability,
-                "blocking": self.is_blocking,
-                "blocking_auth": self.blocking_authority,
-            })
+            self.requirement_hash = compute_digest(
+                {
+                    "id": self.requirement_id,
+                    "desc": self.description,
+                    "origin": self.origin.value,
+                    "clause_id": self.source_clause_id,
+                    "domain_cap": self.required_domain_capability,
+                    "blocking": self.is_blocking,
+                    "blocking_auth": self.blocking_authority,
+                }
+            )
 
 
 @dataclass
@@ -281,6 +302,7 @@ class SatisfactionObligation:
     Represents: WHAT MUST BECOME OBSERVABLY TRUE?
     Defines the physical effect, input/output contracts, and evidence boundaries.
     """
+
     obligation_id: str
     source_requirement_ids: List[str]
     authority: ObligationAuthority
@@ -312,6 +334,7 @@ class CapabilityManifest:
     """
     Truthful capability manifest representing physically verified adapters.
     """
+
     capability_id: str
     operations_supported: List[OperatorType]
     input_contracts: Dict[str, Any]
@@ -329,14 +352,14 @@ class CapabilityManifest:
 
     @property
     def is_authorized_for_execution(self) -> bool:
-        return (
-            self.kind in (CapabilityKind.REAL_PHYSICAL_ADAPTER, CapabilityKind.VERIFIED_EXTERNAL_ADAPTER)
-            and self.lifecycle_state in (
-                CapabilityLifecycleState.VERIFIED_FOR_TASK,
-                CapabilityLifecycleState.PROVISIONALLY_AVAILABLE,
-                CapabilityLifecycleState.REUSE_VERIFIED,
-                CapabilityLifecycleState.PROMOTED,
-            )
+        return self.kind in (
+            CapabilityKind.REAL_PHYSICAL_ADAPTER,
+            CapabilityKind.VERIFIED_EXTERNAL_ADAPTER,
+        ) and self.lifecycle_state in (
+            CapabilityLifecycleState.VERIFIED_FOR_TASK,
+            CapabilityLifecycleState.PROVISIONALLY_AVAILABLE,
+            CapabilityLifecycleState.REUSE_VERIFIED,
+            CapabilityLifecycleState.PROMOTED,
         )
 
 

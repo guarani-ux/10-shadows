@@ -9,10 +9,11 @@ Guarantees deterministic compilation without arbitrary context stuffing or hallu
 
 from __future__ import annotations
 
-from enum import Enum
 import hashlib
 import json
+from enum import Enum
 from typing import Any, Dict, List, Optional, Sequence, Union
+
 from pydantic import BaseModel, Field
 
 from loop_engine.canonical_objective import CanonicalObjective
@@ -23,17 +24,18 @@ from loop_engine.model.boundary import DeficitDeclaration, DeficitType
 
 class ContextClass(str, Enum):
     AUTHORITATIVE = "AUTHORITATIVE"  # Invariants, constraints, verified evidence, governance
-    STATE = "STATE"                  # Execution state, attempt, stage, unresolved obligations
-    PROCEDURE = "PROCEDURE"          # Applicable skills, externalized engineering methodologies
-    MEMORY = "MEMORY"                # Distilled failure signatures, negative constraints, prior capabilities
-    TOOLS = "TOOLS"                  # Available action surfaces, schemas, contracts
-    UNCERTAINTY = "UNCERTAINTY"      # Missing facts, ungrounded requirements, declared deficits
+    STATE = "STATE"  # Execution state, attempt, stage, unresolved obligations
+    PROCEDURE = "PROCEDURE"  # Applicable skills, externalized engineering methodologies
+    MEMORY = "MEMORY"  # Distilled failure signatures, negative constraints, prior capabilities
+    TOOLS = "TOOLS"  # Available action surfaces, schemas, contracts
+    UNCERTAINTY = "UNCERTAINTY"  # Missing facts, ungrounded requirements, declared deficits
 
 
 class CompiledContext(BaseModel):
     """
     Structured, authority-preserved cognitive context emitted by ContextCompiler.
     """
+
     context_digest: str
     authoritative: Dict[str, Any] = Field(default_factory=dict)
     state: Dict[str, Any] = Field(default_factory=dict)
@@ -65,6 +67,7 @@ class ContextCompiler:
     Deterministic context compilation engine.
     Assembles minimal sufficient context without leaking unverified model outputs into fact.
     """
+
     def __init__(
         self,
         governance_rules: Optional[Dict[str, Any]] = None,
@@ -96,7 +99,9 @@ class ContextCompiler:
             authoritative["description"] = objective.description
             authoritative["desired_outcome"] = objective.desired_outcome
             authoritative["forbidden_actions"] = list(objective.forbidden_actions)
-            authoritative["verified_evidence"] = [e.model_dump() if hasattr(e, "model_dump") else e for e in objective.verified_evidence]
+            authoritative["verified_evidence"] = [
+                e.model_dump() if hasattr(e, "model_dump") else e for e in objective.verified_evidence
+            ]
         elif isinstance(objective, dict):
             authoritative["objective"] = objective.get("objective") or objective.get("intent", "")
             authoritative["constraints"] = list(objective.get("constraints", []))
@@ -115,7 +120,6 @@ class ContextCompiler:
             authoritative["governance_rules"] = self.governance_rules
         if domain_knowledge:
             authoritative["knowledge"] = domain_knowledge
-
 
         # 2. State Class (Execution status, run_id, attempt number, strike number)
         state: Dict[str, Any] = {}
@@ -149,11 +153,13 @@ class ContextCompiler:
             for entry in failure_history:
                 sig = entry.get("failure_signature") or entry.get("signature") or "UNKNOWN_SIG"
                 cls = entry.get("classification") or entry.get("failure_classification") or "UNSPECIFIED"
-                distilled_failures.append({
-                    "signature": sig,
-                    "classification": str(cls),
-                    "root_cause": entry.get("root_cause", "Unspecified error trace"),
-                })
+                distilled_failures.append(
+                    {
+                        "signature": sig,
+                        "classification": str(cls),
+                        "root_cause": entry.get("root_cause", "Unspecified error trace"),
+                    }
+                )
                 # Add negative constraint if available
                 if "negative_constraint" in entry:
                     negative_constraints.add(entry["negative_constraint"])
@@ -170,11 +176,13 @@ class ContextCompiler:
             tool_list = []
             for t in available_tools:
                 if isinstance(t, CapabilityContract):
-                    tool_list.append({
-                        "capability_id": t.capability_id,
-                        "domain": t.domain,
-                        "supported_objective_types": list(t.supported_objective_types),
-                    })
+                    tool_list.append(
+                        {
+                            "capability_id": t.capability_id,
+                            "domain": t.domain,
+                            "supported_objective_types": list(t.supported_objective_types),
+                        }
+                    )
                 else:
                     tool_list.append({"capability_id": str(t)})
             tools["available_capabilities"] = tool_list

@@ -1,16 +1,18 @@
 """Red-Team Adversary Test Suite for Slice 1: Source Custody & Research Runs."""
 
-import os
 import json
+import os
+
 import pytest
 from jsonschema.exceptions import ValidationError
-from svris.core.db import initialize_database, get_connection
+
+from svris.core.db import get_connection, initialize_database
 from svris.core.runs import (
+    InvalidRunTransitionError,
+    complete_research_run,
     create_research_run,
     ingest_and_bind_source,
     update_run_status,
-    complete_research_run,
-    InvalidRunTransitionError,
 )
 
 

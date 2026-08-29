@@ -3,7 +3,9 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn current_timestamp_rfc3339() -> String {
-    let duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default();
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default();
     let total_secs = duration.as_secs();
     let millis = duration.subsec_millis();
 
@@ -17,7 +19,11 @@ pub fn current_timestamp_rfc3339() -> String {
     let mut year = 1970;
 
     loop {
-        let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 1 } else { 0 };
+        let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+            1
+        } else {
+            0
+        };
         let days_in_year = 365 + leap;
         if days >= days_in_year {
             days -= days_in_year;
@@ -27,7 +33,11 @@ pub fn current_timestamp_rfc3339() -> String {
         }
     }
 
-    let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) { 1 } else { 0 };
+    let leap = if (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0) {
+        1
+    } else {
+        0
+    };
     let month_days = [31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let mut month = 1;
     for &md in &month_days {

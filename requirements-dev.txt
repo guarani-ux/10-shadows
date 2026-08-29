@@ -1,6 +1,4 @@
-pytest
-pydantic
-jsonschema
-yt-dlp
-youtube-transcript-api
-PyYAML
+-r requirements.txt
+pytest>=8.0.0
+pytest-cov>=5.0.0
+ruff>=0.4.0

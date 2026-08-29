@@ -6,8 +6,11 @@ while maintaining 100% backward-compatible generate(...) API.
 """
 
 from typing import Any, Callable, Dict, Optional
+
 from loop_engine.model.boundary import (
     ModelAdapter as CanonicalModelAdapter,
+)
+from loop_engine.model.boundary import (
     ModelRequest,
     ModelResponse,
 )
@@ -17,6 +20,7 @@ class ModelAdapter(CanonicalModelAdapter):
     """
     Forge ModelAdapter base class, bridging to canonical ModelAdapter.
     """
+
     @property
     def model_id(self) -> str:
         return "forge-model-base"
@@ -56,6 +60,7 @@ class MockModelAdapter(ModelAdapter):
     """
     Deterministic ModelAdapter for offline execution, unit tests, and CI/CD validation.
     """
+
     def __init__(self, default_handler: Optional[Callable[[str, Dict[str, Any]], Dict[str, Any]]] = None):
         self.default_handler = default_handler
         self.preset_responses: Dict[str, Dict[str, Any]] = {}
@@ -75,11 +80,13 @@ class MockModelAdapter(ModelAdapter):
         input_data: Dict[str, Any],
         output_schema: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        self.call_history.append({
-            "instruction": instruction,
-            "input_data": input_data,
-            "output_schema": output_schema,
-        })
+        self.call_history.append(
+            {
+                "instruction": instruction,
+                "input_data": input_data,
+                "output_schema": output_schema,
+            }
+        )
 
         # Check explicit registered response
         for key, resp in self.preset_responses.items():
@@ -96,7 +103,9 @@ class MockModelAdapter(ModelAdapter):
             return {
                 "objective": intent,
                 "deliverable": {
-                    "kind": input_data.get("requested_surface", "ANSWER") if input_data.get("requested_surface") != "AUTO" else "ANSWER",
+                    "kind": input_data.get("requested_surface", "ANSWER")
+                    if input_data.get("requested_surface") != "AUTO"
+                    else "ANSWER",
                     "description": f"Output for: {intent}",
                 },
                 "constraints": input_data.get("constraints", []),

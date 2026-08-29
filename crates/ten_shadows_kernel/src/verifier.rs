@@ -45,8 +45,10 @@ impl SubprocessVerifier {
                 let full_trace = format!("{}\n{}", stdout, stderr);
                 let exit_code = output.status.code().unwrap_or(1);
 
-                let passed_cnt = Self::extract_count(&full_trace, " passed").unwrap_or(if exit_code == 0 { 1 } else { 0 });
-                let failed_cnt = Self::extract_count(&full_trace, " failed").unwrap_or(if exit_code != 0 { 1 } else { 0 });
+                let passed_cnt = Self::extract_count(&full_trace, " passed")
+                    .unwrap_or(if exit_code == 0 { 1 } else { 0 });
+                let failed_cnt = Self::extract_count(&full_trace, " failed")
+                    .unwrap_or(if exit_code != 0 { 1 } else { 0 });
 
                 let mut hasher = Sha256::new();
                 hasher.update(format!("{}:{}", cmd_bin, full_trace).as_bytes());
@@ -74,27 +76,25 @@ impl SubprocessVerifier {
                     timestamp: current_timestamp_rfc3339(),
                 }
             }
-            Err(e) => {
-                IndependentVerificationRecord {
-                    verifier_id,
-                    verifier_type,
-                    builder_id: builder_id.to_string(),
-                    modality: EvidenceModality::DeterministicTest,
-                    purpose: EvidencePurpose::BehavioralVerification,
-                    test_digest: format!("{:x}", Sha256::digest(format!("{}", e).as_bytes())),
-                    tests_collected: 0,
-                    tests_passed: 0,
-                    tests_failed: 1,
-                    exit_code: 1,
-                    duration_seconds: (duration * 1000.0).round() / 1000.0,
-                    falsification_attempted: true,
-                    verified_status: "FAIL".into(),
-                    execution_trace: Some(format!("Subprocess execution failed: {}", e)),
-                    tested_effect: None,
-                    verifier_spec_digest: None,
-                    timestamp: current_timestamp_rfc3339(),
-                }
-            }
+            Err(e) => IndependentVerificationRecord {
+                verifier_id,
+                verifier_type,
+                builder_id: builder_id.to_string(),
+                modality: EvidenceModality::DeterministicTest,
+                purpose: EvidencePurpose::BehavioralVerification,
+                test_digest: format!("{:x}", Sha256::digest(format!("{}", e).as_bytes())),
+                tests_collected: 0,
+                tests_passed: 0,
+                tests_failed: 1,
+                exit_code: 1,
+                duration_seconds: (duration * 1000.0).round() / 1000.0,
+                falsification_attempted: true,
+                verified_status: "FAIL".into(),
+                execution_trace: Some(format!("Subprocess execution failed: {}", e)),
+                tested_effect: None,
+                verifier_spec_digest: None,
+                timestamp: current_timestamp_rfc3339(),
+            },
         }
     }
 

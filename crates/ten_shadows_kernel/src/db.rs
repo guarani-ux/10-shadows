@@ -78,13 +78,17 @@ impl KernelDb {
             updated_at: now,
         };
 
-        let mut file = OpenOptions::new().create(true).append(true).open(&self.runs_file)?;
-        let line = serde_json::to_string(&record).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.runs_file)?;
+        let line = serde_json::to_string(&record).map_err(io::Error::other)?;
         writeln!(file, "{}", line)?;
         file.sync_all()?;
         Ok(())
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn record_receipt(
         &self,
         run_id: &str,
@@ -110,8 +114,11 @@ impl KernelDb {
             created_at: now,
         };
 
-        let mut file = OpenOptions::new().create(true).append(true).open(&self.receipts_file)?;
-        let line = serde_json::to_string(&record).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.receipts_file)?;
+        let line = serde_json::to_string(&record).map_err(io::Error::other)?;
         writeln!(file, "{}", line)?;
         file.sync_all()?;
         Ok(())
@@ -120,7 +127,7 @@ impl KernelDb {
     pub fn has_run(&self, run_id: &str) -> bool {
         if let Ok(file) = File::open(&self.runs_file) {
             let reader = BufReader::new(file);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 if let Ok(record) = serde_json::from_str::<RunRecord>(&line) {
                     if record.run_id == run_id {
                         return true;
@@ -134,7 +141,7 @@ impl KernelDb {
     pub fn get_run_objective_hash(&self, run_id: &str) -> Option<String> {
         if let Ok(file) = File::open(&self.runs_file) {
             let reader = BufReader::new(file);
-            for line in reader.lines().flatten() {
+            for line in reader.lines().map_while(Result::ok) {
                 if let Ok(record) = serde_json::from_str::<RunRecord>(&line) {
                     if record.run_id == run_id {
                         return Some(record.objective_hash);

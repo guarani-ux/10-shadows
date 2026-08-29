@@ -31,16 +31,19 @@ from forge.core.substrate import (
 
 class ObjectiveInadequateError(Exception):
     """Raised when attempting to compile a graph for an inadequate CanonicalObjective."""
+
     pass
 
 
 class DecompositionIncompleteError(Exception):
     """Raised when attempting to compile a graph without 100% decomposition coverage."""
+
     pass
 
 
 class ClosureDeficitError(Exception):
     """Raised when attempting to compile a graph with open capability or evidence deficits."""
+
     pass
 
 
@@ -115,13 +118,15 @@ class ExecutionGraphCompiler:
             ev_deps[op.operation_id] = [e.evidence_id for e in op.evidence_requirements]
 
         graph_id = f"graph_{uuid.uuid4().hex[:8]}"
-        graph_hash = compute_digest({
-            "graph_id": graph_id,
-            "obj_hash": decomposition_proof.objective_hash,
-            "ops": [op.operation_id for op in operations],
-            "bindings": bindings,
-            "gates": [vc.contract_id for vc in verification_contracts],
-        })
+        graph_hash = compute_digest(
+            {
+                "graph_id": graph_id,
+                "obj_hash": decomposition_proof.objective_hash,
+                "ops": [op.operation_id for op in operations],
+                "bindings": bindings,
+                "gates": [vc.contract_id for vc in verification_contracts],
+            }
+        )
 
         return ExecutionGraph(
             graph_id=graph_id,
@@ -235,14 +240,16 @@ class ExecutionGraphCompiler:
                     "error": f"Capability verifier failed for '{cap_id}'.",
                 }
 
-            execution_trace.append({
-                "operation_id": op.operation_id,
-                "operator": op.operator.value,
-                "capability_id": cap_id,
-                "output": op_output,
-                "source_obligation_id": op.source_obligation_id,
-                "semantic_proof_id": op.semantic_proof_id,
-            })
+            execution_trace.append(
+                {
+                    "operation_id": op.operation_id,
+                    "operator": op.operator.value,
+                    "capability_id": cap_id,
+                    "output": op_output,
+                    "source_obligation_id": op.source_obligation_id,
+                    "semantic_proof_id": op.semantic_proof_id,
+                }
+            )
 
         # Run independent obligation-bound verification gates
         for gate in graph.verification_gates:

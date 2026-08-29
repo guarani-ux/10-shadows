@@ -4,15 +4,18 @@ import hashlib
 import json
 import os
 from datetime import datetime, timezone
-from typing import Tuple, List, Dict, Any
+from typing import Any, Dict, List, Tuple
+
 from jsonschema import validate
+
+from svris.core.custody import create_source_chunks, create_source_snapshot
 from svris.core.db import get_connection
-from svris.core.custody import create_source_snapshot, create_source_chunks
 from svris.core.source_normalizer import normalize_url
 
 
 class InvalidRunTransitionError(Exception):
     """Raised when an illegal status transition is attempted on a research run."""
+
     pass
 
 

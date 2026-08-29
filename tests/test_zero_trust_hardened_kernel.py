@@ -25,34 +25,33 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
 import pytest
 
+from loop_engine.governor import GovernorEngine
 from loop_engine.kernel_db import (
-    KernelDatabase,
-    ProposalAlreadySealedError,
     IllegalStateTransitionError,
-    ReceiptNotFoundError,
-    ReceiptMismatchError,
+    KernelDatabase,
     PrivilegedStateMutationProhibitedError,
+    ProposalAlreadySealedError,
+    ReceiptMismatchError,
+    ReceiptNotFoundError,
 )
-
+from loop_engine.promoter import PromotionCoordinator
+from loop_engine.quarantine import PathTraversalEscapeError, QuarantineManager
 from loop_engine.schema import (
-    State,
     FailureClassification,
     ProposalManifest,
+    State,
     VerificationReceipt,
+    compute_env_fingerprint,
+    compute_failure_signature,
     compute_spec_hash,
     compute_test_digest,
     compute_tree_hash,
-    compute_env_fingerprint,
-    compute_failure_signature,
 )
 from loop_engine.verifier_gate import PhysicalVerifierGate
-from loop_engine.promoter import PromotionCoordinator
-from loop_engine.quarantine import QuarantineManager, PathTraversalEscapeError
-from loop_engine.governor import GovernorEngine
-from zero_trust_engine.auditor import PlanAuditor, AuditResult
-
+from zero_trust_engine.auditor import AuditResult, PlanAuditor
 
 
 @pytest.fixture
@@ -144,7 +143,6 @@ def test_illegal_state_transition_raises(clean_kernel_harness):
         db.transition_proposal_state("TASK-STATE-001", State.CANDIDATE_SEALED, State.PROMOTED)
 
 
-
 # Test 4: Fixture directory deletion/mutation blocked
 def test_fixture_directory_deletion_blocked(clean_kernel_harness):
     repo_dir = clean_kernel_harness["repo_dir"]
@@ -153,16 +151,27 @@ def test_fixture_directory_deletion_blocked(clean_kernel_harness):
     verifier_gate = clean_kernel_harness["verifier_gate"]
 
     task_id = "TASK-MUTATE-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_mutate"
-    subprocess.run(["git", "worktree", "add", "-b", "mutate-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "mutate-branch", str(wt), "HEAD"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "fix"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -189,17 +198,28 @@ def test_candidate_pytest_shadowing_blocked(clean_kernel_harness):
     verifier_gate = clean_kernel_harness["verifier_gate"]
 
     task_id = "TASK-SHADOW-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_shadow"
-    subprocess.run(["git", "worktree", "add", "-b", "shadow-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "shadow-branch", str(wt), "HEAD"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
     # Attacker places fake pytest.py in candidate root
     (wt / "pytest.py").write_text("import sys\nsys.exit(0)\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "shadow pytest"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -226,22 +246,32 @@ def test_zero_tests_collected_rejected(clean_kernel_harness):
     verifier_gate = clean_kernel_harness["verifier_gate"]
 
     task_id = "TASK-ZERO-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     # Create empty test fixture and commit to main
     (fixtures_dir / "test_empty.py").write_text("# empty test file\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=repo_dir, check=True)
     subprocess.run(["git", "commit", "-m", "add empty test fixture"], cwd=repo_dir, check=True)
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_zero"
-    subprocess.run(["git", "worktree", "add", "-b", "zero-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "zero-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "zero tests"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -269,16 +299,24 @@ def test_dirty_or_stale_target_branch_blocked(clean_kernel_harness):
     promoter = clean_kernel_harness["promoter"]
 
     task_id = "TASK-DIRTY-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_dirty"
-    subprocess.run(["git", "worktree", "add", "-b", "dirty-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "dirty-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "app.py"], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "clean candidate"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -314,16 +352,24 @@ def test_target_movement_after_verification_aborts(clean_kernel_harness):
     promoter = clean_kernel_harness["promoter"]
 
     task_id = "TASK-MOVE-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_move"
-    subprocess.run(["git", "worktree", "add", "-b", "move-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "move-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "app.py"], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "candidate v2"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -357,16 +403,24 @@ def test_crash_at_every_promotion_boundary(clean_kernel_harness):
     promoter = clean_kernel_harness["promoter"]
 
     task_id = "TASK-RECON-001"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_recon"
-    subprocess.run(["git", "worktree", "add", "-b", "recon-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "recon-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "app.py"], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "candidate v2"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
-    cand_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
+    cand_tree = subprocess.run(
+        ["git", "rev-parse", "HEAD^{tree}"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     manifest = ProposalManifest(
         task_id=task_id,
@@ -418,7 +472,6 @@ def test_concurrent_promotion_attempts_blocked(clean_kernel_harness):
         db._raw_transition_proposal_state("TASK-CONCUR-001", State.VERIFIED, State.PROMOTION_PENDING)
 
 
-
 # Test 11: Unreadable or changed hashed file rejected
 def test_unreadable_or_changed_hashed_file(clean_kernel_harness):
     repo_dir = clean_kernel_harness["repo_dir"]
@@ -427,15 +480,24 @@ def test_unreadable_or_changed_hashed_file(clean_kernel_harness):
     verifier_gate = clean_kernel_harness["verifier_gate"]
 
     task_id = "TASK-TAMPER-TREE"
-    base_commit = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True).stdout.strip()
+    base_commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo_dir, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     wt = clean_kernel_harness["tmp_path"] / "wt_tamper_tree"
-    subprocess.run(["git", "worktree", "add", "-b", "tamper-tree-branch", str(wt), "HEAD"], cwd=repo_dir, check=True, capture_output=True)
+    subprocess.run(
+        ["git", "worktree", "add", "-b", "tamper-tree-branch", str(wt), "HEAD"],
+        cwd=repo_dir,
+        check=True,
+        capture_output=True,
+    )
     (wt / "app.py").write_text("def run(): return 'v2.0'\n", encoding="utf-8")
     subprocess.run(["git", "add", "."], cwd=wt, check=True)
     subprocess.run(["git", "commit", "-m", "commit 1"], cwd=wt, check=True)
 
-    cand_sha = subprocess.run(["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True).stdout.strip()
+    cand_sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=wt, capture_output=True, text=True, check=True
+    ).stdout.strip()
 
     # Create manifest with fake tree SHA
     manifest = ProposalManifest(
@@ -510,11 +572,11 @@ def test_duplicate_persistence_authority_prohibited(clean_kernel_harness):
 
 # Test 15: Real CanonicalObjective -> Scribe -> Herald -> Slicer route executed with artifact lineage & receipt persistence
 def test_real_route_artifact_lineage_and_consumption(clean_kernel_harness):
-    from loop_engine.router import BoundedShadowRouter
+    from loop_engine.artifacts import ArtifactRegistry
     from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference
     from loop_engine.context import RunContext
-    from loop_engine.artifacts import ArtifactRegistry
     from loop_engine.governor import StepGovernor
+    from loop_engine.router import BoundedShadowRouter
 
     db = clean_kernel_harness["db"]
     repo_dir = clean_kernel_harness["repo_dir"]

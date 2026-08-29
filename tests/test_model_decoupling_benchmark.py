@@ -5,6 +5,7 @@ Includes rigorous physical verification acceptance tests (A through P) for model
 """
 
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple, Union
+
 import pytest
 
 from loop_engine.epistemic import EpistemicDisposition
@@ -38,6 +39,7 @@ from loop_engine.transition import PrivilegedTransitionEngine, TransitionRejecti
 
 class FalseSuccessAdapter(ModelAdapter):
     """Adapter that emits fake status tokens and invalid code."""
+
     @property
     def model_id(self) -> str:
         return "false-success-mock"
@@ -58,6 +60,7 @@ class FalseSuccessAdapter(ModelAdapter):
 
 class CorruptedCandidateAdapter(ModelAdapter):
     """Adapter that emits structurally altered code while claiming SUCCESS."""
+
     @property
     def model_id(self) -> str:
         return "corrupted-candidate-mock"
@@ -81,6 +84,7 @@ class KnowledgeModelTestAdapter(ModelAdapter):
     Test model adapter for evaluating knowledge tasks in unit tests.
     Does not pollute production ModelAdapter with domain-specific logic.
     """
+
     def __init__(
         self,
         model_id: str = "test-knowledge-model",
@@ -508,7 +512,9 @@ def test_acceptance_l_comparative_benchmark_demonstrates_low_model_elasticity():
     weak_model = KnowledgeModelTestAdapter(model_id="weak-v1", is_strong=False)
 
     runner = BenchmarkRunner()
-    result = runner.run_comparative_benchmark(strong_model, weak_model, corpus=create_canonical_benchmark_corpus(seed=42))
+    result = runner.run_comparative_benchmark(
+        strong_model, weak_model, corpus=create_canonical_benchmark_corpus(seed=42)
+    )
 
     # 1. Verify Naked Performance Gap exists on qualified tasks
     assert result.naked_score_a == 1.0
@@ -737,7 +743,10 @@ def test_acceptance_p_validated_response_bound_provider_receipt_produces_qualifi
                 "    return round(val, 4)\n"
             )
             candidate_payload = {"status": "SUCCESS", "code": code}
-            raw_response = {"responseId": "resp_live_google_123", "candidates": [{"content": {"parts": [{"text": code}]}}]}
+            raw_response = {
+                "responseId": "resp_live_google_123",
+                "candidates": [{"content": {"parts": [{"text": code}]}}],
+            }
             payload_digest = compute_provider_payload_digest(
                 candidate_payload=candidate_payload,
                 raw_response=raw_response,

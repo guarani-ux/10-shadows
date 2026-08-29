@@ -2,7 +2,8 @@
 
 import hashlib
 from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from svris.core.db import get_connection
 
 

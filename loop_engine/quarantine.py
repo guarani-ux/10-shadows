@@ -17,6 +17,7 @@ from loop_engine.schema import FailureClassification, QuarantineRecord, Verifica
 
 class PathTraversalEscapeError(Exception):
     """Raised when a candidate or quarantine path attempts a path traversal or symlink escape."""
+
     pass
 
 
@@ -80,7 +81,9 @@ class QuarantineManager:
                 "candidate_commit_sha": receipt.candidate_commit_sha,
                 "candidate_tree_sha": receipt.candidate_tree_sha,
                 "physical_tree_hash": receipt.physical_tree_hash,
-                "failure_classification": receipt.failure_classification.value if receipt.failure_classification else None,
+                "failure_classification": receipt.failure_classification.value
+                if receipt.failure_classification
+                else None,
                 "failure_signature": failure_signature,
                 "execution_trace": receipt.execution_trace or "",
                 "timestamp": timestamp,

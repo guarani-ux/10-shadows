@@ -50,7 +50,7 @@ def install_hooks() -> bool:
         return False
 
     PRE_COMMIT_HOOK_PATH.write_text(HOOK_SHELL_SCRIPT, encoding="utf-8", newline="\n")
-    
+
     # Make executable on Unix/Mac
     try:
         current_stat = os.stat(PRE_COMMIT_HOOK_PATH)

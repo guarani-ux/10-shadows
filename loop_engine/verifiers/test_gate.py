@@ -11,6 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 class SubprocessGateError(Exception):
     """Raised when subprocess execution harness encounters an unrecoverable error."""
+
     pass
 
 
@@ -61,7 +62,7 @@ def run_isolated_pytest(
         exit_code = proc.returncode
         stdout = proc.stdout
         stderr = proc.stderr
-        passed = (exit_code == 0)
+        passed = exit_code == 0
 
         return {
             "status": "PASS" if passed else "FAIL",

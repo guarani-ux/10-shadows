@@ -1,12 +1,13 @@
 import json
 from typing import Any, Dict, List, Optional
+
 from loop_engine.scribe.memory_store import ScribeMemoryStore
 
 
 class ScribePatternMiner:
     """
     Shadow 6 Pattern & Anomaly Synthesis Engine.
-    
+
     Cross-references multi-video corpora to identify:
     1. Hook Velocity Distributions (e.g. fastest vs. slowest intro hooks).
     2. Common Blindspots across channels (e.g. recurring visual-only gaps).

@@ -1,4 +1,5 @@
 import pytest
+
 from loop_engine.alchemist.trace_parser import CrashTraceParser
 
 

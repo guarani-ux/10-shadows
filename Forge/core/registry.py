@@ -9,10 +9,10 @@ NON_AUTHORITATIVE_TEST_DOUBLE and forbidden from satisfying production closure.
 """
 
 import hashlib
-from pathlib import Path
 import re
 import tempfile
 import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from forge.adapters.actions import SandboxFileAdapter
@@ -131,7 +131,9 @@ class CapabilityRegistry:
         }
 
         def _sort_key(c: CapabilityManifest) -> Tuple[int, int, int, str]:
-            effect_match = 1 if (required_effect_type and c.provenance.get("effect_type") == required_effect_type) else 0
+            effect_match = (
+                1 if (required_effect_type and c.provenance.get("effect_type") == required_effect_type) else 0
+            )
             lifecycle_rank = lifecycle_ranks.get(c.lifecycle_state, -10)
             verifier_rank = 1 if c.verifier is not None else 0
             # Tie-break: reverse lexicographical capability_id for stable determinism
@@ -150,7 +152,10 @@ class CapabilityRegistry:
 
     def promote_capability(self, capability_id: str) -> bool:
         cap = self.get_capability(capability_id)
-        if cap and cap.lifecycle_state in (CapabilityLifecycleState.REUSE_VERIFIED, CapabilityLifecycleState.VERIFIED_FOR_TASK):
+        if cap and cap.lifecycle_state in (
+            CapabilityLifecycleState.REUSE_VERIFIED,
+            CapabilityLifecycleState.VERIFIED_FOR_TASK,
+        ):
             cap.lifecycle_state = CapabilityLifecycleState.PROMOTED
             return True
         return False
@@ -167,14 +172,16 @@ class CapabilityRegistry:
             # Check for direct conflicts
             for i, c1 in enumerate(claim_list):
                 t1 = c1.get("claim_text", "") or c1.get("claim", "")
-                for j, c2 in enumerate(claim_list[i + 1:], start=i + 1):
+                for j, c2 in enumerate(claim_list[i + 1 :], start=i + 1):
                     t2 = c2.get("claim_text", "") or c2.get("claim", "")
                     if ("5ms" in t1 and "50ms" in t2) or ("not" in t1 and t1.replace("not", "").strip() in t2):
-                        contradictions.append({
-                            "claim_a": t1,
-                            "claim_b": t2,
-                            "conflict": "DIRECT_NUMERIC_OR_POLARITY_CONTRADICTION",
-                        })
+                        contradictions.append(
+                            {
+                                "claim_a": t1,
+                                "claim_b": t2,
+                                "conflict": "DIRECT_NUMERIC_OR_POLARITY_CONTRADICTION",
+                            }
+                        )
             return {
                 "contradictions": contradictions,
                 "has_conflict": len(contradictions) > 0,
@@ -410,7 +417,13 @@ class CapabilityRegistry:
         # ---------------------------------------------------------------------
         # 8. Forge Deterministic Mathematical Calculator (CALCULATE)
         # ---------------------------------------------------------------------
-        def _physical_math_calc_adapter(force: Optional[float] = None, area: Optional[float] = None, a: Optional[float] = None, b: Optional[float] = None, **kwargs) -> Dict[str, Any]:
+        def _physical_math_calc_adapter(
+            force: Optional[float] = None,
+            area: Optional[float] = None,
+            a: Optional[float] = None,
+            b: Optional[float] = None,
+            **kwargs,
+        ) -> Dict[str, Any]:
             f = force if force is not None else a
             ar = area if area is not None else b
             if f is not None and ar is not None and ar != 0:

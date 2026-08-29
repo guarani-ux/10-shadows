@@ -4,12 +4,15 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
 from loop_engine.base import PROJECT_ROOT
 
 
 class ShadowDomainState(BaseModel):
     """Real-time physical state of an individual domain shadow."""
+
     shadow_id: int = Field(ge=1, le=10)
     name: str
     code_name: str
@@ -22,6 +25,7 @@ class ShadowDomainState(BaseModel):
 
 class SystemTelemetryHUD(BaseModel):
     """Master operating system projection computed purely from physical ground truth."""
+
     system_name: str = "10 SHADOWS"
     runtime_version: str = "3.0.0-SOVEREIGN"
     git_branch: str
@@ -36,7 +40,7 @@ class SystemTelemetryHUD(BaseModel):
 class SovereignStateProjector:
     """
     Shadow 10 (The Game Master) Telemetry & HUD Engine.
-    
+
     Dynamically inspects Git repository, physical filesystems, test directories,
     and SQLite WAL receipt databases to project real-time system status.
     Zero hardcoded values.
@@ -110,7 +114,9 @@ class SovereignStateProjector:
             status_rows = conn.execute("SELECT status, COUNT(*) FROM receipts GROUP BY status").fetchall()
             by_status = {status: count for status, count in status_rows}
 
-            shadow_rows = conn.execute("SELECT shadow_id, domain_code, COUNT(*) FROM receipts GROUP BY shadow_id, domain_code").fetchall()
+            shadow_rows = conn.execute(
+                "SELECT shadow_id, domain_code, COUNT(*) FROM receipts GROUP BY shadow_id, domain_code"
+            ).fetchall()
             by_shadow: Dict[int, int] = {}
             by_code: Dict[str, int] = {}
             for s_id, d_code, count in shadow_rows:
@@ -142,9 +148,10 @@ class SovereignStateProjector:
             has_module = any((self.root_dir / p).exists() for p in expected_paths)
             runner_file = self.root_dir / "loop_engine" / "runners" / f"{code_name}_runner.py"
             has_runner = runner_file.exists() or (s_id in [5, 8, 10] and has_module)
-            
+
             domain_tests = [
-                f for f in all_test_files
+                f
+                for f in all_test_files
                 if code_name in f.name.lower() or name.lower().replace("the ", "") in f.name.lower()
             ]
 

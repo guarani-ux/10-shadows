@@ -17,6 +17,7 @@ Tests Mission J Requirements (Tests 1 through 12):
 12. Real Governed Software Mutation
 Plus Positive E2E and Negative Control Tests.
 """
+
 from __future__ import annotations
 
 import json
@@ -30,25 +31,25 @@ from pathlib import Path
 
 import pytest
 
+from loop_engine.epistemic import SemanticLaunderingError
 from loop_engine.execution_authority import (
-    TenShadowsKernel,
-    TenShadowsReceipt,
-    RunStatus,
-    RoutingStrategy,
-    WorkerRole,
+    DisaggregatedEpistemicClaims,
     EvidenceModality,
     EvidencePurpose,
-    VerificationType,
-    ProviderExecutionReceipt,
-    WorkerInvocationRecord,
-    IndependentVerificationRecord,
     ExecutionAttemptRecord,
-    DisaggregatedEpistemicClaims,
+    IndependentVerificationRecord,
+    ProviderExecutionReceipt,
+    RoutingStrategy,
+    RunStatus,
+    TenShadowsKernel,
+    TenShadowsReceipt,
+    VerificationType,
+    WorkerInvocationRecord,
+    WorkerRole,
     assert_evidence_monotonicity,
     is_ten_shadows_execution,
     verify_execution_receipt,
 )
-from loop_engine.epistemic import SemanticLaunderingError
 from loop_engine.kernel_db import KernelDatabase
 
 
@@ -103,6 +104,7 @@ def disposable_git_repo(tmp_path):
 # ===========================================================================
 # Mission J: Adversarial Regression Tests (1 through 12)
 # ===========================================================================
+
 
 class TestMissionJAdversarialSuite:
     def test_01_false_ten_shadows_invocation(self, temp_kernel, tmp_path):
@@ -349,13 +351,18 @@ class TestMissionJAdversarialSuite:
 
     def test_12_real_governed_software_mutation(self, temp_kernel, disposable_git_repo):
         """12. Real governed mutation on a disposable Git repository fixture -> starting HEAD != final HEAD."""
-        starting_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(disposable_git_repo), text=True).strip()
+        starting_head = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=str(disposable_git_repo), text=True
+        ).strip()
 
         def builder_mutator(ctx, path):
             calc_file = path / "src" / "calc.py"
             calc_file.write_text("def compute(): return 10\ndef add(a, b): return a + b\n", encoding="utf-8")
             test_file = path / "tests" / "test_calc.py"
-            test_file.write_text("from src.calc import compute, add\ndef test_compute(): assert compute() == 10\ndef test_add(): assert add(2, 3) == 5\n", encoding="utf-8")
+            test_file.write_text(
+                "from src.calc import compute, add\ndef test_compute(): assert compute() == 10\ndef test_add(): assert add(2, 3) == 5\n",
+                encoding="utf-8",
+            )
             subprocess.run(["git", "add", "."], cwd=str(path), check=True)
             subprocess.run(["git", "commit", "-m", "feat: add add helper"], cwd=str(path), check=True)
             return [{"file": str(calc_file), "status": "MODIFIED"}]
@@ -379,6 +386,7 @@ class TestMissionJAdversarialSuite:
 # Mission L & M: Positive Acceptance Test & Negative Control
 # ===========================================================================
 
+
 class TestAcceptanceAndNegativeControl:
     def test_positive_e2e_acceptance_flow(self, temp_kernel, disposable_git_repo):
         """Mission L: Positive End-to-End Acceptance Test on disposable Git fixture."""
@@ -388,9 +396,14 @@ class TestAcceptanceAndNegativeControl:
             app_file = path / "src" / "calc.py"
             app_file.write_text("def compute(): return 10\ndef is_safe(): return True\n", encoding="utf-8")
             test_file = path / "tests" / "test_calc.py"
-            test_file.write_text("from src.calc import compute, is_safe\ndef test_compute(): assert compute() == 10\ndef test_safe(): assert is_safe() is True\n", encoding="utf-8")
+            test_file.write_text(
+                "from src.calc import compute, is_safe\ndef test_compute(): assert compute() == 10\ndef test_safe(): assert is_safe() is True\n",
+                encoding="utf-8",
+            )
             subprocess.run(["git", "add", "."], cwd=str(path), check=True)
-            subprocess.run(["git", "commit", "-m", "feat(hardening): apply zero trust checks"], cwd=str(path), check=True)
+            subprocess.run(
+                ["git", "commit", "-m", "feat(hardening): apply zero trust checks"], cwd=str(path), check=True
+            )
             return [{"path": str(app_file), "action": "HARDENED"}]
 
         receipt = temp_kernel.run_objective(
@@ -412,9 +425,15 @@ class TestAcceptanceAndNegativeControl:
         """Mission M: Negative control reproducing fake prompt-only run outside kernel."""
         # 1. External actor mutates repository directly
         (disposable_git_repo / "src" / "calc.py").write_text("def compute(): return 99\n", encoding="utf-8")
-        (disposable_git_repo / "tests" / "test_calc.py").write_text("from src.calc import compute\ndef test_compute(): assert compute() == 99\n", encoding="utf-8")
+        (disposable_git_repo / "tests" / "test_calc.py").write_text(
+            "from src.calc import compute\ndef test_compute(): assert compute() == 99\n", encoding="utf-8"
+        )
         subprocess.run(["git", "add", "."], cwd=str(disposable_git_repo), check=True)
-        subprocess.run(["git", "commit", "-m", "feat(hardening): apply 10 shadows zero-trust in prompt"], cwd=str(disposable_git_repo), check=True)
+        subprocess.run(
+            ["git", "commit", "-m", "feat(hardening): apply 10 shadows zero-trust in prompt"],
+            cwd=str(disposable_git_repo),
+            check=True,
+        )
 
         # 2. External actor fabricates a receipt file
         fake_receipt = tmp_path / "external_model_receipt.json"

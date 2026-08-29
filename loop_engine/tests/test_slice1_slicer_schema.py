@@ -1,5 +1,6 @@
 import pytest
-from loop_engine.slicer.schema import VerticalSliceTask, SliceDAG
+
+from loop_engine.slicer.schema import SliceDAG, VerticalSliceTask
 
 
 def test_slice_dag_topological_sort():

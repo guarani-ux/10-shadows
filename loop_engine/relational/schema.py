@@ -11,29 +11,31 @@ Enforces:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 class EpistemicStatus(str, Enum):
     """Epistemic status of relational nodes and edges."""
-    PROPOSED = "PROPOSED"            # Model/worker proposal (hypothetical)
-    INFERRED = "INFERRED"            # Inferred via heuristics or similarity
-    OBSERVED = "OBSERVED"            # Directly observed physical event/artifact
-    VERIFIED = "VERIFIED"            # Verified by independent test or oracle
-    QUALIFIED = "QUALIFIED"          # Independently qualified for execution
+
+    PROPOSED = "PROPOSED"  # Model/worker proposal (hypothetical)
+    INFERRED = "INFERRED"  # Inferred via heuristics or similarity
+    OBSERVED = "OBSERVED"  # Directly observed physical event/artifact
+    VERIFIED = "VERIFIED"  # Verified by independent test or oracle
+    QUALIFIED = "QUALIFIED"  # Independently qualified for execution
     AUTHORITATIVE = "AUTHORITATIVE"  # Certified by Kernel authority
-    CONTESTED = "CONTESTED"          # Under active adversarial challenge
-    SUPERSEDED = "SUPERSEDED"        # Replaced by newer qualified version
-    INVALIDATED = "INVALIDATED"      # Falsified or downgraded (JTMS retracted)
+    CONTESTED = "CONTESTED"  # Under active adversarial challenge
+    SUPERSEDED = "SUPERSEDED"  # Replaced by newer qualified version
+    INVALIDATED = "INVALIDATED"  # Falsified or downgraded (JTMS retracted)
 
 
 class NodeType(str, Enum):
     """Categorization of relational graph nodes."""
+
     OBJECTIVE = "OBJECTIVE"
     SUBPROBLEM = "SUBPROBLEM"
     REQUIREMENT = "REQUIREMENT"
@@ -54,6 +56,7 @@ class NodeType(str, Enum):
 
 class RelationType(str, Enum):
     """Categorization of relational graph edges."""
+
     # Dependency / Decomposition
     REQUIRES = "REQUIRES"
     BLOCKS = "BLOCKS"
@@ -89,6 +92,7 @@ class RelationalNode:
     Typed, immutable relational graph node representing a problem entity,
     capability, artifact, or claim.
     """
+
     node_id: str
     node_type: NodeType
     label: str
@@ -126,6 +130,7 @@ class RelationalEdge:
     Typed, immutable directed relational graph edge with explicit epistemic
     status, evidence modality, and confidence score.
     """
+
     edge_id: str
     source_id: str
     target_id: str

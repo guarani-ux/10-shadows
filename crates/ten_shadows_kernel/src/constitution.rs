@@ -110,7 +110,13 @@ impl ObjectiveContract {
                 unresolved_mandatory.push("INSUFFICIENT_REQUIREMENTS_EMPTY_SET".to_string());
             }
             let mut hasher = Sha256::new();
-            hasher.update(format!("{}:{:?}:false:empty_obligations", self.objective_id, self.sufficiency_rule).as_bytes());
+            hasher.update(
+                format!(
+                    "{}:{:?}:false:empty_obligations",
+                    self.objective_id, self.sufficiency_rule
+                )
+                .as_bytes(),
+            );
             let proof_digest = format!("{:x}", hasher.finalize());
 
             return ObjectiveSufficiencyProof {
@@ -160,7 +166,13 @@ impl ObjectiveContract {
         };
 
         let mut hasher = Sha256::new();
-        hasher.update(format!("{}:{:?}:{}", self.objective_id, self.sufficiency_rule, is_sufficient).as_bytes());
+        hasher.update(
+            format!(
+                "{}:{:?}:{}",
+                self.objective_id, self.sufficiency_rule, is_sufficient
+            )
+            .as_bytes(),
+        );
         let proof_digest = format!("{:x}", hasher.finalize());
 
         ObjectiveSufficiencyProof {
@@ -201,9 +213,14 @@ impl EvidenceEntailment {
     ) -> Self {
         // Strict Entailment Check: Tested effect must match required effect and evidence digest must be valid
         let is_applicable = !evidence_digest.trim().is_empty()
-            && tested_effect.trim().eq_ignore_ascii_case(&obligation.required_effect.trim());
+            && tested_effect
+                .trim()
+                .eq_ignore_ascii_case(obligation.required_effect.trim());
         let justification = if is_applicable {
-            format!("Evidence '{}' directly tests required effect '{}'", evidence_digest, obligation.required_effect)
+            format!(
+                "Evidence '{}' directly tests required effect '{}'",
+                evidence_digest, obligation.required_effect
+            )
         } else {
             format!("Irrelevant Evidence: Tested effect '{}' does not fulfill required obligation effect '{}'", tested_effect, obligation.required_effect)
         };

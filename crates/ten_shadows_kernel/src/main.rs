@@ -118,7 +118,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("  Requested Model:    {}", requested_model);
 
             // Step 2: Record Run Creation in Journal DB
-            let start_commit_str = starting_head.clone().unwrap_or_else(|| "UNKNOWN_NON_GIT".into());
+            let start_commit_str = starting_head
+                .clone()
+                .unwrap_or_else(|| "UNKNOWN_NON_GIT".into());
             db.record_run_created(&run_id, &task_id_str, &obj_hash, &start_commit_str)?;
 
             // Step 3: Capture Baseline (Typestate: BaselineCaptured)
@@ -126,12 +128,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Step 4: Workspace Preparation (Typestate: WorkspaceReady)
             let (run_ws, eval_path) = if is_mutation_run && starting_head.is_some() {
-                println!("[KERNEL] Spawning isolated GovernedWorkspace from baseline {}...", starting_head.as_ref().unwrap());
+                let head = starting_head.as_deref().unwrap_or("UNKNOWN");
+                println!(
+                    "[KERNEL] Spawning isolated GovernedWorkspace from baseline {}...",
+                    head
+                );
                 let ws_run = run_baseline.prepare_governed_workspace(None)?;
-                let p = ws_run.workspace_path.clone().unwrap();
+                let p = ws_run
+                    .workspace_path
+                    .clone()
+                    .unwrap_or_else(|| target_canonical.clone());
                 (ws_run, p)
             } else {
-                println!("[KERNEL] Mounting read-only audit workspace for target {}...", target_canonical.display());
+                println!(
+                    "[KERNEL] Mounting read-only audit workspace for target {}...",
+                    target_canonical.display()
+                );
                 let ws_run = run_baseline.prepare_audit_workspace(&target_canonical);
                 (ws_run, target_canonical.clone())
             };
@@ -146,18 +158,33 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // Step 6: Dispatch Worker & Record Candidate (Typestate: CandidateProduced)
             let run_cand = if is_mutation_run {
-                println!("[KERNEL] Dispatching Worker '{}' via Language-Neutral Dispatcher...", worker_id);
+                println!(
+                    "[KERNEL] Dispatching Worker '{}' via Language-Neutral Dispatcher...",
+                    worker_id
+                );
                 println!("  Target Provider: {}", requested_provider);
                 println!("  Target Model:    {}", requested_model);
-                run_auth.dispatch_and_produce_candidate(&requested_provider, &requested_model, None)?
+                run_auth.dispatch_and_produce_candidate(
+                    &requested_provider,
+                    &requested_model,
+                    None,
+                )?
             } else {
                 let current_head = resolve_git_head(&eval_path);
-                let cand_sha = current_head.clone().unwrap_or_else(|| "UNTRACKED_WORKSPACE".into());
-                run_auth.record_external_candidate(&cand_sha, "Baseline audit execution (zero mutations)")
+                let cand_sha = current_head
+                    .clone()
+                    .unwrap_or_else(|| "UNTRACKED_WORKSPACE".into());
+                run_auth.record_external_candidate(
+                    &cand_sha,
+                    "Baseline audit execution (zero mutations)",
+                )
             };
 
             // Step 7: Independent Verification Subprocess (Typestate: Verified)
-            println!("\n[KERNEL] Executing Independent Verification Subprocess on {}...", eval_path.display());
+            println!(
+                "\n[KERNEL] Executing Independent Verification Subprocess on {}...",
+                eval_path.display()
+            );
             let verification_rec = SubprocessVerifier::execute(
                 &eval_path,
                 &task_id_str,
@@ -167,7 +194,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             );
 
             println!("  Verifier ID:        {}", verification_rec.verifier_id);
-            println!("  Tests Passed:       {}/{}", verification_rec.tests_passed, verification_rec.tests_collected);
+            println!(
+                "  Tests Passed:       {}/{}",
+                verification_rec.tests_passed, verification_rec.tests_collected
+            );
             println!("  Exit Code:          {}", verification_rec.exit_code);
             println!("  Status:             {}", verification_rec.verified_status);
 
@@ -203,7 +233,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("\n[PREDICATE EVALUATION]");
             println!("  Execution Valid:     {}", report.is_execution_valid);
             println!("  Production Valid:    {}", report.is_production_valid);
-            println!("  Objective Satisfied: {}", report.is_objective_accomplished);
+            println!(
+                "  Objective Satisfied: {}",
+                report.is_objective_accomplished
+            );
         }
 
         "verify-receipt" if args.len() >= 3 => {
@@ -242,7 +275,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if report.is_production_valid {
                 println!("\n[VERIFICATION PASSED] Candidate was ACTUALLY produced under Ten Shadows custody.");
             } else {
-                println!("\n[VERIFICATION FAILED] Candidate was NOT produced under Ten Shadows custody:");
+                println!(
+                    "\n[VERIFICATION FAILED] Candidate was NOT produced under Ten Shadows custody:"
+                );
                 for err in report.errors {
                     println!("  - {}", err);
                 }

@@ -26,10 +26,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from loop_engine.execution_authority import (
-    TenShadowsKernel,
     RunStatus,
-    verify_execution_receipt,
+    TenShadowsKernel,
     is_ten_shadows_execution,
+    verify_execution_receipt,
 )
 from loop_engine.kernel_db import KernelDatabase
 
@@ -45,7 +45,7 @@ def find_ts_binary() -> Optional[Path]:
     for p in possible_paths:
         if p.exists() and p.is_file():
             return p
-    
+
     # Check PATH
     which_ts = shutil.which("ts")
     if which_ts:
@@ -115,7 +115,7 @@ def handle_run(
         return proc.returncode
 
     # 3. Fallback to Python Kernel Implementation
-    print(f"\n[KERNEL] Initializing Ten Shadows Python Kernel...", flush=True)
+    print("\n[KERNEL] Initializing Ten Shadows Python Kernel...", flush=True)
     print(f"  Target:    {target_path}", flush=True)
     print(f"  Objective: {objective_str[:80]}...", flush=True)
 
@@ -136,7 +136,10 @@ def handle_run(
     print(f"Capabilities:   {', '.join(receipt.capabilities_selected)}", flush=True)
     print(f"Workers:        {len(receipt.worker_invocations)}", flush=True)
     if receipt.verification:
-        print(f"Tests Passed:   {receipt.verification.tests_passed}/{receipt.verification.tests_collected} (Exit {receipt.verification.exit_code})", flush=True)
+        print(
+            f"Tests Passed:   {receipt.verification.tests_passed}/{receipt.verification.tests_collected} (Exit {receipt.verification.exit_code})",
+            flush=True,
+        )
     print(f"Signature:      {receipt.receipt_signature[:16]}...", flush=True)
     print(f"Receipt File:   .receipts/{receipt.run_id}_receipt.json\n", flush=True)
 
@@ -190,8 +193,12 @@ def handle_status() -> int:
 
     kernel_db = KernelDatabase()
     with kernel_db.get_connection() as conn:
-        runs = conn.execute("SELECT run_id, task_id, status, started_at FROM runs ORDER BY rowid DESC LIMIT 10").fetchall()
-        receipts = conn.execute("SELECT id, run_id, task_id, status, created_at FROM receipts ORDER BY id DESC LIMIT 5").fetchall()
+        runs = conn.execute(
+            "SELECT run_id, task_id, status, started_at FROM runs ORDER BY rowid DESC LIMIT 10"
+        ).fetchall()
+        receipts = conn.execute(
+            "SELECT id, run_id, task_id, status, created_at FROM receipts ORDER BY id DESC LIMIT 5"
+        ).fetchall()
 
     print(f"Recent Runs ({len(runs)}):", flush=True)
     for r in runs:
@@ -213,8 +220,16 @@ def main() -> int:
     run_parser = subparsers.add_parser("run", help="Execute an objective under Ten Shadows kernel authority")
     run_parser.add_argument("--target", "-t", type=str, help="Target repository or working directory")
     run_parser.add_argument("--objective", "-o", type=str, help="Goal or objective statement")
-    run_parser.add_argument("--mutate", "-m", action="store_true", help="Authorize governed workspace mutations and promotion")
-    run_parser.add_argument("--provider", "-p", type=str, default="deterministic", help="Model/worker provider (deterministic, gemini, shadow:forge, shadow:alchemist, shadow:svris)")
+    run_parser.add_argument(
+        "--mutate", "-m", action="store_true", help="Authorize governed workspace mutations and promotion"
+    )
+    run_parser.add_argument(
+        "--provider",
+        "-p",
+        type=str,
+        default="deterministic",
+        help="Model/worker provider (deterministic, gemini, shadow:forge, shadow:alchemist, shadow:svris)",
+    )
     run_parser.add_argument("--model", type=str, default="deterministic-v1", help="Requested model ID")
     run_parser.add_argument("--strategy", "-s", type=str, help="Routing strategy override")
 

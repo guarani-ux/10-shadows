@@ -8,9 +8,9 @@ Enforces Pirate King Negative Constraints:
 16. No Reinvention when Adequate Capability Exists
 """
 
-from dataclasses import dataclass, field
 import hashlib
 import json
+from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 
@@ -20,6 +20,7 @@ class CapabilityContract:
     Formal, cryptographic capability contract defining domain scope,
     supported objective types, and I/O schema digests.
     """
+
     capability_id: str
     domain: str
     supported_objective_types: Tuple[str, ...]

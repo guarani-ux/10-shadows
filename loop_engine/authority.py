@@ -7,12 +7,12 @@ cannot be asserted into existence by callers. They must be witnessed by an authe
 unforgeable ProofWitness created inside the physical TCB.
 """
 
-from dataclasses import dataclass, field
 import hashlib
 import hmac
 import os
 import secrets
 import time
+from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
 
 # Ephemeral runtime session key generated on process boot inside TCB memory.
@@ -22,11 +22,13 @@ _TCB_SESSION_SECRET: bytes = secrets.token_bytes(32)
 
 class PrivilegedMintingError(Exception):
     """Raised when an unauthorized component attempts to mint a privileged state without proof."""
+
     pass
 
 
 class InvalidWitnessError(Exception):
     """Raised when a ProofWitness signature or bound digest fails cryptographic verification."""
+
     pass
 
 
@@ -36,6 +38,7 @@ class ProofWitness:
     Cryptographic proof witness proving that a physical verification gate or authority
     engine has executed and certified a claim.
     """
+
     witness_id: str
     issuer: str
     target_digest: str
@@ -51,9 +54,7 @@ class ProofWitness:
             return False
 
         payload = f"{self.witness_id}:{self.issuer}:{self.target_digest}:{self.scope}:{self.timestamp}"
-        expected_sig = hmac.new(
-            _TCB_SESSION_SECRET, payload.encode("utf-8"), hashlib.sha256
-        ).hexdigest()
+        expected_sig = hmac.new(_TCB_SESSION_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
         return hmac.compare_digest(self.signature, expected_sig)
 
@@ -66,9 +67,7 @@ def issue_proof_witness(issuer: str, target_digest: str, scope: str) -> ProofWit
     witness_id = f"wit_{secrets.token_hex(8)}"
     now = time.time()
     payload = f"{witness_id}:{issuer}:{target_digest}:{scope}:{now}"
-    signature = hmac.new(
-        _TCB_SESSION_SECRET, payload.encode("utf-8"), hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(_TCB_SESSION_SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
     return ProofWitness(
         witness_id=witness_id,
@@ -86,6 +85,7 @@ class VerificationContractWitness:
     Proof-bearing witness demonstrating that a concrete objective has been bound
     to physical acceptance test fixtures. Replaces all boolean flags.
     """
+
     contract_id: str
     objective_hash: str
     acceptance_test_digest: str
@@ -105,9 +105,7 @@ def create_verification_contract_witness(
     Constructs a proof-bearing VerificationContractWitness for an objective.
     """
     contract_id = f"vcw_{secrets.token_hex(8)}"
-    combined_digest = hashlib.sha256(
-        f"{objective_hash}:{acceptance_test_digest}".encode("utf-8")
-    ).hexdigest()
+    combined_digest = hashlib.sha256(f"{objective_hash}:{acceptance_test_digest}".encode("utf-8")).hexdigest()
     witness = issue_proof_witness(
         issuer="loop_engine.authority",
         target_digest=combined_digest,

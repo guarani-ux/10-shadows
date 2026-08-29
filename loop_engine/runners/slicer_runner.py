@@ -1,21 +1,21 @@
+import hashlib
 import json
 import uuid
-import hashlib
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.slicer.slicer_engine import AutonomousSlicerEngine
-from loop_engine.slicer.schema import SliceDAG, VerticalSliceTask
-from loop_engine.receipts import ReceiptStore
-from loop_engine.context import RunContext
 from loop_engine.artifacts import MasterAVScriptArtifact, ProductionPlanDAGArtifact
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.context import RunContext
+from loop_engine.receipts import ReceiptStore
+from loop_engine.slicer.schema import SliceDAG, VerticalSliceTask
+from loop_engine.slicer.slicer_engine import AutonomousSlicerEngine
 
 
 class SlicerDomainRunner(BaseLoop):
     """
     Shadow 7 (The Slicer) Domain Runner.
-    
+
     Autonomous loop for compiling macro goals, tasks, or MasterAVScriptArtifacts into
     verifiable, topologically-ordered ProductionPlanDAGArtifact execution plans.
     """

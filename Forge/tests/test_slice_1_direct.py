@@ -10,7 +10,7 @@ def test_normalize_intent(mock_model):
         "intent": "Summarize the key architectural principles of Forge",
         "context": [],
         "constraints": ["Be concise"],
-        "requested_surface": "ANSWER"
+        "requested_surface": "ANSWER",
     }
 
     task_spec = normalize(intent_req, mock_model)
@@ -23,10 +23,7 @@ def test_route_direct_decision():
     task_spec = {
         "task_id": "task-102",
         "objective": "Explain photosynthesis to a child",
-        "deliverable": {
-            "kind": "ANSWER",
-            "description": "Simple explanation"
-        },
+        "deliverable": {"kind": "ANSWER", "description": "Simple explanation"},
         "constraints": [],
         "knowns": [],
         "unknowns": [],
@@ -34,7 +31,7 @@ def test_route_direct_decision():
         "success_conditions": ["Clear explanation"],
         "requires_external_action": False,
         "reversibility": "REVERSIBLE",
-        "risk": "LOW"
+        "risk": "LOW",
     }
 
     route_decision = compile_route(task_spec)
@@ -46,10 +43,7 @@ def test_direct_execution(mock_model):
     task_spec = {
         "task_id": "task-103",
         "objective": "Compare Postgres and SQLite",
-        "deliverable": {
-            "kind": "ANALYSIS",
-            "description": "Database comparison"
-        },
+        "deliverable": {"kind": "ANALYSIS", "description": "Database comparison"},
         "constraints": [],
         "knowns": [],
         "unknowns": [],
@@ -57,7 +51,7 @@ def test_direct_execution(mock_model):
         "success_conditions": ["List trade-offs"],
         "requires_external_action": False,
         "reversibility": "REVERSIBLE",
-        "risk": "LOW"
+        "risk": "LOW",
     }
 
     result = direct(task_spec, mock_model)

@@ -1,12 +1,14 @@
-import pytest
 from pathlib import Path
-from loop_engine.router import BoundedShadowRouter, HumanEscalationRecord
-from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, ProductionConstraints
-from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
-from loop_engine.runners.slicer_runner import SlicerDomainRunner
+
+import pytest
+
 from loop_engine.gamemaster.state_projector import SovereignStateProjector
 from loop_engine.governor import Governor
+from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, ProductionConstraints
 from loop_engine.receipts import ReceiptStore
+from loop_engine.router import BoundedShadowRouter, HumanEscalationRecord
+from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
+from loop_engine.runners.slicer_runner import SlicerDomainRunner
 
 
 def test_bounded_shadow_router_explicit_decisions():
@@ -64,7 +66,7 @@ def test_routed_multi_shadow_pipeline_execution(tmp_path):
             {"slice_id": "s1", "name": "Film Wide Aisle Shot", "assigned_shadow": "media", "dependencies": []},
             {"slice_id": "s2", "name": "Film Technician MCU", "assigned_shadow": "media", "dependencies": ["s1"]},
             {"slice_id": "s3", "name": "Render Vertical Shorts", "assigned_shadow": "herald", "dependencies": ["s2"]},
-        ]
+        ],
     }
     slicer_res = gov.run_loop(slicer_runner, slicer_input)
     assert slicer_res["status"] == "SUCCESS"

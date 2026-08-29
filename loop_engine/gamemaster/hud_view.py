@@ -4,7 +4,7 @@ from loop_engine.gamemaster.state_projector import SystemTelemetryHUD
 class TerminalHUDView:
     """
     Shadow 10 (The Game Master) Terminal HUD Renderer.
-    
+
     Renders high-density, ASCII-safe sovereign operating system projection
     strictly sourced from physical telemetry.
     """
@@ -19,7 +19,12 @@ class TerminalHUDView:
         lines.append("+------------------------------------------------------------------------------+")
         lines.append(f"| [10 SHADOWS] :: ZERO-TRUST RUNTIME OS [{hud.runtime_version}]".ljust(79) + "|")
         lines.append("+------------------------------------------------------------------------------+")
-        lines.append(f"| Branch: {hud.git_branch} ({hud.git_commit}) [{clean_indicator}] | Test Files: {hud.discovered_test_files} | WAL Receipts: {hud.total_wal_receipts} ({receipts_summary})".ljust(79) + "|")
+        lines.append(
+            f"| Branch: {hud.git_branch} ({hud.git_commit}) [{clean_indicator}] | Test Files: {hud.discovered_test_files} | WAL Receipts: {hud.total_wal_receipts} ({receipts_summary})".ljust(
+                79
+            )
+            + "|"
+        )
         lines.append("+------------------------------------------------------------------------------+")
         lines.append("| SHADOW DOMAINS : REAL-TIME MATRIX                                            |")
         lines.append("+----+------------------+-----------------+----------+--------------+----------+")

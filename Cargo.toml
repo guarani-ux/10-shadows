@@ -1,0 +1,5 @@
+[workspace]
+members = [
+    "crates/ten_shadows_kernel",
+]
+resolver = "2"

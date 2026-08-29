@@ -7,16 +7,17 @@ Bridges ForgeEngine with the hardened Loop Engine runtime:
 - Atomically merges verified code into master with cryptographic commit receipt.
 """
 
+import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-import uuid
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.extractor import strip_markdown_fences, safe_extract_target
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.extractor import safe_extract_target, strip_markdown_fences
 from loop_engine.harness.git_worktree import GitWorktreeHarness
 from loop_engine.receipts import ReceiptStore
 from loop_engine.verifiers.ast_gate import validate_ast_security
 from loop_engine.verifiers.test_gate import run_isolated_pytest
+
 try:
     from Forge.forge import ForgeEngine
 except ImportError:
@@ -77,7 +78,9 @@ class ForgeDomainRunner(BaseLoop):
             forge_res = self.forge.run(forge_payload)
             resolution_proof = forge_res.get("resolution_proof")
             if forge_res.get("status") == "SUCCESS":
-                code_content = str(forge_res.get("result", {}).get("final_state", {}).get("repaired_code", code_content))
+                code_content = str(
+                    forge_res.get("result", {}).get("final_state", {}).get("repaired_code", code_content)
+                )
             else:
                 deficit = forge_res.get("deficit_type") or forge_res.get("status", "RESOLUTION_DEFICIT")
                 deficits = forge_res.get("deficits", [])

@@ -1,5 +1,7 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from forge.adapters.actions import SandboxFileAdapter
 from forge.core.authorize import AuthorizationGate
 from forge.core.execute import execute_action
@@ -15,12 +17,12 @@ def test_authorized_execution_happy_path(test_store, sandbox_adapter):
         "operation": {
             "kind": "WRITE_FILE",
             "target": "valid_output.txt",
-            "payload": {"content": "Physical verification test"}
+            "payload": {"content": "Physical verification test"},
         },
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-301",
         "reversible": True,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)
@@ -42,15 +44,11 @@ def test_denial_test_no_side_effect(test_store, sandbox_adapter):
         "transaction_id": "tx-302",
         "attempt_id": "att-302",
         "task_id": "task-302",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "forbidden.txt",
-            "payload": {"content": "Should not exist"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "forbidden.txt", "payload": {"content": "Should not exist"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-302",
         "reversible": True,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)
@@ -70,15 +68,11 @@ def test_replay_idempotency_test(test_store, sandbox_adapter):
         "transaction_id": "tx-303",
         "attempt_id": "att-303",
         "task_id": "task-303",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "idempotent.txt",
-            "payload": {"content": "Run once"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "idempotent.txt", "payload": {"content": "Run once"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-unique-303",
         "reversible": True,
-        "rollback": None
+        "rollback": None,
     }
 
     auth1 = gate.evaluate_proposal(proposal)
@@ -100,15 +94,11 @@ def test_payload_substitution_attack(test_store, sandbox_adapter):
         "transaction_id": "tx-304",
         "attempt_id": "att-304",
         "task_id": "task-304",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "original.txt",
-            "payload": {"content": "Authorized payload"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "original.txt", "payload": {"content": "Authorized payload"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-304",
         "reversible": True,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)
@@ -118,7 +108,7 @@ def test_payload_substitution_attack(test_store, sandbox_adapter):
     tampered_operation = {
         "kind": "WRITE_FILE",
         "target": "original.txt",
-        "payload": {"content": "MALICIOUS INJECTED PAYLOAD"}
+        "payload": {"content": "MALICIOUS INJECTED PAYLOAD"},
     }
 
     receipt = execute_action(auth, tampered_operation, sandbox_adapter, test_store)
@@ -133,15 +123,11 @@ def test_target_substitution_path_traversal(test_store, sandbox_adapter):
         "transaction_id": "tx-305",
         "attempt_id": "att-305",
         "task_id": "task-305",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "../../../etc/passwd",
-            "payload": {"content": "evil"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "../../../etc/passwd", "payload": {"content": "evil"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-305",
         "reversible": False,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)
@@ -155,15 +141,11 @@ def test_target_substitution_windows_drive(test_store):
         "transaction_id": "tx-305-win",
         "attempt_id": "att-305-win",
         "task_id": "task-305",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "C:\\Windows\\System32\\cmd.exe",
-            "payload": {"content": "evil"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "C:\\Windows\\System32\\cmd.exe", "payload": {"content": "evil"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-305-win",
         "reversible": False,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)
@@ -179,11 +161,7 @@ def test_sandbox_prefix_sibling_escape(temp_dir):
     with pytest.raises(PermissionError) as exc_info:
         adapter.execute(
             authorization_id="auth-test",
-            operation={
-                "kind": "WRITE_FILE",
-                "target": "../sandbox_escape/pwn.txt",
-                "payload": {"content": "breach"}
-            }
+            operation={"kind": "WRITE_FILE", "target": "../sandbox_escape/pwn.txt", "payload": {"content": "breach"}},
         )
     assert "escapes sandbox root" in str(exc_info.value)
 
@@ -198,15 +176,11 @@ def test_failure_receipt_integrity(test_store):
         "transaction_id": "tx-306",
         "attempt_id": "att-306",
         "task_id": "task-306",
-        "operation": {
-            "kind": "WRITE_FILE",
-            "target": "broken.txt",
-            "payload": {"content": "crash"}
-        },
+        "operation": {"kind": "WRITE_FILE", "target": "broken.txt", "payload": {"content": "crash"}},
         "capability_required": "SANDBOX_FILE_WRITE",
         "idempotency_key": "idem-306",
         "reversible": True,
-        "rollback": None
+        "rollback": None,
     }
 
     auth = gate.evaluate_proposal(proposal)

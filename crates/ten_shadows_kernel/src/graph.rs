@@ -39,7 +39,9 @@ impl EpistemicStatus {
 
     pub fn can_transition_to(&self, new_status: EpistemicStatus) -> bool {
         // Law 4: Cannot upgrade without physical observation
-        new_status.rank() <= self.rank() || new_status == EpistemicStatus::Verified || new_status == EpistemicStatus::Observed
+        new_status.rank() <= self.rank()
+            || new_status == EpistemicStatus::Verified
+            || new_status == EpistemicStatus::Observed
     }
 }
 
@@ -98,7 +100,12 @@ pub struct RelationalNode {
 }
 
 impl RelationalNode {
-    pub fn new(node_id: &str, node_type: NodeType, label: &str, epistemic_status: EpistemicStatus) -> Self {
+    pub fn new(
+        node_id: &str,
+        node_type: NodeType,
+        label: &str,
+        epistemic_status: EpistemicStatus,
+    ) -> Self {
         let mut hasher = Sha256::new();
         hasher.update(format!("{}:{:?}:{}", node_id, node_type, label).as_bytes());
         let digest = format!("{:x}", hasher.finalize());

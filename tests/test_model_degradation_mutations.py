@@ -6,6 +6,7 @@ Demonstrates that model degradation results in more system work (re-compilation,
 rather than silent false success, and proves that AI models have zero authority to mint privileged truth.
 """
 
+from loop_engine.kernel_db import KernelDatabase, PrivilegedStateMutationProhibitedError
 from loop_engine.model.boundary import (
     DeficitDeclaration,
     DeficitType,
@@ -21,7 +22,6 @@ from loop_engine.model.candidate_search import (
 )
 from loop_engine.model.context_compiler import ContextCompiler
 from loop_engine.schema import State
-from loop_engine.kernel_db import KernelDatabase, PrivilegedStateMutationProhibitedError
 
 
 def test_model_omits_constraint_survives_in_canonical_context():
@@ -51,6 +51,7 @@ def test_model_claims_success_without_evidence_rejected_by_authority():
     # And attempting to directly write to DB is blocked
     db = KernelDatabase()
     import pytest
+
     with pytest.raises(PrivilegedStateMutationProhibitedError):
         db.transition_proposal_state("task_hack_auth", State.CANDIDATE_SEALED, State.VERIFIED)
 

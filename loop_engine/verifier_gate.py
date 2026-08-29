@@ -4,21 +4,19 @@ Hardened Physical Verifier Gate for 10 SHADOWS.
 Sterile pytest execution in ephemeral git worktree with anti-shadowing protections.
 """
 
-from dataclasses import dataclass
 import hashlib
 import os
-from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from loop_engine.ast_guard import scan_python_worktree
-from loop_engine.sterile_env import build_sterile_environment
+from loop_engine.governance import load_canonical_governance
 from loop_engine.kernel_db import KernelDatabase
-
-
 from loop_engine.schema import (
     FailureClassification,
     ProposalManifest,
@@ -29,8 +27,8 @@ from loop_engine.schema import (
     compute_test_digest,
     compute_tree_hash,
 )
+from loop_engine.sterile_env import build_sterile_environment
 
-from loop_engine.governance import load_canonical_governance
 
 def get_banned_shadow_modules() -> List[str]:
     """Retrieves authoritative banned module list from canonical governance.yaml."""
@@ -49,8 +47,8 @@ def get_banned_shadow_modules() -> List[str]:
             "sys.py",
         ]
 
-BANNED_SHADOW_MODULES: List[str] = get_banned_shadow_modules()
 
+BANNED_SHADOW_MODULES: List[str] = get_banned_shadow_modules()
 
 
 class VerificationResult(tuple):
@@ -58,6 +56,7 @@ class VerificationResult(tuple):
     Dual-interface result wrapper allowing both tuple unpacking (receipt_id, receipt)
     and direct attribute access on the receipt.
     """
+
     def __new__(cls, receipt_id: int, receipt: VerificationReceipt):
         return super().__new__(cls, (receipt_id, receipt))
 
@@ -94,7 +93,10 @@ class PhysicalVerifierGate:
             self.kernel_db = kernel_db
         elif isinstance(verifier_version_or_kernel_db, KernelDatabase):
             self.kernel_db = verifier_version_or_kernel_db
-        elif isinstance(verifier_version_or_kernel_db, (str, Path)) and not str(verifier_version_or_kernel_db).replace(".", "").isdigit():
+        elif (
+            isinstance(verifier_version_or_kernel_db, (str, Path))
+            and not str(verifier_version_or_kernel_db).replace(".", "").isdigit()
+        ):
             self.kernel_db = KernelDatabase(Path(verifier_version_or_kernel_db))
         else:
             possible_dbs = (
@@ -110,14 +112,16 @@ class PhysicalVerifierGate:
 
         from loop_engine.transition import (
             PrivilegedTransitionEngine,
-            TransitionRequest,
-            TransitionReceipt as EngineReceipt,
             TransitionRejection,
+            TransitionRequest,
             compute_complete_claim_digest,
             compute_governance_digest,
         )
-        self.transition_engine = PrivilegedTransitionEngine(kernel_db=self.kernel_db)
+        from loop_engine.transition import (
+            TransitionReceipt as EngineReceipt,
+        )
 
+        self.transition_engine = PrivilegedTransitionEngine(kernel_db=self.kernel_db)
 
     def verify_candidate(
         self,
@@ -199,7 +203,7 @@ class PhysicalVerifierGate:
             capture_output=True,
             text=True,
         )
-        is_clean = (status_res.returncode == 0 and not status_res.stdout.strip())
+        is_clean = status_res.returncode == 0 and not status_res.stdout.strip()
 
         if (physical_git_tree != manifest.candidate_tree_sha) or not is_clean:
             receipt = VerificationReceipt(
@@ -275,7 +279,6 @@ class PhysicalVerifierGate:
 
         # Gate 5: Sterile Subprocess Pytest Execution
         clean_env = build_sterile_environment(worktree_path=candidate_worktree)
-
 
         test_target = self.canonical_fixtures_dir / test_file_relative
         if not test_target.exists():
@@ -367,8 +370,8 @@ class PhysicalVerifierGate:
         if returncode == 0:
             from loop_engine.authority import issue_proof_witness
             from loop_engine.transition import (
-                TransitionRequest,
                 TransitionRejection,
+                TransitionRequest,
                 compute_complete_claim_digest,
                 compute_governance_digest,
             )
@@ -469,4 +472,3 @@ class PhysicalVerifierGate:
         receipt_id = self.kernel_db.record_verified_receipt(receipt)
         receipt.receipt_id = receipt_id
         return VerificationResult(receipt_id, receipt)
-

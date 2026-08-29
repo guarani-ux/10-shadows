@@ -13,11 +13,21 @@ pub mod state_machine;
 pub mod time_utils;
 pub mod verifier;
 
-pub use candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
-pub use constitution::{EvidenceEntailment, ObjectiveContract, ObjectiveSufficiencyProof, Obligation, ObligationStatus, SufficiencyRule};
+pub use candidate::{
+    CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate,
+};
+pub use constitution::{
+    EvidenceEntailment, ObjectiveContract, ObjectiveSufficiencyProof, Obligation, ObligationStatus,
+    SufficiencyRule,
+};
 pub use db::KernelDb;
-pub use dispatcher::{DispatchError, ProviderUsage, WorkerAuthorization, WorkerDispatcher, WorkerExecutionResult};
-pub use evidence::{assert_evidence_monotonicity, EvidenceModality, EvidencePurpose, SubstrateLawError, VerificationType};
+pub use dispatcher::{
+    DispatchError, ProviderUsage, WorkerAuthorization, WorkerDispatcher, WorkerExecutionResult,
+};
+pub use evidence::{
+    assert_evidence_monotonicity, EvidenceModality, EvidencePurpose, SubstrateLawError,
+    VerificationType,
+};
 pub use predicate::{evaluate_receipt, VerificationReport};
 pub use receipt::{
     DisaggregatedEpistemicClaims, ExecutionAttemptRecord, IndependentVerificationRecord,

@@ -1,6 +1,7 @@
 import pytest
-from loop_engine.alchemist.trace_parser import CrashTraceParser
+
 from loop_engine.alchemist.repair_strategy import RepairStrategyEngine
+from loop_engine.alchemist.trace_parser import CrashTraceParser
 
 
 def test_repair_strategy_zero_division():

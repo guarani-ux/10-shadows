@@ -37,12 +37,14 @@ def test_context_compiler_preserves_authority_classes():
         constraints=["Zero mutable globals", "Deterministic execution"],
         verified_evidence=[{"evidence_id": "ev_01", "trace": "Passed AST gate"}],
         applicable_procedure="tdd",
-        failure_history=[{
-            "signature": "SIG_SYNTAX_ERR",
-            "classification": "CANDIDATE_FAILURE",
-            "root_cause": "Missing colon on line 12",
-            "negative_constraint": "DO NOT REPEAT: Syntax error on class def",
-        }],
+        failure_history=[
+            {
+                "signature": "SIG_SYNTAX_ERR",
+                "classification": "CANDIDATE_FAILURE",
+                "root_cause": "Missing colon on line 12",
+                "negative_constraint": "DO NOT REPEAT: Syntax error on class def",
+            }
+        ],
         available_tools=[cap_contract],
         declared_deficits=[
             DeficitDeclaration(
@@ -92,4 +94,3 @@ def test_context_compiler_with_canonical_objective():
     assert auth["description"] == "Refactor authentication seam"
     assert "Preserve constant-time comparison" in auth["constraints"]
     assert "direct_production_write" in auth["forbidden_actions"]
-

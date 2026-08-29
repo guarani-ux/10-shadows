@@ -1,12 +1,14 @@
-import pytest
 from pathlib import Path
-from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
-from loop_engine.herald.generator import IntelligentAVScriptGenerator
-from loop_engine.herald.validators import DeterministicScriptValidator
-from loop_engine.herald.schema import MasterAVScriptBlueprint, AVTableRow
-from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
+
+import pytest
+
 from loop_engine.governor import Governor
+from loop_engine.herald.generator import IntelligentAVScriptGenerator
+from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
+from loop_engine.herald.schema import AVTableRow, MasterAVScriptBlueprint
+from loop_engine.herald.validators import DeterministicScriptValidator
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
 
 
 def test_herald_forced_failure_and_adaptive_repair_diff_proven(tmp_path):
@@ -90,13 +92,11 @@ def test_herald_impossible_brief_honest_abort(tmp_path):
     )
 
     from loop_engine.governance import load_canonical_governance
+
     custom_gov = load_canonical_governance().model_copy(deep=True)
     custom_gov.governor.strike_ceiling = 2
     gov = Governor._create_for_test(governance_config=custom_gov)
     result = gov.run_loop(runner, brief)
-
-
-
 
     assert result["status"] in ["SUCCESS", "ABORTED"]
     if result["status"] == "ABORTED":

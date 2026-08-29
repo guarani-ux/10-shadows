@@ -1,4 +1,5 @@
 from typing import Any, Dict
+
 from forge.core.schema import validate_contract
 
 
@@ -35,7 +36,7 @@ def compile_route(task_spec: Dict[str, Any]) -> Dict[str, Any]:
             "route": "ACT",
             "reason": "Task requires external or persistent mutation.",
             "minimal_next_step": "Construct ActionProposal and pass to authorization gate.",
-            "stop_condition": "Action executed and receipt recorded."
+            "stop_condition": "Action executed and receipt recorded.",
         }
     elif requires_persistent_capability(task_spec):
         route_decision = {
@@ -43,7 +44,7 @@ def compile_route(task_spec: Dict[str, Any]) -> Dict[str, Any]:
             "route": "BUILD",
             "reason": "Task requires a persistent, reusable capability or system artifact.",
             "minimal_next_step": "Synthesize BuildSpec and generate minimal processor.",
-            "stop_condition": "Artifact produced and smoke test passed."
+            "stop_condition": "Artifact produced and smoke test passed.",
         }
     else:
         route_decision = {
@@ -51,7 +52,7 @@ def compile_route(task_spec: Dict[str, Any]) -> Dict[str, Any]:
             "route": "DIRECT",
             "reason": "Requested outcome can be produced immediately without persistent machinery or side effects.",
             "minimal_next_step": "Process task directly through model adapter.",
-            "stop_condition": "DirectResult generated."
+            "stop_condition": "DirectResult generated.",
         }
 
     validate_contract("RouteDecision", route_decision)

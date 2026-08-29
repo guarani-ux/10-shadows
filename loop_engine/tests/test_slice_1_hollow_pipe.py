@@ -1,10 +1,11 @@
 import os
-import pytest
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-from loop_engine.base import BaseLoop, PROJECT_ROOT
-from loop_engine.extractor import strip_markdown_fences, safe_extract_target
+import pytest
+
+from loop_engine.base import PROJECT_ROOT, BaseLoop
+from loop_engine.extractor import safe_extract_target, strip_markdown_fences
 
 
 # -------------------------------------------------------------

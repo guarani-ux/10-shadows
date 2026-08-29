@@ -16,13 +16,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from loop_engine.base import PROJECT_ROOT
 from loop_engine.schema import (
-    State,
     LEGAL_STATE_TRANSITIONS,
-    FailureClassification,
     EnvironmentFingerprint,
+    FailureClassification,
     ProposalManifest,
-    VerificationReceipt,
     QuarantineRecord,
+    State,
+    VerificationReceipt,
 )
 
 KERNEL_DB_PATH = PROJECT_ROOT / "scratch" / "kernel.db"
@@ -30,21 +30,25 @@ KERNEL_DB_PATH = PROJECT_ROOT / "scratch" / "kernel.db"
 
 class ProposalAlreadySealedError(Exception):
     """Raised when attempting to overwrite an already sealed proposal manifest."""
+
     pass
 
 
 class IllegalStateTransitionError(Exception):
     """Raised when attempting an illegal or unverified state transition."""
+
     pass
 
 
 class ReceiptNotFoundError(Exception):
     """Raised when a promotion references a receipt_id that does not exist in KernelDatabase."""
+
     pass
 
 
 class ReceiptMismatchError(Exception):
     """Raised when a receipt does not match the sealed proposal manifest."""
+
     pass
 
 
@@ -58,11 +62,11 @@ PRIVILEGED_STATES = {
 
 class PrivilegedStateMutationProhibitedError(Exception):
     """Raised when an unauthenticated caller attempts direct privileged state mutation in KernelDatabase."""
+
     pass
 
 
 class KernelDatabase:
-
     """
     Unified Single-Database Transactional Boundary for 10 SHADOWS.
     """
@@ -365,6 +369,7 @@ class KernelDatabase:
     ) -> None:
         """Internal custody transition method callable exclusively by PrivilegedTransitionEngine."""
         from loop_engine.transition import _INTERNAL_TRANSITION_TOKEN
+
         if auth_token != _INTERNAL_TRANSITION_TOKEN:
             raise PrivilegedStateMutationProhibitedError(
                 "Invalid authority token: direct privileged state mutation is prohibited."
@@ -409,7 +414,6 @@ class KernelDatabase:
         if cur_state is None:
             raise IllegalStateTransitionError(f"Proposal '{task_id}' does not exist.")
         self.transition_proposal_state(task_id, cur_state, to_state)
-
 
     def record_receipt(self, receipt: VerificationReceipt) -> int:
         """Alias for record_verified_receipt."""
@@ -470,7 +474,9 @@ class KernelDatabase:
                 acceptance_test_digest=row["acceptance_test_digest"],
                 env_fingerprint=EnvironmentFingerprint.from_dict(json.loads(row["env_fingerprint"])),
                 status=State(row["status"]),
-                failure_classification=FailureClassification(row["failure_classification"]) if row["failure_classification"] else None,
+                failure_classification=FailureClassification(row["failure_classification"])
+                if row["failure_classification"]
+                else None,
                 failure_signature=row["failure_signature"],
                 execution_trace=row["execution_trace"],
                 timestamp=row["created_at"],
@@ -784,7 +790,9 @@ class KernelDatabase:
                 return d
             return None
 
-    def find_domain_authorities(self, namespace: Optional[str] = None, status: str = "VERIFIED") -> List[Dict[str, Any]]:
+    def find_domain_authorities(
+        self, namespace: Optional[str] = None, status: str = "VERIFIED"
+    ) -> List[Dict[str, Any]]:
         """Finds all domain authorities for a namespace."""
         with self.get_connection() as conn:
             if namespace:

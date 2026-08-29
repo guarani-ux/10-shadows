@@ -6,9 +6,10 @@ Ensures that any implementation mutation weakening cryptographic binding, anti-r
 governance validation, legal state progression, or database custody is immediately killed.
 """
 
-from pathlib import Path
-import pytest
 import secrets
+from pathlib import Path
+
+import pytest
 
 from loop_engine.authority import issue_proof_witness
 from loop_engine.epistemic import EpistemicDisposition
@@ -22,13 +23,13 @@ from loop_engine.schema import (
     State,
 )
 from loop_engine.transition import (
+    _INTERNAL_TRANSITION_TOKEN,
     PrivilegedTransitionEngine,
-    TransitionRequest,
     TransitionReceipt,
     TransitionRejection,
+    TransitionRequest,
     compute_complete_claim_digest,
     compute_governance_digest,
-    _INTERNAL_TRANSITION_TOKEN,
 )
 
 
@@ -157,5 +158,8 @@ class TestTransitionMutations:
         task_id = "task_mut_04"
         db.record_proposal(create_manifest(task_id))
 
-        with pytest.raises(PrivilegedStateMutationProhibitedError, match="Direct database mutation to privileged state 'PROMOTED' is prohibited"):
+        with pytest.raises(
+            PrivilegedStateMutationProhibitedError,
+            match="Direct database mutation to privileged state 'PROMOTED' is prohibited",
+        ):
             db.update_state(task_id, State.PROMOTED)

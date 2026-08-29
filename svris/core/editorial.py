@@ -1,8 +1,9 @@
 """Editorial Intelligence Engine: Insights and Story Angles."""
 
-from datetime import datetime, timezone
 import hashlib
+from datetime import datetime, timezone
 from typing import Optional
+
 from svris.core.db import get_connection
 
 

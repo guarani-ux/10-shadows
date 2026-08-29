@@ -2,11 +2,12 @@
 
 import os
 import sqlite3
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
 
 
 class CASUpdateError(Exception):
     """Raised when an optimistic concurrency update fails due to revision mismatch."""
+
     pass
 
 
@@ -90,9 +91,7 @@ def update_claim_cas(
     if cur.rowcount == 0:
         conn.rollback()
         conn.close()
-        raise CASUpdateError(
-            f"CAS collision on claim '{claim_id}': expected revision {expected_revision}."
-        )
+        raise CASUpdateError(f"CAS collision on claim '{claim_id}': expected revision {expected_revision}.")
 
     conn.commit()
     conn.close()

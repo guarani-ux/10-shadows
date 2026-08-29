@@ -1,13 +1,14 @@
 import subprocess
+import tempfile
 import time
 from pathlib import Path
-import tempfile
+
 import pytest
 
 from loop_engine.harness.git_worktree import (
-    GitWorktreeHarness,
-    AuthoritativeSourceProtectionError,
     PROJECT_ROOT,
+    AuthoritativeSourceProtectionError,
+    GitWorktreeHarness,
     run_git,
 )
 
@@ -22,14 +23,26 @@ def disposable_repo():
         repo_path = Path(tmpdir).resolve()
         # Initialize disposable repo
         subprocess.run(["git", "init"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.name", "Test Harness"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "config", "user.email", "test@ten-shadows.local"], cwd=str(repo_path), check=True, capture_output=True)
-        
+        subprocess.run(
+            ["git", "config", "user.name", "Test Harness"], cwd=str(repo_path), check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "config", "user.email", "test@ten-shadows.local"],
+            cwd=str(repo_path),
+            check=True,
+            capture_output=True,
+        )
+
         # Create initial baseline commit A
         baseline_file = repo_path / "plan.md"
         baseline_file.write_text("# Initial Plan", encoding="utf-8")
         subprocess.run(["git", "add", "plan.md"], cwd=str(repo_path), check=True, capture_output=True)
-        subprocess.run(["git", "commit", "-m", "chore: initial baseline commit"], cwd=str(repo_path), check=True, capture_output=True)
+        subprocess.run(
+            ["git", "commit", "-m", "chore: initial baseline commit"],
+            cwd=str(repo_path),
+            check=True,
+            capture_output=True,
+        )
 
         yield repo_path
 
@@ -40,7 +53,7 @@ def test_git_worktree_sandbox_lifecycle_in_disposable_repo(disposable_repo):
     operate correctly inside a disposable test repository without touching the authoritative repo.
     """
     source_head_before, _, _ = run_git(["rev-parse", "HEAD"], cwd=PROJECT_ROOT)
-    
+
     with tempfile.TemporaryDirectory() as wt_dir:
         harness = GitWorktreeHarness(
             repo_root=disposable_repo,
@@ -120,7 +133,7 @@ def test_authoritative_source_mutation_blocked():
         repo_root=PROJECT_ROOT,
         allow_authoritative_mutation=False,
     )
-    
+
     with pytest.raises(AuthoritativeSourceProtectionError) as exc_info:
         # Mock worktree path and branch name to test safety gate
         harness.commit_and_merge(

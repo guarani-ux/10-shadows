@@ -44,7 +44,6 @@ def ensure_directories():
 ensure_channel_dirs = ensure_directories
 
 
-
 def compute_sha256(content: str) -> str:
     """Computes deterministic SHA-256 hash of a string."""
     return hashlib.sha256(content.encode("utf-8")).hexdigest()
@@ -93,7 +92,9 @@ def process_intent(
         _persist_receipts(task_id, receipt, intent_path)
         return receipt
 
-    print(f"\n[DAEMON] >>> Received Intent: task_id='{task_id}' (strikes={strikes}/3, plan_hash={plan_hash[:8] if plan_hash else 'none'})")
+    print(
+        f"\n[DAEMON] >>> Received Intent: task_id='{task_id}' (strikes={strikes}/3, plan_hash={plan_hash[:8] if plan_hash else 'none'})"
+    )
     print(f"[DAEMON] Executing sterile command: {test_command}")
 
     sterile_env = build_sterile_environment()
@@ -114,7 +115,7 @@ def process_intent(
         exit_code = proc.returncode
         stdout = proc.stdout
         stderr = proc.stderr
-        passed = (exit_code == 0)
+        passed = exit_code == 0
 
     except subprocess.TimeoutExpired:
         duration = round(time.time() - start_time, 3)
@@ -134,7 +135,9 @@ def process_intent(
 
     # 2. Strike Ledger Update on Failure
     if not passed:
-        classification = FailureClassification.ENVIRONMENT_FAILURE if exit_code == 124 else FailureClassification.CANDIDATE_FAILURE
+        classification = (
+            FailureClassification.ENVIRONMENT_FAILURE if exit_code == 124 else FailureClassification.CANDIDATE_FAILURE
+        )
         db.record_strike(
             task_id=task_id,
             classification=classification,
@@ -148,7 +151,7 @@ def process_intent(
         target_file = Path(target_path_str)
         if candidate_file.exists():
             target_file.parent.mkdir(parents=True, exist_ok=True)
-            temp_target = target_file.parent / f".tmp_{target_file.name}_{int(time.time()*1000)}"
+            temp_target = target_file.parent / f".tmp_{target_file.name}_{int(time.time() * 1000)}"
             candidate_file.replace(temp_target)
             os.replace(temp_target, target_file)
             promotion_info = {

@@ -17,10 +17,10 @@ Verifies that all historical shortcut failure modes are mechanically eliminated:
 12. Missing input is classified as INPUT_DEFICIT, not CAPABILITY_DEFICIT.
 """
 
-import pytest
 from typing import Any, Dict
 
-from forge.forge import ForgeEngine
+import pytest
+
 from forge.core.registry import CapabilityRegistry
 from forge.core.substrate import (
     CapabilityKind,
@@ -28,12 +28,13 @@ from forge.core.substrate import (
     CapabilityManifest,
     EvidenceClass,
     EvidenceRequirement,
+    ObligationAuthority,
     OperatorType,
     RequiredOperation,
     SatisfactionObligation,
-    ObligationAuthority,
     VerificationContract,
 )
+from forge.forge import ForgeEngine
 from loop_engine.kernel_db import KernelDatabase
 
 
@@ -83,7 +84,11 @@ def test_synthetic_root_evidence_not_manufactured(tmp_path):
             "inputs": {"statement": "str"},
             "outputs": {"is_valid": "bool"},
             "evidence_requirements": [
-                {"evidence_id": "ev_external_source", "claim": "Peer reviewed citation", "required_evidence_class": "VERIFIED_FACT"}
+                {
+                    "evidence_id": "ev_external_source",
+                    "claim": "Peer reviewed citation",
+                    "required_evidence_class": "VERIFIED_FACT",
+                }
             ],
         },
         "source_data": {"statement": "The earth orbits the sun."},
@@ -98,24 +103,29 @@ def test_injected_operations_rejected_in_production_run(tmp_path):
     """Proves that production run() strictly rejects caller-injected operations or contracts."""
     engine = ForgeEngine(sandbox_dir=tmp_path / "sb", kernel_db=KernelDatabase(tmp_path / "k.db"))
     with pytest.raises(ValueError, match="Production run\\(\\) does not accept injected operations"):
-        engine.run("Test intent", injected_operations=[
-            RequiredOperation(
-                operation_id="op_injected",
-                operator=OperatorType.ACT,
-                semantic_responsibility="Bypass",
-                inputs=[],
-                outputs=[],
-            )
-        ])
+        engine.run(
+            "Test intent",
+            injected_operations=[
+                RequiredOperation(
+                    operation_id="op_injected",
+                    operator=OperatorType.ACT,
+                    semantic_responsibility="Bypass",
+                    inputs=[],
+                    outputs=[],
+                )
+            ],
+        )
 
 
 def test_legacy_envelope_does_not_bypass_semantic_gate(tmp_path):
     """Proves that sending a dictionary with requested_surface does not bypass GSR in run()."""
     engine = ForgeEngine(sandbox_dir=tmp_path / "sb", kernel_db=KernelDatabase(tmp_path / "k.db"))
-    res = engine.run({
-        "intent": "Calculate the shear stress of the beam",
-        "requested_surface": "DIRECT",
-    })
+    res = engine.run(
+        {
+            "intent": "Calculate the shear stress of the beam",
+            "requested_surface": "DIRECT",
+        }
+    )
     # Must go through GSR and fail with SEMANTIC_BINDING_DEFICIT (not execute direct bypass)
     assert res["status"] == "RESOLUTION_DEFICIT"
     assert res["deficit_type"] == "SEMANTIC_BINDING_DEFICIT"
@@ -142,7 +152,7 @@ def test_missing_input_classified_as_input_deficit(tmp_path):
 def test_deterministic_capability_selection(tmp_path):
     """Proves that capability selection is deterministic and prioritizes lifecycle strength."""
     reg = CapabilityRegistry()
-    
+
     cap_task = CapabilityManifest(
         capability_id="calc_task",
         operations_supported=[OperatorType.CALCULATE],
@@ -165,10 +175,10 @@ def test_deterministic_capability_selection(tmp_path):
         lifecycle_state=CapabilityLifecycleState.PROMOTED,
         provenance={"effect_type": "CALCULATION"},
     )
-    
+
     reg.register_capability(cap_task)
     reg.register_capability(cap_promoted)
-    
+
     matches = reg.find_capabilities_matching_contracts(
         required_input_contract={"a": "float", "b": "float"},
         required_output_contract={"out": "float"},

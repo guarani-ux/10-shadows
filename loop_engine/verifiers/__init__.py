@@ -5,8 +5,8 @@ Verifiers Package - AST and Process Verification Gates for Loop Engine.
 from loop_engine.verifiers.ast_gate import (
     ASTSecurityViolation,
     ASTSecurityVisitor,
-    validate_ast_security,
     inspect_file_ast,
+    validate_ast_security,
 )
 from loop_engine.verifiers.test_gate import (
     SubprocessGateError,

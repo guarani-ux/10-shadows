@@ -11,6 +11,7 @@ Enforces Pirate King Constraints:
 """
 
 import pytest
+
 from loop_engine.authority import create_verification_contract_witness
 from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference
 from loop_engine.capability import CapabilityContract

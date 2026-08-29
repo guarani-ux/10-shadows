@@ -3,6 +3,7 @@
 import hashlib
 from datetime import datetime, timezone
 from typing import Optional
+
 from svris.core.db import get_connection
 
 
@@ -46,7 +47,9 @@ def mark_claim_superseded(
     cur = conn.cursor()
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    relation_id = f"rel_{hashlib.sha256(f'{old_claim_id}:{superseding_claim_id}:SUPERSEDES'.encode('utf-8')).hexdigest()[:16]}"
+    relation_id = (
+        f"rel_{hashlib.sha256(f'{old_claim_id}:{superseding_claim_id}:SUPERSEDES'.encode('utf-8')).hexdigest()[:16]}"
+    )
 
     cur.execute(
         """UPDATE claims

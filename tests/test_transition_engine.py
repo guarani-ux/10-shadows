@@ -6,7 +6,9 @@ anti-replay guards, and legal state machine invariants.
 """
 
 import hashlib
+
 import pytest
+
 from loop_engine.authority import issue_proof_witness
 from loop_engine.kernel_db import KernelDatabase
 from loop_engine.schema import State
@@ -77,6 +79,7 @@ class TestPrivilegedTransitionEngine:
 
     def test_forged_witness_rejected(self, engine):
         from loop_engine.authority import ProofWitness
+
         forged_witness = ProofWitness(
             witness_id="wit_forged",
             issuer="attacker",

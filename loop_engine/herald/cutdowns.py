@@ -1,11 +1,12 @@
 from typing import Any, Dict, List
+
 from loop_engine.herald.schema import AVTableRow, ValidatedCutDownScript
 
 
 class ModularCutDownExtractor:
     """
     Shadow 3 (The Herald) Modular Cut-Down Extraction Engine.
-    
+
     Synthesizes complete, standalone 15-30s vertical scripts
     from validated master AV rows with platform-specific vertical video direction.
     """
@@ -25,7 +26,7 @@ class ModularCutDownExtractor:
             if 10.0 <= duration <= 35.0:
                 words = r.spoken_audio.split()
                 hook_sentence = " ".join(words[:8]) + "..."
-                
+
                 # Compose complete standalone audio with concise punchy CTA
                 short_audio = f"{r.spoken_audio} If you are interested, {intended_action.lower().rstrip('.')} today."
                 short_words = short_audio.split()

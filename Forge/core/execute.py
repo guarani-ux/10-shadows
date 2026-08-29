@@ -1,5 +1,6 @@
 import uuid
 from typing import Any, Dict, Optional
+
 from forge.adapters.actions import ActionAdapter
 from forge.core.authorize import compute_operation_hash
 from forge.core.schema import validate_contract
@@ -10,7 +11,7 @@ def execute_action(
     authorization_decision: Dict[str, Any],
     operation: Dict[str, Any],
     action_adapter: ActionAdapter,
-    store: Optional[ForgeStore] = None
+    store: Optional[ForgeStore] = None,
 ) -> Dict[str, Any]:
     """
     Executes an authorized action through the ActionAdapter and generates an ExecutionReceipt.
@@ -31,7 +32,7 @@ def execute_action(
             "outcome": "FAILED",
             "side_effect_committed": False,
             "output": {},
-            "error": f"Execution rejected: Decision was {authorization_decision.get('decision')} ({authorization_decision.get('reason')})"
+            "error": f"Execution rejected: Decision was {authorization_decision.get('decision')} ({authorization_decision.get('reason')})",
         }
         validate_contract("ExecutionReceipt", receipt)
         return receipt
@@ -51,7 +52,7 @@ def execute_action(
             "outcome": "FAILED",
             "side_effect_committed": False,
             "output": {},
-            "error": f"Security Violation: Executing operation hash '{actual_hash}' does not match authorized hash '{authorized_hash}'"
+            "error": f"Security Violation: Executing operation hash '{actual_hash}' does not match authorized hash '{authorized_hash}'",
         }
         validate_contract("ExecutionReceipt", receipt)
         return receipt
@@ -69,17 +70,14 @@ def execute_action(
                 "outcome": "FAILED",
                 "side_effect_committed": False,
                 "output": {},
-                "error": "Authorization token has already been consumed or is invalid."
+                "error": "Authorization token has already been consumed or is invalid.",
             }
             validate_contract("ExecutionReceipt", receipt)
             return receipt
 
     # Step 4: Execute side effect through adapter
     try:
-        output = action_adapter.execute(
-            authorization_id=authorization_id,
-            operation=operation
-        )
+        output = action_adapter.execute(authorization_id=authorization_id, operation=operation)
         receipt = {
             "execution_id": execution_id,
             "transaction_id": transaction_id,
@@ -89,7 +87,7 @@ def execute_action(
             "outcome": "SUCCESS",
             "side_effect_committed": True,
             "output": output,
-            "error": None
+            "error": None,
         }
     except Exception as e:
         receipt = {
@@ -101,7 +99,7 @@ def execute_action(
             "outcome": "FAILED",
             "side_effect_committed": False,
             "output": {},
-            "error": str(e)
+            "error": str(e),
         }
 
     validate_contract("ExecutionReceipt", receipt)

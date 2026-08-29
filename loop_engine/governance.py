@@ -10,6 +10,7 @@ immediately halts.
 
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -19,6 +20,7 @@ CANONICAL_GOVERNANCE_PATH = PROJECT_ROOT / "governance.yaml"
 
 class GovernanceConfigurationError(Exception):
     """Raised when canonical governance configuration is missing, invalid, or fails validation."""
+
     pass
 
 
@@ -56,9 +58,7 @@ class GovernanceConfig(BaseModel):
 _CACHED_GOVERNANCE: Optional[GovernanceConfig] = None
 
 
-def load_canonical_governance(
-    config_path: Optional[Path] = None, force_reload: bool = False
-) -> GovernanceConfig:
+def load_canonical_governance(config_path: Optional[Path] = None, force_reload: bool = False) -> GovernanceConfig:
     """
     Loads and validates the canonical governance configuration.
     Enforces Fail-Closed invariant: Missing, corrupted, or invalid configuration raises GovernanceConfigurationError.

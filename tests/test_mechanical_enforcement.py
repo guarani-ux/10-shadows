@@ -30,19 +30,21 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+
 import pytest
 
 from loop_engine.kernel_db import KernelDatabase
 from loop_engine.schema import FailureClassification
 from loop_engine.verifier_daemon import (
-    process_intent,
-    build_sterile_environment,
     RECEIPTS_LEDGER_DIR,
+    build_sterile_environment,
+    process_intent,
 )
-from scripts.install_git_hooks import install_hooks, PRE_COMMIT_HOOK_PATH
 from scripts import verify_plan_audit
-from scripts.verify_plan_audit import verify_plan, is_exempt_path, PROJECT_ROOT, main as audit_gate_main
-from zero_trust_engine.auditor import PlanAuditor, AuditResult, Severity, Finding, FindingStatus, AuditReport
+from scripts.install_git_hooks import PRE_COMMIT_HOOK_PATH, install_hooks
+from scripts.verify_plan_audit import PROJECT_ROOT, is_exempt_path, verify_plan
+from scripts.verify_plan_audit import main as audit_gate_main
+from zero_trust_engine.auditor import AuditReport, AuditResult, Finding, FindingStatus, PlanAuditor, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -100,7 +102,7 @@ def test_verifier_daemon_pass_and_atomic_promotion(tmp_path):
         "git_diff_hash": "diff_hash_11223344",
         "candidate_path": str(candidate_file),
         "target_path": str(target_file),
-        "test_command": "python -c \"import sys; sys.exit(0)\"",
+        "test_command": 'python -c "import sys; sys.exit(0)"',
     }
     intent_file.write_text(json.dumps(intent_payload), encoding="utf-8")
 
@@ -174,7 +176,7 @@ def test_verifier_daemon_strike_ceiling_blocks_execution(tmp_path):
     intent_file = tmp_path / "intent_blocked.json"
     intent_payload = {
         "task_id": task_id,
-        "test_command": "python -c \"import sys; sys.exit(0)\"",
+        "test_command": 'python -c "import sys; sys.exit(0)"',
     }
     intent_file.write_text(json.dumps(intent_payload), encoding="utf-8")
 
@@ -282,18 +284,20 @@ def test_audit_gate_audit_result_revise_denies(monkeypatch):
             return AuditReport(
                 outcome=AuditResult.REVISE,
                 scope_evaluations={},
-                findings=[Finding(
-                    finding_id="F-HIGH-1",
-                    name="Vacuous Test Oracle",
-                    severity=Severity.HIGH,
-                    status=FindingStatus.CONFIRMED,
-                    applicable_because="Test checks",
-                    failure_scenario="Trivial assert",
-                    impact="Defects escape",
-                    required_plan_change="Add assertions",
-                    required_verification="Run tests",
-                    residual_risk="None",
-                )],
+                findings=[
+                    Finding(
+                        finding_id="F-HIGH-1",
+                        name="Vacuous Test Oracle",
+                        severity=Severity.HIGH,
+                        status=FindingStatus.CONFIRMED,
+                        applicable_because="Test checks",
+                        failure_scenario="Trivial assert",
+                        impact="Defects escape",
+                        required_plan_change="Add assertions",
+                        required_verification="Run tests",
+                        residual_risk="None",
+                    )
+                ],
                 required_acceptance_evidence=["traces"],
             )
 
@@ -316,18 +320,20 @@ def test_audit_gate_audit_result_block_denies(monkeypatch):
             return AuditReport(
                 outcome=AuditResult.BLOCK,
                 scope_evaluations={},
-                findings=[Finding(
-                    finding_id="F-CRIT-1",
-                    name="Production-Path Disconnect",
-                    severity=Severity.CRITICAL,
-                    status=FindingStatus.CONFIRMED,
-                    applicable_because="Entrypoint disconnect",
-                    failure_scenario="Unwired code",
-                    impact="Silent failure",
-                    required_plan_change="Wire entrypoint",
-                    required_verification="Run entrypoint",
-                    residual_risk="None",
-                )],
+                findings=[
+                    Finding(
+                        finding_id="F-CRIT-1",
+                        name="Production-Path Disconnect",
+                        severity=Severity.CRITICAL,
+                        status=FindingStatus.CONFIRMED,
+                        applicable_because="Entrypoint disconnect",
+                        failure_scenario="Unwired code",
+                        impact="Silent failure",
+                        required_plan_change="Wire entrypoint",
+                        required_verification="Run entrypoint",
+                        residual_risk="None",
+                    )
+                ],
                 required_acceptance_evidence=["traces"],
             )
 
@@ -350,18 +356,20 @@ def test_audit_gate_unresolved_high_finding_denies(monkeypatch):
             return AuditReport(
                 outcome=AuditResult.PASS,
                 scope_evaluations={},
-                findings=[Finding(
-                    finding_id="F-HIGH-2",
-                    name="Unresolved High Security Risk",
-                    severity=Severity.HIGH,
-                    status=FindingStatus.CONFIRMED,
-                    applicable_because="High risk",
-                    failure_scenario="Escape",
-                    impact="Loss",
-                    required_plan_change="Fix",
-                    required_verification="Verify",
-                    residual_risk="None",
-                )],
+                findings=[
+                    Finding(
+                        finding_id="F-HIGH-2",
+                        name="Unresolved High Security Risk",
+                        severity=Severity.HIGH,
+                        status=FindingStatus.CONFIRMED,
+                        applicable_because="High risk",
+                        failure_scenario="Escape",
+                        impact="Loss",
+                        required_plan_change="Fix",
+                        required_verification="Verify",
+                        residual_risk="None",
+                    )
+                ],
                 required_acceptance_evidence=["traces"],
             )
 
@@ -384,18 +392,20 @@ def test_audit_gate_unresolved_critical_finding_denies(monkeypatch):
             return AuditReport(
                 outcome=AuditResult.PASS,
                 scope_evaluations={},
-                findings=[Finding(
-                    finding_id="F-CRIT-2",
-                    name="Fatal Isolation Failure",
-                    severity=Severity.CRITICAL,
-                    status=FindingStatus.CONFIRMED,
-                    applicable_because="Critical risk",
-                    failure_scenario="Crash",
-                    impact="Torn state",
-                    required_plan_change="Fix isolation",
-                    required_verification="Verify isolation",
-                    residual_risk="None",
-                )],
+                findings=[
+                    Finding(
+                        finding_id="F-CRIT-2",
+                        name="Fatal Isolation Failure",
+                        severity=Severity.CRITICAL,
+                        status=FindingStatus.CONFIRMED,
+                        applicable_because="Critical risk",
+                        failure_scenario="Crash",
+                        impact="Torn state",
+                        required_plan_change="Fix isolation",
+                        required_verification="Verify isolation",
+                        residual_risk="None",
+                    )
+                ],
                 required_acceptance_evidence=["traces"],
             )
 

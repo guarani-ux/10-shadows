@@ -1,12 +1,14 @@
 import json
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.verifier_daemon import (
-    ensure_channel_dirs,
-    process_intent,
     CHANNEL_DIR,
     INTENT_FILE,
     RECEIPT_FILE,
+    ensure_channel_dirs,
+    process_intent,
 )
 
 
@@ -55,7 +57,9 @@ def test_verifier_daemon_failing_command(tmp_path, monkeypatch):
     ensure_channel_dirs()
 
     import time
+
     from loop_engine.kernel_db import KernelDatabase
+
     test_db = KernelDatabase(tmp_path / "test_kernel.db")
 
     # Test failing command

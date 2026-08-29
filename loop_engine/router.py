@@ -3,21 +3,22 @@ import json
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
+
 from pydantic import BaseModel, Field
 
-from loop_engine.context import RunContext
-from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference
 from loop_engine.artifacts import (
-    ArtifactRegistry,
     ArtifactRecord,
-    StructuredSourceArtifact,
+    ArtifactRegistry,
     MasterAVScriptArtifact,
     ProductionPlanDAGArtifact,
+    StructuredSourceArtifact,
 )
+from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference
+from loop_engine.context import RunContext
+from loop_engine.governor import StepExecutionResult, StepGovernor
 from loop_engine.kernel_db import KernelDatabase
-from loop_engine.governor import StepGovernor, StepExecutionResult
-from loop_engine.runners.scribe_runner import ScribeDomainRunner
 from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
+from loop_engine.runners.scribe_runner import ScribeDomainRunner
 from loop_engine.runners.slicer_runner import SlicerDomainRunner
 
 
@@ -25,6 +26,7 @@ class RoutingDecision(BaseModel):
     """
     Explicit, auditable multi-Shadow routing plan.
     """
+
     objective: str
     run_id: str
     selected_shadow_ids: List[int] = Field(description="Ordered sequence of Shadow IDs to execute")
@@ -41,6 +43,7 @@ class HumanEscalationRecord(BaseModel):
     Structured record emitted when an ambiguous objective, security hazard,
     strike ceiling breach, or required human gate halts automated execution.
     """
+
     escalation_id: str
     run_id: str
     parent_run_id: str
@@ -60,7 +63,9 @@ class HumanEscalationRecord(BaseModel):
     reason: str
     details: Dict[str, Any] = Field(default_factory=dict)
     remediation_options: List[str] = Field(default_factory=list)
-    status: Literal["PENDING", "AWAITING_APPROVAL", "RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_OVERRIDDEN"] = "AWAITING_APPROVAL"
+    status: Literal["PENDING", "AWAITING_APPROVAL", "RESOLVED_APPROVED", "RESOLVED_REJECTED", "RESOLVED_OVERRIDDEN"] = (
+        "AWAITING_APPROVAL"
+    )
     created_at: str = Field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
 
@@ -68,6 +73,7 @@ class RouteStep(BaseModel):
     """
     A single typed step within a multi-Shadow RoutePlan.
     """
+
     step_id: str
     shadow_id: int
     domain_code: str
@@ -85,6 +91,7 @@ class RoutePlan(BaseModel):
     """
     Topologically ordered, deterministic multi-Shadow route plan.
     """
+
     plan_id: str
     pipeline_type: str
     canonical_objective_hash: str
@@ -109,6 +116,7 @@ class RouteExecutionResult(BaseModel):
     """
     Structured outcome of an end-to-end multi-Shadow route execution.
     """
+
     status: Literal["SUCCESS", "ESCALATED", "AWAITING_APPROVAL", "RESUMED", "ABORTED"]
     parent_run_id: str
     route_plan_hash: str
@@ -125,7 +133,7 @@ class RouteExecutionResult(BaseModel):
 class BoundedShadowRouter:
     """
     Shadow Routing & Capability Orchestrator.
-    
+
     Inspects canonical objectives, determines required Shadow domains,
     orders them by dependency DAG, and executes verified multi-Shadow pipelines.
     """
@@ -177,8 +185,7 @@ class BoundedShadowRouter:
         all_shadow_ids = set(range(1, 11))
         excluded_ids = sorted(list(all_shadow_ids - set(selected_ids)))
         exclusion_reasons = {
-            s_id: f"Shadow {s_id} not required for objective type '{obj_type}'."
-            for s_id in excluded_ids
+            s_id: f"Shadow {s_id} not required for objective type '{obj_type}'." for s_id in excluded_ids
         }
 
         return RoutingDecision(
@@ -256,8 +263,7 @@ class BoundedShadowRouter:
         all_shadow_ids = set(range(1, 11))
         excluded_ids = sorted(list(all_shadow_ids - set(selected_shadow_ids)))
         exclusion_reasons = {
-            s_id: f"Shadow {s_id} not required for pipeline '{requested_pipeline_type}'."
-            for s_id in excluded_ids
+            s_id: f"Shadow {s_id} not required for pipeline '{requested_pipeline_type}'." for s_id in excluded_ids
         }
 
         plan = RoutePlan(
@@ -447,12 +453,14 @@ class BoundedShadowRouter:
                     dest_md = step_res.receipt.get("destination_markdown", "") if step_res.receipt else ""
                     dest_json = step_res.receipt.get("destination_json", "") if step_res.receipt else ""
                     from pathlib import Path
+
                     p_json = Path(dest_json)
                     p_md = Path(dest_md)
                     if p_json.exists() and p_md.exists():
                         bp_data = json.loads(p_json.read_text(encoding="utf-8"))
                         md_data = p_md.read_text(encoding="utf-8")
                         from loop_engine.herald.schema import MasterAVScriptBlueprint
+
                         bp = MasterAVScriptBlueprint.model_validate(bp_data)
                         evidence_refs = [
                             EvidenceReference(
@@ -466,8 +474,17 @@ class BoundedShadowRouter:
                             UnknownReference(
                                 unknown_id=u.unknown_id,
                                 description=u.description,
-                                classification=u.classification if u.classification in ("CREATIVE_PROPOSAL", "ASSUMPTION_REQUIRING_APPROVAL", "UNRESOLVED_FACTUAL_CONFLICT", "UNRESOLVED_UNKNOWN") else "ASSUMPTION_REQUIRING_APPROVAL",
-                                mitigation_or_approval_decision=u.mitigation_or_approval_decision or "Standard coverage",
+                                classification=u.classification
+                                if u.classification
+                                in (
+                                    "CREATIVE_PROPOSAL",
+                                    "ASSUMPTION_REQUIRING_APPROVAL",
+                                    "UNRESOLVED_FACTUAL_CONFLICT",
+                                    "UNRESOLVED_UNKNOWN",
+                                )
+                                else "ASSUMPTION_REQUIRING_APPROVAL",
+                                mitigation_or_approval_decision=u.mitigation_or_approval_decision
+                                or "Standard coverage",
                             )
                             for u in bp.explicit_unknowns
                         ]
@@ -487,6 +504,7 @@ class BoundedShadowRouter:
                 elif step.output_artifact_type == "ProductionPlanDAGArtifact":
                     dest_file = step_res.receipt.get("destination", "") if step_res.receipt else ""
                     from pathlib import Path
+
                     p = Path(dest_file)
                     if p.exists():
                         raw_data = json.loads(p.read_text(encoding="utf-8"))
@@ -535,7 +553,8 @@ class BoundedShadowRouter:
                     task_id=parent_context.task_id,
                     shadow_id=step.shadow_id,
                     category="STRIKE_CEILING_EXCEEDED",
-                    reason=step_res.last_error or f"Step '{step.step_id}' aborted after 3 failed verification attempts.",
+                    reason=step_res.last_error
+                    or f"Step '{step.step_id}' aborted after 3 failed verification attempts.",
                     details={
                         "step_id": step.step_id,
                         "strikes_exhausted": step_res.strikes_used,

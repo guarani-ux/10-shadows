@@ -12,11 +12,11 @@ Enforces:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from forge.core.substrate import CanonicalRequirement, compute_digest
@@ -37,7 +37,9 @@ from loop_engine.relational.schema import EpistemicStatus
 
 class CompositionRule(str, Enum):
     MANDATORY_CONJUNCTION = "MANDATORY_CONJUNCTION"  # All mandatory requirements must be satisfied (AND)
-    AUTHORITATIVE_ALTERNATIVES = "AUTHORITATIVE_ALTERNATIVES"  # Explicit disjunction permitted by objective semantics (OR)
+    AUTHORITATIVE_ALTERNATIVES = (
+        "AUTHORITATIVE_ALTERNATIVES"  # Explicit disjunction permitted by objective semantics (OR)
+    )
     CONDITIONAL = "CONDITIONAL"  # Requires prerequisite satisfaction before branch is active
     OPTIONAL_PREFERENCE = "OPTIONAL_PREFERENCE"  # Best-effort preference; does not block completion
 
@@ -47,6 +49,7 @@ class ObjectiveSufficiencyProof:
     """
     Cryptographic proof of Law 6 Objective Sufficiency.
     """
+
     objective_id: str
     objective_version: int
     is_satisfied: bool
@@ -86,17 +89,13 @@ class Law6SufficiencyEngine:
         # 1. Check specification qualification status
         if spec.qualification_status != SemanticQualificationStatus.QUALIFIED:
             unresolved_mandatory.append(f"UNQUALIFIED_SPECIFICATION_{spec.qualification_status.value}")
-            return Law6SufficiencyEngine._build_proof(
-                spec, False, [], unresolved_mandatory, [], composition_rule
-            )
+            return Law6SufficiencyEngine._build_proof(spec, False, [], unresolved_mandatory, [], composition_rule)
 
         # 2. Prevent 0-requirement false-success exploit on non-trivial objectives
         if not spec.requirements:
             if len(spec.canonical_intent.strip()) > 0:
                 unresolved_mandatory.append("INSUFFICIENT_REQUIREMENTS_EMPTY_SET")
-                return Law6SufficiencyEngine._build_proof(
-                    spec, False, [], unresolved_mandatory, [], composition_rule
-                )
+                return Law6SufficiencyEngine._build_proof(spec, False, [], unresolved_mandatory, [], composition_rule)
 
         # 3. Evaluate each canonical requirement
         for req in spec.requirements:
@@ -109,7 +108,11 @@ class Law6SufficiencyEngine:
             # JTMS Live Invalidation Check
             if jtms_store:
                 node = jtms_store.get_node(req.requirement_id)
-                if node and node.epistemic_status in (EpistemicStatus.INVALIDATED, EpistemicStatus.CONTESTED, EpistemicStatus.PROPOSED):
+                if node and node.epistemic_status in (
+                    EpistemicStatus.INVALIDATED,
+                    EpistemicStatus.CONTESTED,
+                    EpistemicStatus.PROPOSED,
+                ):
                     if req.is_blocking:
                         unresolved_mandatory.append(req.requirement_id)
                     continue
@@ -121,7 +124,11 @@ class Law6SufficiencyEngine:
                 filtered_ev: List[QualifiedEvidence] = []
                 for ev in ev_list:
                     ev_node = jtms_store.get_node(ev.evidence_id)
-                    if ev_node and ev_node.epistemic_status in (EpistemicStatus.INVALIDATED, EpistemicStatus.CONTESTED, EpistemicStatus.PROPOSED):
+                    if ev_node and ev_node.epistemic_status in (
+                        EpistemicStatus.INVALIDATED,
+                        EpistemicStatus.CONTESTED,
+                        EpistemicStatus.PROPOSED,
+                    ):
                         continue
                     filtered_ev.append(ev)
                 ev_list = filtered_ev
@@ -172,14 +179,16 @@ class Law6SufficiencyEngine:
         falsified: List[str],
         composition: CompositionRule,
     ) -> ObjectiveSufficiencyProof:
-        digest = compute_digest({
-            "spec_hash": spec.specification_hash,
-            "satisfied": sorted(satisfied_ids),
-            "unresolved": sorted(unresolved),
-            "falsified": sorted(falsified),
-            "composition": composition.value,
-            "is_satisfied": is_satisfied,
-        })
+        digest = compute_digest(
+            {
+                "spec_hash": spec.specification_hash,
+                "satisfied": sorted(satisfied_ids),
+                "unresolved": sorted(unresolved),
+                "falsified": sorted(falsified),
+                "composition": composition.value,
+                "is_satisfied": is_satisfied,
+            }
+        )
         return ObjectiveSufficiencyProof(
             objective_id=spec.objective_id,
             objective_version=spec.version,

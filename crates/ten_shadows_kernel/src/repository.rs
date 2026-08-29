@@ -50,7 +50,11 @@ pub struct AuthoritativeSource {
 impl AuthoritativeSource {
     pub fn new(path: &Path) -> Result<Self, RepositoryRoleError> {
         let canonical = path.canonicalize().map_err(|e| {
-            RepositoryRoleError::InvalidGitRepository(format!("Cannot canonicalize path '{}': {}", path.display(), e))
+            RepositoryRoleError::InvalidGitRepository(format!(
+                "Cannot canonicalize path '{}': {}",
+                path.display(),
+                e
+            ))
         })?;
         Ok(Self { root: canonical })
     }
@@ -93,9 +97,12 @@ impl GovernedWorkspace {
         let wt_base = base_worktrees_dir
             .map(|p| p.to_path_buf())
             .unwrap_or_else(|| std::env::temp_dir().join("10_shadows_worktrees"));
-        
+
         fs::create_dir_all(&wt_base).map_err(|e| {
-            RepositoryRoleError::InvalidGitRepository(format!("Failed to create worktrees dir: {}", e))
+            RepositoryRoleError::InvalidGitRepository(format!(
+                "Failed to create worktrees dir: {}",
+                e
+            ))
         })?;
 
         let safe_run_id = run_id.replace(['/', '\\', ':', ' '], "_");
@@ -104,10 +111,12 @@ impl GovernedWorkspace {
 
         // Invariant: Path safety guard — workspace must NOT be identical to source root!
         if workspace_path == source.root {
-            return Err(RepositoryRoleError::AuthoritativeSourceMutationForbidden(format!(
-                "Workspace path '{}' cannot be the AuthoritativeSource root!",
-                workspace_path.display()
-            )));
+            return Err(RepositoryRoleError::AuthoritativeSourceMutationForbidden(
+                format!(
+                    "Workspace path '{}' cannot be the AuthoritativeSource root!",
+                    workspace_path.display()
+                ),
+            ));
         }
 
         // Clean up any stale worktree at this path
@@ -116,10 +125,22 @@ impl GovernedWorkspace {
         }
 
         let output = Command::new("git")
-            .args(["worktree", "add", "-b", &branch_name, workspace_path.to_str().unwrap(), baseline_sha])
+            .args([
+                "worktree",
+                "add",
+                "-b",
+                &branch_name,
+                workspace_path.to_str().unwrap(),
+                baseline_sha,
+            ])
             .current_dir(&source.root)
             .output()
-            .map_err(|e| RepositoryRoleError::InvalidGitRepository(format!("Failed to spawn git worktree command: {}", e)))?;
+            .map_err(|e| {
+                RepositoryRoleError::InvalidGitRepository(format!(
+                    "Failed to spawn git worktree command: {}",
+                    e
+                ))
+            })?;
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
@@ -160,7 +181,12 @@ impl GovernedWorkspace {
     /// Safely destroys the worktree and deletes the sandbox branch from the source repo.
     pub fn destroy(self) {
         let _ = Command::new("git")
-            .args(["worktree", "remove", "--force", self.workspace_root.to_str().unwrap_or_default()])
+            .args([
+                "worktree",
+                "remove",
+                "--force",
+                self.workspace_root.to_str().unwrap_or_default(),
+            ])
             .current_dir(&self.source_root)
             .output();
 

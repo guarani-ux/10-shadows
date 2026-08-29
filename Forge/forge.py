@@ -24,16 +24,16 @@ Zero domain keyword heuristics. Zero synthetic defaults or fixtures.
 Production ingress strictly rejects injected operations, verification contracts, and ungrounded authority claims.
 """
 
+import uuid
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set, Union
-import uuid
 
 from forge.adapters.actions import ActionAdapter, SandboxFileAdapter
-from forge.adapters.model import ModelAdapter, MockModelAdapter
+from forge.adapters.model import MockModelAdapter, ModelAdapter
 from forge.core.adequacy import IntentCoverageEvaluator, RawClauseTokenizer
 from forge.core.authorize import AuthorizationGate
 from forge.core.build import build
-from forge.core.closure import ClosureGate, AntiCheatingViolation
+from forge.core.closure import AntiCheatingViolation, ClosureGate
 from forge.core.compiler import ExecutionGraphCompiler
 from forge.core.decomposition import DecompositionCoverageEvaluator
 from forge.core.direct import direct
@@ -54,10 +54,10 @@ from forge.core.substrate import (
     EvidenceRequirement,
     ObjectiveAdequacyState,
     OperatorType,
+    RequiredOperation,
     RequirementDisposition,
     RequirementOrigin,
     RequirementTrace,
-    RequiredOperation,
     ResolutionProof,
     SatisfactionObligation,
     VerificationContract,
@@ -103,7 +103,12 @@ class ForgeEngine:
         Executes an objective through Grounded Satisfaction Resolution.
         Production ingress strictly rejects injected operations or verification contracts.
         """
-        if "injected_operations" in kwargs or "injected_contracts" in kwargs or kwargs.get("injected_operations") or kwargs.get("injected_contracts"):
+        if (
+            "injected_operations" in kwargs
+            or "injected_contracts" in kwargs
+            or kwargs.get("injected_operations")
+            or kwargs.get("injected_contracts")
+        ):
             raise ValueError("Production run() does not accept injected operations or verification contracts.")
 
         run_id = f"run_{uuid.uuid4().hex[:8]}"
@@ -111,17 +116,26 @@ class ForgeEngine:
         # Step 1: Ingest Raw Human Intent & Caller Environment Inputs
         raw_intent = intent_or_request if isinstance(intent_or_request, str) else intent_or_request.get("intent", "")
         explicit_contracts: List[Dict[str, Any]] = []
-        
+
         env_inputs: Dict[str, Any] = {"raw_input": raw_intent, "source_text": raw_intent, "text": raw_intent}
         if initial_environment_inputs:
             env_inputs.update(initial_environment_inputs)
-            
+
         if isinstance(intent_or_request, dict):
             # Check for reserved authority fields injected by untrusted caller
-            reserved_fields = {"GROUNDED", "authority_source", "SemanticApplicabilityProof", "SatisfactionObligation", "RequiredOperation", "ResolutionProof", "VerificationContract", "VERIFIED_FACT"}
+            reserved_fields = {
+                "GROUNDED",
+                "authority_source",
+                "SemanticApplicabilityProof",
+                "SatisfactionObligation",
+                "RequiredOperation",
+                "ResolutionProof",
+                "VerificationContract",
+                "VERIFIED_FACT",
+            }
             for k in reserved_fields:
                 if k in intent_or_request:
-                    pass # Ignore caller authority claims
+                    pass  # Ignore caller authority claims
 
             if "explicit_semantic_contracts" in intent_or_request:
                 explicit_contracts = intent_or_request["explicit_semantic_contracts"]
@@ -133,7 +147,15 @@ class ForgeEngine:
                 env_inputs.update(intent_or_request["source_data"])
 
             for k, v in intent_or_request.items():
-                if k not in ("intent", "request_id", "explicit_semantic_contracts", "contract", "source_data", "metadata", "requested_surface"):
+                if k not in (
+                    "intent",
+                    "request_id",
+                    "explicit_semantic_contracts",
+                    "contract",
+                    "source_data",
+                    "metadata",
+                    "requested_surface",
+                ):
                     env_inputs[k] = v
 
         raw_clauses = RawClauseTokenizer.tokenize(raw_intent)
@@ -223,8 +245,10 @@ class ForgeEngine:
         for op in operations:
             bound_obl = obl_map.get(op.source_obligation_id)
             v_spec = bound_obl.provenance.get("verification_spec") if bound_obl else None
-            
-            def _build_validator(expected_outputs: List[str], spec: Optional[Dict[str, Any]]) -> Callable[[Dict[str, Any]], bool]:
+
+            def _build_validator(
+                expected_outputs: List[str], spec: Optional[Dict[str, Any]]
+            ) -> Callable[[Dict[str, Any]], bool]:
                 def _validator(state: Dict[str, Any]) -> bool:
                     if not isinstance(state, dict):
                         return False
@@ -238,11 +262,12 @@ class ForgeEngine:
                             if state.get(k) != exp_v:
                                 return False
                     return True
+
                 return _validator
 
             contract_id = f"vc_{op.operation_id}"
             success_condition = op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}"
-            
+
             verification_contracts.append(
                 VerificationContract(
                     contract_id=contract_id,
@@ -346,7 +371,9 @@ class ForgeEngine:
         v_contracts = verification_contracts or [
             VerificationContract(
                 contract_id=f"vc_{op.operation_id}",
-                observable_success_condition=op.postconditions[0] if op.postconditions else f"Satisfied {op.operation_id}",
+                observable_success_condition=op.postconditions[0]
+                if op.postconditions
+                else f"Satisfied {op.operation_id}",
                 verification_method="TEST_VERIFY",
                 evidence_required=[],
                 validator_fn=lambda state: True,
@@ -429,7 +456,9 @@ class ForgeEngine:
                 input_data=task,
             )
 
-            dynamic_target = action_gen.get("target") or f"{task['deliverable'].get('kind', 'output').lower()}_{task['task_id']}.txt"
+            dynamic_target = (
+                action_gen.get("target") or f"{task['deliverable'].get('kind', 'output').lower()}_{task['task_id']}.txt"
+            )
             dynamic_payload = action_gen.get("payload") or {"content": f"Action result for: {task['objective']}"}
             dynamic_capability = action_gen.get("capability_required") or "SANDBOX_FILE_WRITE"
 

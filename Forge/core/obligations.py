@@ -15,11 +15,11 @@ Enforces:
 5. Zero domain keyword routing. Zero default DATA_EXTRACTION fallback.
 """
 
-from dataclasses import dataclass
 import hashlib
 import json
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
 import uuid
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from forge.core.substrate import (
     CandidateSemanticBinding,
@@ -78,18 +78,30 @@ class CandidateBindingGenerator:
 
         for req in canonical_requirements:
             # 1. Check if structured machine-readable contract was explicitly provided at ingress
-            if req.requirement_id in structured_map or (structured_contracts and len(structured_contracts) == 1 and len(canonical_requirements) == 1):
+            if req.requirement_id in structured_map or (
+                structured_contracts and len(structured_contracts) == 1 and len(canonical_requirements) == 1
+            ):
                 struct_c = structured_map.get(req.requirement_id) or structured_contracts[0]
-                
+
                 inputs_raw = struct_c.get("inputs", {})
                 outputs_raw = struct_c.get("outputs", {})
-                
+
                 norm_inputs = {
-                    k: v if isinstance(v, ContractField) else ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"), unit=v.get("unit") if isinstance(v, dict) else None)
+                    k: v
+                    if isinstance(v, ContractField)
+                    else ContractField(
+                        type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"),
+                        unit=v.get("unit") if isinstance(v, dict) else None,
+                    )
                     for k, v in inputs_raw.items()
                 }
                 norm_outputs = {
-                    k: v if isinstance(v, ContractField) else ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"), unit=v.get("unit") if isinstance(v, dict) else None)
+                    k: v
+                    if isinstance(v, ContractField)
+                    else ContractField(
+                        type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"),
+                        unit=v.get("unit") if isinstance(v, dict) else None,
+                    )
                     for k, v in outputs_raw.items()
                 }
 
@@ -98,10 +110,20 @@ class CandidateBindingGenerator:
                     inputs=norm_inputs,
                     outputs=norm_outputs,
                     transformation_rule=struct_c.get("transformation_rule") or struct_c.get("rule"),
-                    evidence_requirements=tuple([
-                        e if isinstance(e, EvidenceRequirement) else EvidenceRequirement(evidence_id=e.get("evidence_id", "ev_0"), claim_or_decision_supported=e.get("claim", ""), required_evidence_class=EvidenceClass(e.get("required_evidence_class", "VERIFIED_FACT")))
-                        for e in struct_c.get("evidence_requirements", [])
-                    ]),
+                    evidence_requirements=tuple(
+                        [
+                            e
+                            if isinstance(e, EvidenceRequirement)
+                            else EvidenceRequirement(
+                                evidence_id=e.get("evidence_id", "ev_0"),
+                                claim_or_decision_supported=e.get("claim", ""),
+                                required_evidence_class=EvidenceClass(
+                                    e.get("required_evidence_class", "VERIFIED_FACT")
+                                ),
+                            )
+                            for e in struct_c.get("evidence_requirements", [])
+                        ]
+                    ),
                     authority_requirements=tuple(struct_c.get("authority_requirements", [])),
                     verification_spec=struct_c.get("verification_spec"),
                 )
@@ -132,16 +154,28 @@ class CandidateBindingGenerator:
             inputs = known_inputs or {}
             is_python_source = "source_code" in inputs and isinstance(inputs["source_code"], str)
             is_task_dag = "tasks" in inputs and isinstance(inputs["tasks"], list)
-            is_text_source = ("source_text" in inputs and isinstance(inputs["source_text"], str) and bool(inputs["source_text"])) or ("text" in inputs and isinstance(inputs["text"], str) and bool(inputs["text"]))
+            is_text_source = (
+                "source_text" in inputs and isinstance(inputs["source_text"], str) and bool(inputs["source_text"])
+            ) or ("text" in inputs and isinstance(inputs["text"], str) and bool(inputs["text"]))
 
-            if is_text_source and ("extract" in req.description.lower() or "ingest" in req.description.lower() or "evidence" in req.description.lower() or "source text" in req.description.lower()):
+            if is_text_source and (
+                "extract" in req.description.lower()
+                or "ingest" in req.description.lower()
+                or "evidence" in req.description.lower()
+                or "source text" in req.description.lower()
+            ):
                 contract = SemanticContract(
                     effect_type="DATA_EXTRACTION",
                     inputs={"source_text": ContractField(type_name="str")},
-                    outputs={"extracted_evidence": ContractField(type_name="List[Dict[str, Any]]"), "claims": ContractField(type_name="List[Dict[str, Any]]")},
+                    outputs={
+                        "extracted_evidence": ContractField(type_name="List[Dict[str, Any]]"),
+                        "claims": ContractField(type_name="List[Dict[str, Any]]"),
+                    },
                     transformation_rule="SENTENCE_SPLIT_EXTRACTION",
                 )
-                binding_hash = compute_canonical_binding_hash(req.requirement_hash, req.requirement_id, contract, req.is_blocking)
+                binding_hash = compute_canonical_binding_hash(
+                    req.requirement_hash, req.requirement_id, contract, req.is_blocking
+                )
                 candidates.append(
                     CandidateSemanticBinding(
                         binding_hash=binding_hash,
@@ -149,19 +183,32 @@ class CandidateBindingGenerator:
                         source_requirement_id=req.requirement_id,
                         semantic_contract=contract,
                         is_blocking=req.is_blocking,
-                        candidate_provenance={"origin": "SYSTEM_INVARIANT_PREDICATE", "precondition": "verified_text_source"},
+                        candidate_provenance={
+                            "origin": "SYSTEM_INVARIANT_PREDICATE",
+                            "precondition": "verified_text_source",
+                        },
                     )
                 )
                 continue
 
-            if is_python_source and ("ast" in req.description.lower() or "syntax" in req.description.lower() or "security" in req.description.lower()):
+            if is_python_source and (
+                "ast" in req.description.lower()
+                or "syntax" in req.description.lower()
+                or "security" in req.description.lower()
+            ):
                 contract = SemanticContract(
                     effect_type="AST_VERIFICATION",
                     inputs={"source_code": ContractField(type_name="str")},
-                    outputs={"ast_ok": ContractField(type_name="bool"), "violations": ContractField(type_name="List[str]"), "syntax_valid": ContractField(type_name="bool")},
+                    outputs={
+                        "ast_ok": ContractField(type_name="bool"),
+                        "violations": ContractField(type_name="List[str]"),
+                        "syntax_valid": ContractField(type_name="bool"),
+                    },
                     transformation_rule="AST_PARSER_LINT",
                 )
-                binding_hash = compute_canonical_binding_hash(req.requirement_hash, req.requirement_id, contract, req.is_blocking)
+                binding_hash = compute_canonical_binding_hash(
+                    req.requirement_hash, req.requirement_id, contract, req.is_blocking
+                )
                 candidates.append(
                     CandidateSemanticBinding(
                         binding_hash=binding_hash,
@@ -169,19 +216,33 @@ class CandidateBindingGenerator:
                         source_requirement_id=req.requirement_id,
                         semantic_contract=contract,
                         is_blocking=req.is_blocking,
-                        candidate_provenance={"origin": "SYSTEM_INVARIANT_PREDICATE", "precondition": "verified_python_source"},
+                        candidate_provenance={
+                            "origin": "SYSTEM_INVARIANT_PREDICATE",
+                            "precondition": "verified_python_source",
+                        },
                     )
                 )
                 continue
 
-            if is_task_dag and ("dag" in req.description.lower() or "topological" in req.description.lower() or "decompose" in req.description.lower() or "sort" in req.description.lower()):
+            if is_task_dag and (
+                "dag" in req.description.lower()
+                or "topological" in req.description.lower()
+                or "decompose" in req.description.lower()
+                or "sort" in req.description.lower()
+            ):
                 contract = SemanticContract(
                     effect_type="TOPOLOGICAL_SORT",
                     inputs={"tasks": ContractField(type_name="List[Dict[str, Any]]")},
-                    outputs={"sorted_dag": ContractField(type_name="List[str]"), "has_cycles": ContractField(type_name="bool"), "node_count": ContractField(type_name="int")},
+                    outputs={
+                        "sorted_dag": ContractField(type_name="List[str]"),
+                        "has_cycles": ContractField(type_name="bool"),
+                        "node_count": ContractField(type_name="int"),
+                    },
                     transformation_rule="DAG_TOPOLOGICAL_SORT",
                 )
-                binding_hash = compute_canonical_binding_hash(req.requirement_hash, req.requirement_id, contract, req.is_blocking)
+                binding_hash = compute_canonical_binding_hash(
+                    req.requirement_hash, req.requirement_id, contract, req.is_blocking
+                )
                 candidates.append(
                     CandidateSemanticBinding(
                         binding_hash=binding_hash,
@@ -189,24 +250,39 @@ class CandidateBindingGenerator:
                         source_requirement_id=req.requirement_id,
                         semantic_contract=contract,
                         is_blocking=req.is_blocking,
-                        candidate_provenance={"origin": "SYSTEM_INVARIANT_PREDICATE", "precondition": "verified_task_list"},
+                        candidate_provenance={
+                            "origin": "SYSTEM_INVARIANT_PREDICATE",
+                            "precondition": "verified_task_list",
+                        },
                     )
                 )
                 continue
 
             # 3. Incorporate any model proposals (ZERO AUTHORITY HYPOTHESES)
-            matched_model_props = [p for p in (model_proposals or []) if p.get("requirement_id") == req.requirement_id or not p.get("requirement_id")]
+            matched_model_props = [
+                p
+                for p in (model_proposals or [])
+                if p.get("requirement_id") == req.requirement_id or not p.get("requirement_id")
+            ]
             if matched_model_props:
                 for prop in matched_model_props:
                     inputs_raw = prop.get("inputs", {})
                     outputs_raw = prop.get("outputs", {})
                     contract = SemanticContract(
                         effect_type=prop.get("effect_type", "UNVERIFIED_EFFECT"),
-                        inputs={k: ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any")) for k, v in inputs_raw.items()},
-                        outputs={k: ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any")) for k, v in outputs_raw.items()},
+                        inputs={
+                            k: ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"))
+                            for k, v in inputs_raw.items()
+                        },
+                        outputs={
+                            k: ContractField(type_name=str(v) if isinstance(v, str) else v.get("type_name", "Any"))
+                            for k, v in outputs_raw.items()
+                        },
                         transformation_rule=prop.get("transformation_rule"),
                     )
-                    binding_hash = compute_canonical_binding_hash(req.requirement_hash, req.requirement_id, contract, req.is_blocking)
+                    binding_hash = compute_canonical_binding_hash(
+                        req.requirement_hash, req.requirement_id, contract, req.is_blocking
+                    )
                     candidates.append(
                         CandidateSemanticBinding(
                             binding_hash=binding_hash,
@@ -292,7 +368,9 @@ class SemanticAuthorityVerifier:
             return (SemanticBindingStatus.GROUNDED, proof, None)
 
         # 4. Check Path C: EXPLICIT_HUMAN_APPROVAL in KernelDatabase
-        approval = self.kernel_db.get_approval_for_subject(subject_type="SEMANTIC_BINDING", subject_hash=candidate.binding_hash)
+        approval = self.kernel_db.get_approval_for_subject(
+            subject_type="SEMANTIC_BINDING", subject_hash=candidate.binding_hash
+        )
         if approval:
             proof_id = f"sp_app_{uuid.uuid4().hex[:8]}"
             proof = SemanticApplicabilityProof(
@@ -320,7 +398,9 @@ class SemanticAuthorityVerifier:
         for dom_auth in domain_authorities:
             mapping = dom_auth.get("mapping", {})
             if canonical_requirement.description in mapping or canonical_requirement.requirement_id in mapping:
-                expected_rule = mapping.get(canonical_requirement.description) or mapping.get(canonical_requirement.requirement_id)
+                expected_rule = mapping.get(canonical_requirement.description) or mapping.get(
+                    canonical_requirement.requirement_id
+                )
                 if expected_rule and expected_rule.get("effect_type") == candidate.semantic_contract.effect_type:
                     proof_id = f"sp_dom_{uuid.uuid4().hex[:8]}"
                     proof = SemanticApplicabilityProof(
@@ -346,7 +426,11 @@ class SemanticAuthorityVerifier:
         # 6. Check Path E: AUTHORITATIVE_EXTERNAL_EVIDENCE in KernelDatabase
         for ev_req in candidate.semantic_contract.evidence_requirements:
             ev_rec = self.kernel_db.get_authority_evidence(ev_req.evidence_id)
-            if ev_rec and ev_rec.get("status") == "VERIFIED" and ev_rec.get("evidence_class") == ev_req.required_evidence_class.value:
+            if (
+                ev_rec
+                and ev_rec.get("status") == "VERIFIED"
+                and ev_rec.get("evidence_class") == ev_req.required_evidence_class.value
+            ):
                 proof_id = f"sp_ev_{uuid.uuid4().hex[:8]}"
                 proof = SemanticApplicabilityProof(
                     proof_id=proof_id,
@@ -466,7 +550,11 @@ class ObligationDerivationEngine:
                     else ObligationAuthority.SYSTEM_INVARIANT
                     if proof.authority_source == SemanticAuthoritySource.SYSTEM_INVARIANT
                     else ObligationAuthority.VERIFIED_DOMAIN_DERIVED
-                    if proof.authority_source in (SemanticAuthoritySource.VERIFIED_DOMAIN_AUTHORITY, SemanticAuthoritySource.AUTHORITATIVE_EXTERNAL_EVIDENCE)
+                    if proof.authority_source
+                    in (
+                        SemanticAuthoritySource.VERIFIED_DOMAIN_AUTHORITY,
+                        SemanticAuthoritySource.AUTHORITATIVE_EXTERNAL_EVIDENCE,
+                    )
                     else ObligationAuthority.HUMAN_APPROVED
                 )
 
@@ -505,7 +593,8 @@ class ObligationDerivationEngine:
                         ResolutionDeficit(
                             deficit_type="SEMANTIC_BINDING_DEFICIT",
                             obligation_id=f"obl_{req.requirement_id}",
-                            reason="; ".join(rejection_reasons) or f"Requirement '{req.requirement_id}' lacks verified semantic authority.",
+                            reason="; ".join(rejection_reasons)
+                            or f"Requirement '{req.requirement_id}' lacks verified semantic authority.",
                             missing_element="SEMANTIC_APPLICABILITY_PROOF",
                         )
                     )

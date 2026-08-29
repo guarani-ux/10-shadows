@@ -50,11 +50,20 @@ impl fmt::Display for CandidateClassification {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             CandidateClassification::Governed(g) => {
-                write!(f, "GovernedCandidate(sha={}, parent={}, worker={})", 
-                    g.lineage.candidate_sha, g.lineage.parent_baseline_sha, g.lineage.worker_invocation_id)
+                write!(
+                    f,
+                    "GovernedCandidate(sha={}, parent={}, worker={})",
+                    g.lineage.candidate_sha,
+                    g.lineage.parent_baseline_sha,
+                    g.lineage.worker_invocation_id
+                )
             }
             CandidateClassification::External(e) => {
-                write!(f, "ExternalCandidate(sha={}, note={})", e.candidate_sha, e.source_note)
+                write!(
+                    f,
+                    "ExternalCandidate(sha={}, note={})",
+                    e.candidate_sha, e.source_note
+                )
             }
         }
     }

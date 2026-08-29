@@ -23,12 +23,12 @@ from loop_engine.capability import CapabilityContract, evaluate_capability_appli
 
 
 class ActionDisposition(str, Enum):
-    DIRECT = "DIRECT"                  # Answer directly (informational, reasoning, inquiry)
-    REUSE = "REUSE"                    # Invoke existing registered capability
-    ACQUIRE = "ACQUIRE"                # Import / install authorized external capability
-    CONFIGURE = "CONFIGURE"            # Adjust parameter or configuration without code generation
-    COMPOSE = "COMPOSE"                # Pipe existing capabilities together
-    BUILD = "BUILD"                    # Earned code generation / compilation
+    DIRECT = "DIRECT"  # Answer directly (informational, reasoning, inquiry)
+    REUSE = "REUSE"  # Invoke existing registered capability
+    ACQUIRE = "ACQUIRE"  # Import / install authorized external capability
+    CONFIGURE = "CONFIGURE"  # Adjust parameter or configuration without code generation
+    COMPOSE = "COMPOSE"  # Pipe existing capabilities together
+    BUILD = "BUILD"  # Earned code generation / compilation
     EXPOSE_DEFICIT = "EXPOSE_DEFICIT"  # Explicitly halt and report domain/capability deficit
 
 

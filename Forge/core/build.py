@@ -2,6 +2,7 @@ import ast
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
+
 from forge.adapters.model import ModelAdapter
 from forge.core.schema import validate_contract
 
@@ -31,9 +32,7 @@ def run_physical_smoke_test(artifact_type: str, content: str) -> Tuple[str, Opti
 
 
 def build(
-    task_spec: Dict[str, Any],
-    model_adapter: ModelAdapter,
-    artifacts_dir: Optional[Path] = None
+    task_spec: Dict[str, Any], model_adapter: ModelAdapter, artifacts_dir: Optional[Path] = None
 ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Synthesizes a minimal reusable capability (BuildSpec) and produces its artifact.
@@ -51,22 +50,24 @@ def build(
         "components (list with 1 minimal component), acceptance_tests, external_side_effects (bool), and the actual artifact code/template."
     )
 
-    generation = model_adapter.generate(
-        instruction=prompt,
-        input_data=task_spec
-    )
+    generation = model_adapter.generate(instruction=prompt, input_data=task_spec)
 
     artifact_type = generation.get("artifact_type", "SCRIPT")
     responsibility = generation.get("responsibility", task_spec["objective"])
-    vertical_slice = generation.get("vertical_slice", {
-        "raw_input": "Input text or data payload",
-        "processing": "Transforms input through single processor logic",
-        "raw_output": "Structured output result"
-    })
+    vertical_slice = generation.get(
+        "vertical_slice",
+        {
+            "raw_input": "Input text or data payload",
+            "processing": "Transforms input through single processor logic",
+            "raw_output": "Structured output result",
+        },
+    )
     inputs = generation.get("inputs", ["raw_input"])
     outputs = generation.get("outputs", ["raw_output"])
     components = generation.get("components", ["core_processor"])
-    acceptance_tests = generation.get("acceptance_tests", task_spec.get("success_conditions", ["Processor runs without crashing"]))
+    acceptance_tests = generation.get(
+        "acceptance_tests", task_spec.get("success_conditions", ["Processor runs without crashing"])
+    )
     external_side_effects = bool(generation.get("external_side_effects", False))
 
     build_spec = {
@@ -79,12 +80,16 @@ def build(
         "outputs": outputs,
         "components": components,
         "acceptance_tests": acceptance_tests,
-        "external_side_effects": external_side_effects
+        "external_side_effects": external_side_effects,
     }
 
     validate_contract("BuildSpec", build_spec)
 
-    raw_content = generation.get("artifact_code") or generation.get("content") or f"# Capability: {responsibility}\n# Type: {artifact_type}\n\ndef process(data):\n    return data\n"
+    raw_content = (
+        generation.get("artifact_code")
+        or generation.get("content")
+        or f"# Capability: {responsibility}\n# Type: {artifact_type}\n\ndef process(data):\n    return data\n"
+    )
 
     # Real Physical Smoke Test
     smoke_status, smoke_error = run_physical_smoke_test(artifact_type, raw_content)
@@ -97,7 +102,7 @@ def build(
         "version": "0.1.0",
         "content": raw_content,
         "smoke_test_status": smoke_status,
-        "smoke_test_error": smoke_error
+        "smoke_test_error": smoke_error,
     }
 
     # Optionally persist to artifacts directory

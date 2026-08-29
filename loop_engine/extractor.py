@@ -46,8 +46,6 @@ def safe_extract_target(filename: str, staging_dir: Path) -> Path:
     try:
         target_path.relative_to(staging_resolved)
     except ValueError:
-        raise ValueError(
-            f"Security Violation: Target path '{filename}' escapes staging boundary '{staging_resolved}'."
-        )
+        raise ValueError(f"Security Violation: Target path '{filename}' escapes staging boundary '{staging_resolved}'.")
 
     return target_path

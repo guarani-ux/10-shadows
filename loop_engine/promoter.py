@@ -12,17 +12,17 @@ from typing import Any, Optional
 
 from loop_engine.authority import issue_proof_witness
 from loop_engine.kernel_db import (
-    KernelDatabase,
-    ReceiptNotFoundError,
-    ReceiptMismatchError,
     IllegalStateTransitionError,
+    KernelDatabase,
+    ReceiptMismatchError,
+    ReceiptNotFoundError,
 )
 from loop_engine.schema import State, VerificationReceipt
 from loop_engine.transition import (
     PrivilegedTransitionEngine,
-    TransitionRequest,
     TransitionReceipt,
     TransitionRejection,
+    TransitionRequest,
     compute_complete_claim_digest,
     compute_governance_digest,
 )
@@ -242,13 +242,17 @@ class PromotionCoordinator:
                 continue
             target_head = target_head_res.stdout.strip()
 
-            is_ancestor = subprocess.run(
-                ["git", "merge-base", "--is-ancestor", cand_sha, target_head],
-                cwd=self.repo_dir,
-            ).returncode == 0
+            is_ancestor = (
+                subprocess.run(
+                    ["git", "merge-base", "--is-ancestor", cand_sha, target_head],
+                    cwd=self.repo_dir,
+                ).returncode
+                == 0
+            )
 
             if is_ancestor:
-                self.kernel_db._raw_transition_proposal_state(task_id, State.PROMOTION_PENDING, State.POST_PROMOTION_VERIFIED)
+                self.kernel_db._raw_transition_proposal_state(
+                    task_id, State.PROMOTION_PENDING, State.POST_PROMOTION_VERIFIED
+                )
             else:
                 self.kernel_db._raw_transition_proposal_state(task_id, State.PROMOTION_PENDING, State.VERIFIED)
-

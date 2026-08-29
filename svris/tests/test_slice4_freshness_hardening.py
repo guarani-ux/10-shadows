@@ -3,14 +3,16 @@
 Strict value assertions and negative mutation traps.
 """
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
 import pytest
+
+from svris.adapters.model import MockModelAdapter
 from svris.core.db import get_connection, init_db
+from svris.core.extractor import CandidateClaim, extract_candidate_claims
 from svris.core.freshness import evaluate_freshness, mark_claim_superseded
 from svris.core.refresh import compute_topic_delta
-from svris.core.extractor import extract_candidate_claims, CandidateClaim
-from svris.core.verifier import verify_and_promote_claim, ProvenanceError
-from svris.adapters.model import MockModelAdapter
+from svris.core.verifier import ProvenanceError, verify_and_promote_claim
 
 
 @pytest.fixture

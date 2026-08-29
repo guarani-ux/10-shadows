@@ -1,24 +1,24 @@
 import uuid
 from typing import Any, Dict, List, Optional
 
+from loop_engine.herald.cinematography import CinematographyValidator
+from loop_engine.herald.cutdowns import ModularCutDownExtractor
+from loop_engine.herald.feedback import ScriptViolation, ValidationFeedback
 from loop_engine.herald.input_contract import CanonicalMediaBrief
+from loop_engine.herald.linguistics import AntiAILinguisticGuard
 from loop_engine.herald.schema import (
+    AVTableRow,
     MasterAVScriptBlueprint,
     StrategicIntent,
     TechnicalScope,
     ValidatedCutDownScript,
-    AVTableRow,
 )
-from loop_engine.herald.cutdowns import ModularCutDownExtractor
-from loop_engine.herald.linguistics import AntiAILinguisticGuard
-from loop_engine.herald.cinematography import CinematographyValidator
-from loop_engine.herald.feedback import ValidationFeedback, ScriptViolation
 
 
 class IntelligentAVScriptGenerator:
     """
     Shadow 3 (The Herald) Adaptive Constraint-Governed Synthesis Engine.
-    
+
     Operates Budget-First:
     1. Pre-calculates exact allowable word budgets per scene window.
     2. Dynamically scales sentence density to match target WPM cadence.
@@ -41,8 +41,20 @@ class IntelligentAVScriptGenerator:
 
         return [
             {"index": 1, "name": "Scene 1: The Hook", "start": 0.0, "end": t_hook, "budget": w_hook},
-            {"index": 2, "name": "Scene 2: The Core Reality", "start": t_hook, "end": t_hook + t_body, "budget": w_body},
-            {"index": 3, "name": "Scene 3: Purpose & Call to Action", "start": t_hook + t_body, "end": float(target_runtime), "budget": w_cta},
+            {
+                "index": 2,
+                "name": "Scene 2: The Core Reality",
+                "start": t_hook,
+                "end": t_hook + t_body,
+                "budget": w_body,
+            },
+            {
+                "index": 3,
+                "name": "Scene 3: Purpose & Call to Action",
+                "start": t_hook + t_body,
+                "end": float(target_runtime),
+                "budget": w_cta,
+            },
         ]
 
     @classmethod
@@ -97,38 +109,50 @@ class IntelligentAVScriptGenerator:
                     sb["budget"] = feedback.suggested_word_budget_adjustments[idx]
 
         # Camera package lookup
-        cam_wide = brief.production_constraints.camera_package[0] if brief.production_constraints.camera_package else "Sony FX3 (24mm f/4)"
-        cam_close = brief.production_constraints.camera_package[1] if len(brief.production_constraints.camera_package) > 1 else "Sony A7IV (85mm f/1.8)"
+        cam_wide = (
+            brief.production_constraints.camera_package[0]
+            if brief.production_constraints.camera_package
+            else "Sony FX3 (24mm f/4)"
+        )
+        cam_close = (
+            brief.production_constraints.camera_package[1]
+            if len(brief.production_constraints.camera_package) > 1
+            else "Sony A7IV (85mm f/1.8)"
+        )
         lighting = brief.production_constraints.lighting_style
 
         # Scene 1 Candidate Sentences (Clean of AI buzzwords)
         s1_candidates = [
             f"Most people think {brief.project_title.lower()} is routine and predictable.",
-            f"In reality, our daily operations connect directly with vital challenges and community needs.",
-            f"Every single morning brings an active opportunity to deliver high impact solutions.",
-            f"We ensure our infrastructure remains dependable from the very start of every shift.",
+            "In reality, our daily operations connect directly with vital challenges and community needs.",
+            "Every single morning brings an active opportunity to deliver high impact solutions.",
+            "We ensure our infrastructure remains dependable from the very start of every shift.",
         ]
         s1_audio = cls.fit_dialogue_to_budget(s1_candidates, scene_budgets[0]["budget"])
-        s1_video = f"Wide Shot ({cam_wide.split()[1] if len(cam_wide.split())>1 else '24mm'}, f/4) tracking past active workstations. {lighting}. Dynamic gimbal movement."
+        s1_video = f"Wide Shot ({cam_wide.split()[1] if len(cam_wide.split()) > 1 else '24mm'}, f/4) tracking past active workstations. {lighting}. Dynamic gimbal movement."
 
         # Scene 2 Candidate Sentences (Ground with evidence, zero banned buzzwords)
-        ev_text = f"In fact, {brief.verified_evidence[0].source_description}" if brief.verified_evidence else "Our team manages mission-critical community technology on every shift."
+        ev_text = (
+            f"In fact, {brief.verified_evidence[0].source_description}"
+            if brief.verified_evidence
+            else "Our team manages mission-critical community technology on every shift."
+        )
         s2_candidates = [
-            f"Behind the scenes, our staff manages high-demand technology, guides workshops, and keeps spaces accessible.",
+            "Behind the scenes, our staff manages high-demand technology, guides workshops, and keeps spaces accessible.",
             ev_text,
-            f"We continuously troubleshoot technical issues, coordinate collaborative programs, and ensure zero operational disruption.",
-            f"Our dedicated team handles each challenge with rigor, precision, and personal care.",
-            f"We maintain smooth service delivery so our stakeholders achieve their objectives without friction.",
+            "We continuously troubleshoot technical issues, coordinate collaborative programs, and ensure zero operational disruption.",
+            "Our dedicated team handles each challenge with rigor, precision, and personal care.",
+            "We maintain smooth service delivery so our stakeholders achieve their objectives without friction.",
         ]
         s2_audio = cls.fit_dialogue_to_budget(s2_candidates, scene_budgets[1]["budget"])
-        s2_video = f"Cut to MCU ({cam_close.split()[1] if len(cam_close.split())>1 else '85mm'}, f/2.0) on technician focused at workstation. B-Roll Insert Cut showing hands assisting patron."
+        s2_video = f"Cut to MCU ({cam_close.split()[1] if len(cam_close.split()) > 1 else '85mm'}, f/2.0) on technician focused at workstation. B-Roll Insert Cut showing hands assisting patron."
 
         # Scene 3 Candidate Sentences (CTA)
         s3_candidates = [
-            f"If you want to be part of work that makes an immediate positive difference, we invite you to connect with us.",
-            f"We are actively seeking dedicated individuals who value community empowerment and excellence.",
+            "If you want to be part of work that makes an immediate positive difference, we invite you to connect with us.",
+            "We are actively seeking dedicated individuals who value community empowerment and excellence.",
             f"Please {brief.intended_audience_action.lower().rstrip('.')} today and take the next step.",
-            f"Visit our official portal now to get started.",
+            "Visit our official portal now to get started.",
         ]
         s3_audio = cls.fit_dialogue_to_budget(s3_candidates, scene_budgets[2]["budget"])
         s3_video = f"Medium Shot (50mm, f/2.8) of team members collaborating in open space. Lower third graphic displaying: '{brief.intended_audience_action}'."
@@ -137,8 +161,24 @@ class IntelligentAVScriptGenerator:
         unk_id = brief.explicit_unknowns[0].unknown_id if brief.explicit_unknowns else None
 
         scenes_raw = [
-            (scene_budgets[0]["name"], scene_budgets[0]["start"], scene_budgets[0]["end"], s1_audio, s1_video, [ev_id] if ev_id else [], []),
-            (scene_budgets[1]["name"], scene_budgets[1]["start"], scene_budgets[1]["end"], s2_audio, s2_video, [ev_id] if ev_id else [], [unk_id] if unk_id else []),
+            (
+                scene_budgets[0]["name"],
+                scene_budgets[0]["start"],
+                scene_budgets[0]["end"],
+                s1_audio,
+                s1_video,
+                [ev_id] if ev_id else [],
+                [],
+            ),
+            (
+                scene_budgets[1]["name"],
+                scene_budgets[1]["start"],
+                scene_budgets[1]["end"],
+                s2_audio,
+                s2_video,
+                [ev_id] if ev_id else [],
+                [unk_id] if unk_id else [],
+            ),
             (scene_budgets[2]["name"], scene_budgets[2]["start"], scene_budgets[2]["end"], s3_audio, s3_video, [], []),
         ]
 

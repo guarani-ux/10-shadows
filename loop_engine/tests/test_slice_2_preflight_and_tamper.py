@@ -1,13 +1,15 @@
-import pytest
 from pathlib import Path
+
+import pytest
+
 from loop_engine.preflight import (
-    canonical_spec_hash,
-    verify_disk_writable,
-    probe_required_modules,
-    run_pre_flight,
-    assert_spec_untampered,
     PreflightCheckError,
     SpecTamperError,
+    assert_spec_untampered,
+    canonical_spec_hash,
+    probe_required_modules,
+    run_pre_flight,
+    verify_disk_writable,
 )
 
 

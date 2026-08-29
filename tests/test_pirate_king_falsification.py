@@ -5,6 +5,7 @@ Attacks every privileged state minting vector, receipt replay vector, and episte
 """
 
 import pytest
+
 from loop_engine.authority import (
     InvalidWitnessError,
     PrivilegedMintingError,
@@ -13,9 +14,9 @@ from loop_engine.authority import (
     issue_proof_witness,
 )
 from loop_engine.epistemic import (
-    EvidenceOrigin,
-    EpistemicStatus,
     EpistemicDisposition,
+    EpistemicStatus,
+    EvidenceOrigin,
     SemanticLaunderingError,
     canonical_json_digest,
     create_envelope,

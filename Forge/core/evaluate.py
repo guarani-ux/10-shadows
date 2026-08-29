@@ -1,5 +1,6 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from forge.core.schema import validate_contract
 
 
@@ -33,7 +34,9 @@ def evaluate(task_spec: Dict[str, Any], outcome_result: Dict[str, Any]) -> Dict[
         if disk_path_str:
             disk_path = Path(disk_path_str)
             if not disk_path.exists():
-                observed_failure = f"Physical Reality Violation: Promised output file '{disk_path}' does not exist on disk."
+                observed_failure = (
+                    f"Physical Reality Violation: Promised output file '{disk_path}' does not exist on disk."
+                )
                 conditions_failed.extend(success_conditions)
             elif disk_path.stat().st_size == 0:
                 observed_failure = f"Physical Reality Violation: File '{disk_path}' is empty (0 bytes)."
@@ -54,7 +57,9 @@ def evaluate(task_spec: Dict[str, Any], outcome_result: Dict[str, Any]) -> Dict[
             # Check content path if written
             content_path = artifact.get("content_path")
             if content_path and not Path(content_path).exists():
-                observed_failure = f"Physical Reality Violation: Synthesized artifact file '{content_path}' missing from disk."
+                observed_failure = (
+                    f"Physical Reality Violation: Synthesized artifact file '{content_path}' missing from disk."
+                )
                 conditions_failed.extend(success_conditions)
             else:
                 conditions_passed.extend(success_conditions)
@@ -74,5 +79,5 @@ def evaluate(task_spec: Dict[str, Any], outcome_result: Dict[str, Any]) -> Dict[
         "success": is_success,
         "conditions_passed": conditions_passed,
         "conditions_failed": conditions_failed,
-        "observed_failure": observed_failure
+        "observed_failure": observed_failure,
     }

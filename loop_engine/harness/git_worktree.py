@@ -1,11 +1,11 @@
 import os
 import shutil
 import subprocess
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-import tempfile
 
 # Workspace root (Authoritative Ten Shadows repository)
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -14,11 +14,13 @@ WORKTREES_ROOT = Path(tempfile.gettempdir()) / "10_shadows_worktrees"
 
 class GitWorktreeError(Exception):
     """Raised when a Git worktree operation fails."""
+
     pass
 
 
 class AuthoritativeSourceProtectionError(GitWorktreeError):
     """Raised when an operation attempts to mutate the authoritative source repository."""
+
     pass
 
 
@@ -30,7 +32,10 @@ def is_authoritative_source(path: Path) -> bool:
     try:
         target_resolved = path.resolve()
         authoritative_resolved = PROJECT_ROOT.resolve()
-        return target_resolved == authoritative_resolved or str(target_resolved).lower() == str(authoritative_resolved).lower()
+        return (
+            target_resolved == authoritative_resolved
+            or str(target_resolved).lower() == str(authoritative_resolved).lower()
+        )
     except Exception:
         return False
 

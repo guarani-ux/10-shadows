@@ -1,11 +1,13 @@
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class StackFrame(BaseModel):
     """An isolated stack frame extracted from a traceback."""
+
     file_path: str
     line_number: int
     function_name: str
@@ -14,6 +16,7 @@ class StackFrame(BaseModel):
 
 class CrashDiagnostic(BaseModel):
     """Structured diagnostic representation of a Python runtime failure."""
+
     exception_type: str
     error_message: str
     failing_file: Optional[str] = None
@@ -25,17 +28,14 @@ class CrashDiagnostic(BaseModel):
 class CrashTraceParser:
     """
     Shadow 9 (The Alchemist) Traceback & Crash Diagnostic Engine.
-    
+
     Parses raw stderr/pytest traces into strongly-typed diagnostics,
     isolating the root-cause file, line number, and AST violation.
     """
 
-    FRAME_PATTERN = re.compile(
-        r'File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>\w+)\n\s*(?P<code>.+)'
-    )
+    FRAME_PATTERN = re.compile(r'File "(?P<file>[^"]+)", line (?P<line>\d+), in (?P<func>\w+)\n\s*(?P<code>.+)')
     EXCEPTION_PATTERN = re.compile(
-        r'^(?P<type>[a-zA-Z_][a-zA-Z0-9_.]*(?:Error|Exception|Violation|AssertionError)):\s*(?P<msg>.*)$',
-        re.MULTILINE
+        r"^(?P<type>[a-zA-Z_][a-zA-Z0-9_.]*(?:Error|Exception|Violation|AssertionError)):\s*(?P<msg>.*)$", re.MULTILINE
     )
 
     @classmethod

@@ -12,26 +12,27 @@ The Primary Graph Synergy:
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import datetime, timezone
 import hashlib
 import json
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 from loop_engine.relational.graph_db import RelationalGraphStore
 from loop_engine.relational.schema import (
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 
 @dataclass(frozen=True)
 class CapabilityRequirement:
     """Declared capability requirement for a subproblem or objective."""
+
     requirement_id: str
     capability_name: str
     required_domain: str
@@ -42,6 +43,7 @@ class CapabilityRequirement:
 @dataclass(frozen=True)
 class CapabilityGap:
     """Identified missing capability gap blocking an execution path."""
+
     gap_id: str
     objective_id: str
     requirement: CapabilityRequirement
@@ -51,6 +53,7 @@ class CapabilityGap:
 @dataclass(frozen=True)
 class TraversalPlan:
     """Result of a capability graph traversal."""
+
     is_traversable: bool
     objective_id: str
     execution_path: List[RelationalNode]
@@ -181,10 +184,13 @@ class CapabilityGapPlanner:
         links the newly qualified capability into the graph, and replans the traversal.
         """
         # 1. Execute Independent Qualification (Builder != Verifier)
-        is_qualified, verifier_trace = qualifier_fn(candidate_code, {
-            "input_contract": gap.requirement.input_contract,
-            "output_contract": gap.requirement.output_contract,
-        })
+        is_qualified, verifier_trace = qualifier_fn(
+            candidate_code,
+            {
+                "input_contract": gap.requirement.input_contract,
+                "output_contract": gap.requirement.output_contract,
+            },
+        )
 
         if not is_qualified:
             # Retract / Mark Acquisition Target as INVALIDATED
@@ -235,10 +241,10 @@ class CapabilityGapPlanner:
             matched: List[RelationalNode] = []
             for r in rows:
                 props = json.loads(r["properties_json"])
-                if (
-                    props.get("capability_name") == req.capability_name
-                    and props.get("domain") in {req.required_domain, "general"}
-                ):
+                if props.get("capability_name") == req.capability_name and props.get("domain") in {
+                    req.required_domain,
+                    "general",
+                }:
                     matched.append(
                         RelationalNode(
                             node_id=r["node_id"],

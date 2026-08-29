@@ -1,7 +1,8 @@
 """Contradiction Detection and Registry Engine."""
 
-from datetime import datetime, timezone
 import hashlib
+from datetime import datetime, timezone
+
 from svris.core.db import get_connection
 
 

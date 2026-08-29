@@ -1,11 +1,12 @@
 import pytest
 from pydantic import ValidationError
-from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, UnknownItem, ProductionConstraints
-from loop_engine.herald.generator import IntelligentAVScriptGenerator
-from loop_engine.herald.validators import DeterministicScriptValidator
-from loop_engine.herald.schema import MasterAVScriptBlueprint, AVTableRow
-from loop_engine.herald.linguistics import AntiAILinguisticGuard
+
 from loop_engine.herald.cinematography import CinematographyValidator
+from loop_engine.herald.generator import IntelligentAVScriptGenerator
+from loop_engine.herald.input_contract import CanonicalMediaBrief, EvidenceItem, ProductionConstraints, UnknownItem
+from loop_engine.herald.linguistics import AntiAILinguisticGuard
+from loop_engine.herald.schema import AVTableRow, MasterAVScriptBlueprint
+from loop_engine.herald.validators import DeterministicScriptValidator
 
 
 def test_adversarial_pacing_ceiling_rejection():
@@ -75,10 +76,10 @@ def test_adversarial_timecode_overlap_rejection():
         production_constraints=ProductionConstraints(target_duration_seconds=75),
     )
     script = IntelligentAVScriptGenerator.synthesize_from_brief(brief)
-    
+
     # Introduce deliberate overlap
     script.av_table[1].start_seconds = 2.0  # Collides with Scene 1 which ends at 15.0s
-    
+
     feedback = DeterministicScriptValidator.audit_blueprint_structured(script)
     assert feedback.passed is False
     assert any(v.violation_code == "TIMECODE_OVERLAP" for v in feedback.violations)
@@ -97,11 +98,11 @@ def test_adversarial_missing_cta_rejection():
         production_constraints=ProductionConstraints(target_duration_seconds=75),
     )
     script = IntelligentAVScriptGenerator.synthesize_from_brief(brief)
-    
+
     # Remove CTA from scene 3
     script.av_table[2].scene_name = "Scene 3: Random Conclusion"
     script.av_table[2].spoken_audio = "And that was everything about our daily routine. The end."
-    
+
     feedback = DeterministicScriptValidator.audit_blueprint_structured(script)
     assert feedback.passed is False
     assert any(v.violation_code == "MISSING_CTA" for v in feedback.violations)

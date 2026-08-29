@@ -13,11 +13,11 @@ Enforces:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from forge.core.adequacy import IntentCoverageEvaluator, RawClauseTokenizer
@@ -59,6 +59,7 @@ class RevisionType(str, Enum):
 @dataclass(frozen=True)
 class RawIntent:
     """Uninterpreted operator prompt or raw input payload."""
+
     raw_text: str
     ingress_timestamp: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     source_identity: str = "OPERATOR"
@@ -76,6 +77,7 @@ class RawIntent:
 @dataclass
 class ProposedRequirement:
     """Untrusted requirement candidate proposed by a worker or model."""
+
     proposal_id: str
     raw_clause_id: str
     description: str
@@ -88,6 +90,7 @@ class ProposedRequirement:
 @dataclass
 class CandidateInterpretation:
     """Proposed decomposition/interpretation of RawIntent by an untrusted worker/model."""
+
     candidate_id: str
     source_intent_hash: str
     proposed_clauses: List[RawClause]
@@ -103,6 +106,7 @@ class ObjectiveRevisionAuthorization:
     Privileged authority token granting permission to revise an objective.
     Prevents unverified strings from impersonating operator or TCB authorization.
     """
+
     authorization_id: str
     authorizing_principal: str  # HUMAN_OPERATOR | SYSTEM_TCB | DOMAIN_AUTHORITY
     authority_proof_token: str
@@ -129,6 +133,7 @@ class VersionedObjectiveSpecification:
     Authoritative, immutable version of an objective specification.
     Contains qualified canonical requirements and the adequacy contract.
     """
+
     objective_id: str
     version: int
     canonical_intent: str
@@ -144,15 +149,17 @@ class VersionedObjectiveSpecification:
 
     @property
     def specification_hash(self) -> str:
-        return compute_digest({
-            "objective_id": self.objective_id,
-            "version": self.version,
-            "canonical_intent": self.canonical_intent,
-            "requirements": [r.requirement_hash for r in self.requirements],
-            "qualification_status": self.qualification_status.value,
-            "parent_version": self.parent_version,
-            "revision_type": self.revision_type.value,
-        })
+        return compute_digest(
+            {
+                "objective_id": self.objective_id,
+                "version": self.version,
+                "canonical_intent": self.canonical_intent,
+                "requirements": [r.requirement_hash for r in self.requirements],
+                "qualification_status": self.qualification_status.value,
+                "parent_version": self.parent_version,
+                "revision_type": self.revision_type.value,
+            }
+        )
 
     @property
     def is_executable(self) -> bool:
@@ -230,36 +237,51 @@ class ObjectiveLifecycleManager:
         covered_clause_ids: Set[str] = set()
 
         for prop in candidate.proposed_requirements:
-            req_id = prop.proposal_id or f"req_{len(canonical_reqs)+1}"
-            
+            req_id = prop.proposal_id or f"req_{len(canonical_reqs) + 1}"
+
             # Ground origin: if claimed SOURCE_EXPLICIT, must match an actual raw clause
-            matching_clause = next((c for c in raw_clauses if c.clause_id == prop.raw_clause_id or prop.description.lower() in c.text.lower() or c.text.lower() in prop.description.lower()), None)
-            
+            matching_clause = next(
+                (
+                    c
+                    for c in raw_clauses
+                    if c.clause_id == prop.raw_clause_id
+                    or prop.description.lower() in c.text.lower()
+                    or c.text.lower() in prop.description.lower()
+                ),
+                None,
+            )
+
             if matching_clause:
                 origin = RequirementOrigin.SOURCE_EXPLICIT
                 covered_clause_ids.add(matching_clause.clause_id)
-                traces.append(RequirementTrace(
-                    raw_clause_id=matching_clause.clause_id,
-                    raw_text=matching_clause.text,
-                    disposition=RequirementDisposition.PRESERVED,
-                    canonical_target=req_id,
-                ))
+                traces.append(
+                    RequirementTrace(
+                        raw_clause_id=matching_clause.clause_id,
+                        raw_text=matching_clause.text,
+                        disposition=RequirementDisposition.PRESERVED,
+                        canonical_target=req_id,
+                    )
+                )
             else:
                 origin = RequirementOrigin.ASSUMED
-                traces.append(RequirementTrace(
-                    raw_clause_id=prop.raw_clause_id or "unmapped",
-                    raw_text=prop.description,
-                    disposition=RequirementDisposition.AMBIGUOUS,
-                    canonical_target=req_id,
-                ))
+                traces.append(
+                    RequirementTrace(
+                        raw_clause_id=prop.raw_clause_id or "unmapped",
+                        raw_text=prop.description,
+                        disposition=RequirementDisposition.AMBIGUOUS,
+                        canonical_target=req_id,
+                    )
+                )
 
-            canonical_reqs.append(CanonicalRequirement(
-                requirement_id=req_id,
-                description=prop.description,
-                origin=origin,
-                source_clause_id=matching_clause.clause_id if matching_clause else None,
-                is_blocking=prop.is_blocking,
-            ))
+            canonical_reqs.append(
+                CanonicalRequirement(
+                    requirement_id=req_id,
+                    description=prop.description,
+                    origin=origin,
+                    source_clause_id=matching_clause.clause_id if matching_clause else None,
+                    is_blocking=prop.is_blocking,
+                )
+            )
 
         # Check for dropped/uncovered clauses
         for clause in raw_clauses:

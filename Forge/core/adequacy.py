@@ -50,23 +50,43 @@ class RawClauseTokenizer:
                 for s in re.split(
                     r"(?:\.(?:\s+|$)|;+)|\s+and\s+(?=(?:validate|decompose|extract|calculate|write|detect|commit|check|verify|run))",
                     line,
-                    flags=re.IGNORECASE
+                    flags=re.IGNORECASE,
                 )
                 if s.strip()
             ]
             for s_idx, s in enumerate(sentences):
                 # Detect constraints / deliverables
                 s_lower = s.lower()
-                is_constraint = any(k in s_lower for k in ["must", "cannot", "never", "only", "strictly", "no ", "without", "budget", "timeout"])
-                is_deliverable = any(k in s_lower for k in ["create", "build", "generate", "return", "output", "calculate", "deliverable", "script", "file", "csv", "json"])
+                is_constraint = any(
+                    k in s_lower
+                    for k in ["must", "cannot", "never", "only", "strictly", "no ", "without", "budget", "timeout"]
+                )
+                is_deliverable = any(
+                    k in s_lower
+                    for k in [
+                        "create",
+                        "build",
+                        "generate",
+                        "return",
+                        "output",
+                        "calculate",
+                        "deliverable",
+                        "script",
+                        "file",
+                        "csv",
+                        "json",
+                    ]
+                )
 
                 clause_id = f"c_{line_idx}_{s_idx}_{hashlib.sha256(s.encode('utf-8')).hexdigest()[:6]}"
-                clauses.append(RawClause(
-                    clause_id=clause_id,
-                    text=s,
-                    is_constraint=is_constraint,
-                    is_deliverable=is_deliverable,
-                ))
+                clauses.append(
+                    RawClause(
+                        clause_id=clause_id,
+                        text=s,
+                        is_constraint=is_constraint,
+                        is_deliverable=is_deliverable,
+                    )
+                )
 
         return clauses
 

@@ -1,6 +1,8 @@
-import pytest
 from pathlib import Path
-from loop_engine.verifiers.test_gate import run_isolated_pytest, PROJECT_ROOT
+
+import pytest
+
+from loop_engine.verifiers.test_gate import PROJECT_ROOT, run_isolated_pytest
 
 
 def test_isolated_pytest_success(tmp_path):

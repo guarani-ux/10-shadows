@@ -1,9 +1,11 @@
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
 class VerticalSliceTask(BaseModel):
     """An irreducible, testable vertical slice in a DAG."""
+
     slice_id: str = Field(description="e.g. 'slice_1_core_engine'")
     slice_number: int = Field(ge=1, le=10)
     title: str = Field(min_length=3)
@@ -16,6 +18,7 @@ class VerticalSliceTask(BaseModel):
 
 class SliceDAG(BaseModel):
     """The complete directed acyclic graph decomposing a macro goal."""
+
     goal_id: str
     goal_description: str
     slices: List[VerticalSliceTask] = Field(min_length=1, max_length=10)

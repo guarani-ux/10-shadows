@@ -6,6 +6,7 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 from loop_engine.base import PROJECT_ROOT, force_remove_readonly
@@ -15,6 +16,7 @@ RECEIPTS_DB_PATH = PROJECT_ROOT / "scratch" / "receipts.db"
 
 class AtomicCommitError(Exception):
     """Raised when atomic 2-phase commit fails to promote staging candidate."""
+
     pass
 
 
@@ -38,19 +40,19 @@ def atomic_two_phase_commit(candidate_path: Path, target_path: Path) -> Dict[str
     """
     if not candidate_path.exists():
         raise AtomicCommitError(f"Candidate path does not exist: {candidate_path}")
-    
+
     target_path.parent.mkdir(parents=True, exist_ok=True)
     candidate_hash = compute_file_sha256(candidate_path)
     file_bytes = candidate_path.stat().st_size
-    
-    temp_target = target_path.parent / f".tmp_{target_path.name}_{int(datetime.now().timestamp()*1000)}"
+
+    temp_target = target_path.parent / f".tmp_{target_path.name}_{int(datetime.now().timestamp() * 1000)}"
     shutil.copy2(candidate_path, temp_target)
     os.replace(temp_target, target_path)
     try:
         candidate_path.unlink()
     except Exception:
         pass
-    
+
     return {
         "status": "COMMITTED",
         "target_file": str(target_path),
@@ -63,6 +65,7 @@ class ExecutionReceipt(BaseModel):
     """
     Immutable, cryptographically verifiable record of a successful loop commit.
     """
+
     task_id: str
     run_id: str
     parent_run_id: Optional[str] = None

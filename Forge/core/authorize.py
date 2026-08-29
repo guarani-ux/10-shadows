@@ -3,6 +3,7 @@ import json
 import uuid
 from pathlib import Path
 from typing import Any, Dict, Optional
+
 from forge.core.schema import validate_contract
 from forge.core.store import ForgeStore
 
@@ -11,7 +12,7 @@ def canonical_json(data: Any) -> str:
     """
     Computes deterministic canonical JSON string with sorted keys and no unnecessary whitespace.
     """
-    return json.dumps(data, sort_keys=True, separators=(',', ':'))
+    return json.dumps(data, sort_keys=True, separators=(",", ":"))
 
 
 def compute_operation_hash(operation: Dict[str, Any]) -> str:
@@ -26,6 +27,7 @@ class AuthorizationGate:
     """
     Enforces deterministic authorization boundaries before external side effects can be executed.
     """
+
     def __init__(self, store: Optional[ForgeStore] = None, allowed_capabilities: Optional[set[str]] = None):
         self.store = store
         self.allowed_capabilities = allowed_capabilities or {"SANDBOX_FILE_WRITE", "FILE_WRITE", "LOCAL_IO"}
@@ -45,7 +47,7 @@ class AuthorizationGate:
                 "transaction_id": transaction_id,
                 "attempt_id": attempt_id,
                 "decision": "DENIED",
-                "reason": f"Required capability '{capability_required}' is not permitted."
+                "reason": f"Required capability '{capability_required}' is not permitted.",
             }
             validate_contract("AuthorizationDecision", decision)
             return decision
@@ -67,7 +69,7 @@ class AuthorizationGate:
                 "transaction_id": transaction_id,
                 "attempt_id": attempt_id,
                 "decision": "DENIED",
-                "reason": f"Target path '{target}' contains invalid path traversal, drive letter, or absolute path sequences."
+                "reason": f"Target path '{target}' contains invalid path traversal, drive letter, or absolute path sequences.",
             }
             validate_contract("AuthorizationDecision", decision)
             return decision
@@ -80,7 +82,7 @@ class AuthorizationGate:
                     "transaction_id": transaction_id,
                     "attempt_id": attempt_id,
                     "decision": "DENIED",
-                    "reason": f"Idempotency key '{idempotency_key}' has already been issued or consumed."
+                    "reason": f"Idempotency key '{idempotency_key}' has already been issued or consumed.",
                 }
                 validate_contract("AuthorizationDecision", decision)
                 return decision
@@ -94,7 +96,7 @@ class AuthorizationGate:
             "decision": "AUTHORIZED",
             "authorization_id": authorization_id,
             "operation_hash": operation_hash,
-            "reason": "All authorization predicates and idempotency checks passed."
+            "reason": "All authorization predicates and idempotency checks passed.",
         }
 
         validate_contract("AuthorizationDecision", decision)
@@ -108,7 +110,7 @@ class AuthorizationGate:
                 attempt_id=attempt_id,
                 operation_hash=operation_hash,
                 idempotency_key=idempotency_key,
-                state="AUTHORIZED"
+                state="AUTHORIZED",
             )
 
         return decision

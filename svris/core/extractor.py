@@ -2,22 +2,26 @@
 
 from dataclasses import dataclass
 from typing import List, Optional
+
 from svris.adapters.model import BaseModelAdapter
 
 
 class ExtractionError(Exception):
     """Base exception for extraction boundary failures."""
+
     pass
 
 
 class ProvenanceError(ExtractionError):
     """Raised when candidate claim violates provenance rules."""
+
     pass
 
 
 @dataclass(frozen=True)
 class CandidateClaim:
     """Immutable in-memory candidate proposition before verification gate."""
+
     claim_id: str
     claim_text: str
     topic_id: str

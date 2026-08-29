@@ -6,6 +6,7 @@ declarations causes immediate fail-closed rejection rather than permissive execu
 """
 
 from pathlib import Path
+
 import pytest
 import yaml
 

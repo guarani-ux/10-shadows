@@ -2,14 +2,15 @@ import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
-from youtube_transcript_api import YouTubeTranscriptApi
+
 import yt_dlp
+from youtube_transcript_api import YouTubeTranscriptApi
 
 
 class SovereignMediaEngine:
     """
     Shadow 3 (The Herald) & Shadow 4 (The Scout) Media Architecture Engine.
-    
+
     Ingests video streams, extracts timecoded transcripts, and computes:
     1. Silence/Non-verbal gap anomaly detection (>3.5s pauses).
     2. Dynamic scene boundary clustering.
@@ -61,13 +62,15 @@ class SovereignMediaEngine:
                 if not clean_text or clean_text == "[Music]":
                     continue
                 words = len(clean_text.split())
-                segments.append({
-                    "start": round(entry.start, 2),
-                    "end": round(entry.start + entry.duration, 2),
-                    "duration": round(entry.duration, 2),
-                    "text": clean_text,
-                    "words": words,
-                })
+                segments.append(
+                    {
+                        "start": round(entry.start, 2),
+                        "end": round(entry.start + entry.duration, 2),
+                        "duration": round(entry.duration, 2),
+                        "text": clean_text,
+                        "words": words,
+                    }
+                )
             if segments:
                 return segments
         except Exception:
@@ -75,10 +78,21 @@ class SovereignMediaEngine:
 
         # Hermetic fallback segments for offline test environments
         return [
-            {"start": 0.0, "end": 15.0, "duration": 15.0, "text": "Welcome to the sovereign analysis of this video.", "words": 8},
-            {"start": 18.0, "end": 45.0, "duration": 27.0, "text": "Here we explore deep systems engineering and zero trust architectures.", "words": 10},
+            {
+                "start": 0.0,
+                "end": 15.0,
+                "duration": 15.0,
+                "text": "Welcome to the sovereign analysis of this video.",
+                "words": 8,
+            },
+            {
+                "start": 18.0,
+                "end": 45.0,
+                "duration": 27.0,
+                "text": "Here we explore deep systems engineering and zero trust architectures.",
+                "words": 10,
+            },
         ]
-
 
     def analyze_structure_and_blindspots(
         self,
@@ -111,12 +125,14 @@ class SovereignMediaEngine:
 
         # Check for initial visual intro (silence before speech)
         if segments[0]["start"] >= 3.0:
-            anomalies.append({
-                "anomaly_type": "VISUAL_ONLY_GAP",
-                "time_window": f"0:00 - {segments[0]['start']}s",
-                "gap_duration": segments[0]["start"],
-                "description": "Silent intro / title card / music intro before spoken dialogue begins.",
-            })
+            anomalies.append(
+                {
+                    "anomaly_type": "VISUAL_ONLY_GAP",
+                    "time_window": f"0:00 - {segments[0]['start']}s",
+                    "gap_duration": segments[0]["start"],
+                    "description": "Silent intro / title card / music intro before spoken dialogue begins.",
+                }
+            )
 
         for i in range(len(segments)):
             seg = segments[i]
@@ -124,30 +140,34 @@ class SovereignMediaEngine:
             current_words += seg["words"]
 
             # Scene transition trigger: gap > 3.0s or end of transcript
-            is_last = (i == len(segments) - 1)
+            is_last = i == len(segments) - 1
             gap = 0.0 if is_last else round(segments[i + 1]["start"] - seg["end"], 2)
 
             if gap >= 3.0 or is_last:
                 scene_duration = round(seg["end"] - current_start, 2)
                 scene_wpm = round(current_words / max(scene_duration / 60.0, 0.01), 1)
-                
-                scenes.append({
-                    "scene_index": len(scenes) + 1,
-                    "time_window": f"{current_start:.1f}s - {seg['end']:.1f}s",
-                    "duration_seconds": scene_duration,
-                    "words_count": current_words,
-                    "pacing_wpm": scene_wpm,
-                    "full_dialogue": " ".join(current_texts),
-                    "verbatim_anchor": current_texts[0],
-                })
+
+                scenes.append(
+                    {
+                        "scene_index": len(scenes) + 1,
+                        "time_window": f"{current_start:.1f}s - {seg['end']:.1f}s",
+                        "duration_seconds": scene_duration,
+                        "words_count": current_words,
+                        "pacing_wpm": scene_wpm,
+                        "full_dialogue": " ".join(current_texts),
+                        "verbatim_anchor": current_texts[0],
+                    }
+                )
 
                 if gap >= 3.0:
-                    anomalies.append({
-                        "anomaly_type": "VISUAL_ONLY_GAP",
-                        "time_window": f"{seg['end']}s - {segments[i + 1]['start']}s",
-                        "gap_duration": gap,
-                        "description": "Non-verbal pause. Visual B-roll, demonstration, or scene transition.",
-                    })
+                    anomalies.append(
+                        {
+                            "anomaly_type": "VISUAL_ONLY_GAP",
+                            "time_window": f"{seg['end']}s - {segments[i + 1]['start']}s",
+                            "gap_duration": gap,
+                            "description": "Non-verbal pause. Visual B-roll, demonstration, or scene transition.",
+                        }
+                    )
 
                 if not is_last:
                     current_start = segments[i + 1]["start"]

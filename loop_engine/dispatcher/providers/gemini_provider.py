@@ -2,6 +2,7 @@
 gemini_provider.py — Gemini 3.7 Flash Worker Adapter for 10 SHADOWS Dispatcher.
 Executes autonomous code generation against Google Gemini API strictly within the GovernedWorkspace.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -17,10 +18,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from loop_engine.dispatcher.protocol import (
-    WorkerAuthorization,
-    WorkerExecutionResult,
-    WorkerEvidenceModality,
     ProviderUsage,
+    WorkerAuthorization,
+    WorkerEvidenceModality,
+    WorkerExecutionResult,
 )
 from loop_engine.dispatcher.providers.base import WorkerProviderAdapter
 
@@ -96,7 +97,9 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
             if not any(part.startswith(".") or part in ("__pycache__", "venv", "target") for part in p.parts):
                 rel = p.relative_to(workspace_path)
                 try:
-                    workspace_files.append({"path": str(rel), "content": p.read_text(encoding="utf-8", errors="replace")[:3000]})
+                    workspace_files.append(
+                        {"path": str(rel), "content": p.read_text(encoding="utf-8", errors="replace")[:3000]}
+                    )
                 except Exception:
                     pass
 
@@ -113,8 +116,10 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
         }
 
         model_name = auth.requested_model or "gemini-3.7-flash"
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self._api_key}"
-        
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self._api_key}"
+        )
+
         req_body = {
             "contents": [{"parts": [{"text": json.dumps(prompt_payload)}]}],
             "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
@@ -139,7 +144,7 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
             with urllib.request.urlopen(http_req, timeout=auth.timeout_seconds) as resp:
                 resp_bytes = resp.read()
                 resp_json = json.loads(resp_bytes.decode("utf-8"))
-                
+
                 # Check for explicit resolved model in response metadata
                 if "modelVersion" in resp_json:
                     resolved_model = resp_json["modelVersion"]
@@ -150,7 +155,7 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
                     resolved_model = "UNPROVEN"
 
                 resp_id = resp_json.get("responseId") or f"resp_gemini_{hashlib.sha256(resp_bytes).hexdigest()[:12]}"
-                
+
                 usage_meta = resp_json.get("usageMetadata", {})
                 p_tokens = usage_meta.get("promptTokenCount")
                 c_tokens = usage_meta.get("candidatesTokenCount")

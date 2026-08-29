@@ -10,31 +10,32 @@ and keeps provider-specific logic completely behind adapters.
 from __future__ import annotations
 
 import abc
-from enum import Enum
 import hashlib
 import json
 import os
 import time
 import urllib.error
 import urllib.request
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
+
 from pydantic import BaseModel, Field
 
 
 class InferenceEffort(str, Enum):
-    FAST = "FAST"          # Minimal latency/tokens (e.g. routine queries, simple extractions)
+    FAST = "FAST"  # Minimal latency/tokens (e.g. routine queries, simple extractions)
     STANDARD = "STANDARD"  # Baseline balanced reasoning
-    DEEP = "DEEP"          # Maximum inference budget (e.g. complex synthesis, difficult repair)
+    DEEP = "DEEP"  # Maximum inference budget (e.g. complex synthesis, difficult repair)
 
 
 class DeficitType(str, Enum):
-    MISSING_KNOWLEDGE = "MISSING_KNOWLEDGE"          # Requires external domain facts or docs
-    MISSING_EVIDENCE = "MISSING_EVIDENCE"            # Requires verified physical test traces or data
-    MISSING_CAPABILITY = "MISSING_CAPABILITY"        # Requires a specific tool/action not provisioned
-    AMBIGUOUS_OBJECTIVE = "AMBIGUOUS_OBJECTIVE"      # Specification contains contradictions/ambiguity
+    MISSING_KNOWLEDGE = "MISSING_KNOWLEDGE"  # Requires external domain facts or docs
+    MISSING_EVIDENCE = "MISSING_EVIDENCE"  # Requires verified physical test traces or data
+    MISSING_CAPABILITY = "MISSING_CAPABILITY"  # Requires a specific tool/action not provisioned
+    AMBIGUOUS_OBJECTIVE = "AMBIGUOUS_OBJECTIVE"  # Specification contains contradictions/ambiguity
     UNRESOLVED_CONSTRAINT = "UNRESOLVED_CONSTRAINT"  # Invariant cannot be satisfied without clarification
-    EXECUTION_FAILURE = "EXECUTION_FAILURE"          # Sandbox / environment execution error
-    CANDIDATE_FAILURE = "CANDIDATE_FAILURE"          # Logic / semantic defect in proposed code
+    EXECUTION_FAILURE = "EXECUTION_FAILURE"  # Sandbox / environment execution error
+    CANDIDATE_FAILURE = "CANDIDATE_FAILURE"  # Logic / semantic defect in proposed code
 
 
 class DeficitDeclaration(BaseModel):
@@ -42,6 +43,7 @@ class DeficitDeclaration(BaseModel):
     First-class declaration emitted by a model or detected by the system
     when an operation cannot be completed reliably without additional competence.
     """
+
     deficit_type: DeficitType
     description: str
     target_subject: Optional[str] = None
@@ -53,6 +55,7 @@ class ModelRequest(BaseModel):
     """
     Provider-agnostic request payload passed into any ModelAdapter.
     """
+
     task_id: str
     operation_type: str = "GENERATE_CANDIDATE"  # e.g. "NORMALIZE", "SYNTHESIZE", "REPAIR", "EXTRACT"
     objective: str
@@ -72,7 +75,11 @@ def compute_provider_payload_digest(
     objective: Optional[str] = None,
 ) -> str:
     """Computes deterministic digest binding candidate payload and provider response."""
-    cand_str = json.dumps(candidate_payload, sort_keys=True) if isinstance(candidate_payload, (dict, list)) else str(candidate_payload)
+    cand_str = (
+        json.dumps(candidate_payload, sort_keys=True)
+        if isinstance(candidate_payload, (dict, list))
+        else str(candidate_payload)
+    )
     raw_str = json.dumps(raw_response, sort_keys=True) if isinstance(raw_response, (dict, list)) else str(raw_response)
     raw = f"{str(objective)}:{cand_str}:{raw_str}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
@@ -83,6 +90,7 @@ class ProviderExecutionReceipt(BaseModel):
     Cryptographically verifiable receipt of physical model provider execution.
     Proves that an inference call actually executed against an external provider.
     """
+
     request_id: str
     response_id: str
     provider_name: str
@@ -131,6 +139,7 @@ class ModelResponse(BaseModel):
     """
     Provider-agnostic response payload returned by any ModelAdapter.
     """
+
     task_id: str
     candidate_payload: Any = None
     explicit_uncertainties: List[str] = Field(default_factory=list)
@@ -159,6 +168,7 @@ class ModelAdapter(abc.ABC):
     Abstract Base Class for all model adapters.
     Downstream subsystems interact exclusively with this interface.
     """
+
     @property
     @abc.abstractmethod
     def model_id(self) -> str:
@@ -201,9 +211,9 @@ class ModelAdapter(abc.ABC):
 
 
 class MockModelProfile(str, Enum):
-    STRONG = "STRONG"              # High capability, succeeds on first attempt, declares deficits accurately
-    WEAK = "WEAK"                  # Flawed initial output, misses constraints unless compiled into context, recovers with repair
-    ADVERSARIAL = "ADVERSARIAL"    # Confidently emits wrong/invalid candidate claiming success
+    STRONG = "STRONG"  # High capability, succeeds on first attempt, declares deficits accurately
+    WEAK = "WEAK"  # Flawed initial output, misses constraints unless compiled into context, recovers with repair
+    ADVERSARIAL = "ADVERSARIAL"  # Confidently emits wrong/invalid candidate claiming success
 
 
 class MockModelAdapter(ModelAdapter):
@@ -211,6 +221,7 @@ class MockModelAdapter(ModelAdapter):
     Deterministic ModelAdapter supporting configurable behavioral profiles for
     offline unit testing, ablation studies, and CI validation.
     """
+
     def __init__(
         self,
         profile: MockModelProfile = MockModelProfile.STRONG,
@@ -400,6 +411,7 @@ class GeminiModelAdapter(ModelAdapter):
     no core dependency leak, clean mapping of inference effort to provider capabilities.
     Executes real provider network requests or fails closed explicitly.
     """
+
     def __init__(
         self,
         api_key: Optional[str] = None,
@@ -434,14 +446,10 @@ class GeminiModelAdapter(ModelAdapter):
             prompt_text += f"\n\nContext:\n{json.dumps(request.compiled_context, sort_keys=True)}"
 
         req_body = {
-            "contents": [
-                {
-                    "parts": [{"text": prompt_text}]
-                }
-            ],
+            "contents": [{"parts": [{"text": prompt_text}]}],
             "generationConfig": {
                 "temperature": 0.2,
-            }
+            },
         }
 
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model_name}:generateContent?key={self._api_key}"

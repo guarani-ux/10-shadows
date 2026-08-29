@@ -1,8 +1,10 @@
-import pytest
 from pathlib import Path
-from loop_engine.runners.media_runner import HeraldMediaRunner
+
+import pytest
+
 from loop_engine.governor import Governor
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.media_runner import HeraldMediaRunner
 
 
 def test_herald_media_runner_e2e(tmp_path):

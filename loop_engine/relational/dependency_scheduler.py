@@ -17,14 +17,15 @@ from loop_engine.relational.graph_db import RelationalGraphStore
 from loop_engine.relational.schema import (
     EpistemicStatus,
     NodeType,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 
 class CyclicDependencyError(Exception):
     """Raised when a dependency cycle is detected in the problem/task graph."""
+
     pass
 
 
@@ -113,8 +114,6 @@ class DependencyScheduler:
                     queue.append(neighbor_id)
 
         if len(ordered) != len(nodes):
-            raise CyclicDependencyError(
-                f"Cyclic dependency detected: scheduled {len(ordered)} of {len(nodes)} nodes."
-            )
+            raise CyclicDependencyError(f"Cyclic dependency detected: scheduled {len(ordered)} of {len(nodes)} nodes.")
 
         return ordered

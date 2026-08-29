@@ -1,9 +1,11 @@
-import pytest
 import tempfile
 from pathlib import Path
-from loop_engine.runners.alchemist_runner import RealAlchemistSelfHealingEngine
+
+import pytest
+
 from loop_engine.governor import Governor
 from loop_engine.receipts import ReceiptStore
+from loop_engine.runners.alchemist_runner import RealAlchemistSelfHealingEngine
 
 
 def test_alchemist_self_healing_successful_repair(tmp_path):
@@ -15,8 +17,7 @@ def test_alchemist_self_healing_successful_repair(tmp_path):
     # 1. Create a broken target source file with a zero division bug
     source_file = tmp_path / "math_module.py"
     source_file.write_text(
-        "def compute_average(total, count):\n"
-        "    return total / count\n",
+        "def compute_average(total, count):\n    return total / count\n",
         encoding="utf-8",
     )
 
@@ -34,10 +35,10 @@ def test_alchemist_self_healing_successful_repair(tmp_path):
 
     # 3. Simulated crash trace
     crash_trace = (
-        f'Traceback (most recent call last):\n'
+        f"Traceback (most recent call last):\n"
         f'  File "{source_file}", line 2, in compute_average\n'
-        f'    return total / count\n'
-        f'ZeroDivisionError: division by zero\n'
+        f"    return total / count\n"
+        f"ZeroDivisionError: division by zero\n"
     )
 
     input_payload = {
@@ -52,7 +53,7 @@ def test_alchemist_self_healing_successful_repair(tmp_path):
 
     assert result["status"] == "SUCCESS"
     assert result["receipt"]["status"] == "COMMITTED"
-    
+
     # Verify file on disk was physically modified and fixed
     repaired_code = source_file.read_text(encoding="utf-8")
     assert "return total / count if count != 0 else 0.0" in repaired_code
@@ -64,10 +65,7 @@ def test_alchemist_self_healing_failed_repair_rollback(tmp_path):
     store = ReceiptStore(db_path=db_file)
     runner = RealAlchemistSelfHealingEngine(receipt_store=store)
 
-    original_code = (
-        "def compute_data(payload):\n"
-        "    return payload['missing_key']\n"
-    )
+    original_code = "def compute_data(payload):\n    return payload['missing_key']\n"
     source_file = tmp_path / "data_module.py"
     source_file.write_text(original_code, encoding="utf-8")
 
@@ -83,10 +81,10 @@ def test_alchemist_self_healing_failed_repair_rollback(tmp_path):
     )
 
     crash_trace = (
-        f'Traceback (most recent call last):\n'
+        f"Traceback (most recent call last):\n"
         f'  File "{source_file}", line 2, in compute_data\n'
-        f'    return payload[\'missing_key\']\n'
-        f'KeyError: \'missing_key\'\n'
+        f"    return payload['missing_key']\n"
+        f"KeyError: 'missing_key'\n"
     )
 
     input_payload = {
@@ -98,13 +96,11 @@ def test_alchemist_self_healing_failed_repair_rollback(tmp_path):
 
     # Use strike_ceiling=1 via GovernanceConfig for fast deterministic failure test
     from loop_engine.governance import load_canonical_governance
+
     custom_gov = load_canonical_governance().model_copy(deep=True)
     custom_gov.governor.strike_ceiling = 1
     gov = Governor._create_for_test(governance_config=custom_gov)
     result = gov.run_loop(runner, input_payload)
-
-
-
 
     # Governor should abort
     assert result["status"] == "ABORTED"

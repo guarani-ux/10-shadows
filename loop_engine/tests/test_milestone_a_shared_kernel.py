@@ -1,25 +1,26 @@
 import json
 import sqlite3
-import pytest
 from pathlib import Path
 
-from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference, ConstraintSet
-from loop_engine.context import RunContext
-from loop_engine.kernel_db import KernelDatabase
+import pytest
+
 from loop_engine.artifacts import (
-    ArtifactRegistry,
     ArtifactRecord,
-    StructuredSourceArtifact,
+    ArtifactRegistry,
     MasterAVScriptArtifact,
     ProductionPlanDAGArtifact,
+    StructuredSourceArtifact,
 )
-from loop_engine.governor import StepGovernor, StepExecutionResult
-from loop_engine.router import BoundedShadowRouter, RoutePlan, HumanEscalationRecord
-from loop_engine.receipts import ReceiptStore
-from loop_engine.runners.scribe_runner import ScribeDomainRunner
-from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
-from loop_engine.runners.slicer_runner import SlicerDomainRunner
+from loop_engine.canonical_objective import CanonicalObjective, ConstraintSet, EvidenceReference, UnknownReference
+from loop_engine.context import RunContext
+from loop_engine.governor import StepExecutionResult, StepGovernor
 from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
+from loop_engine.kernel_db import KernelDatabase
+from loop_engine.receipts import ReceiptStore
+from loop_engine.router import BoundedShadowRouter, HumanEscalationRecord, RoutePlan
+from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
+from loop_engine.runners.scribe_runner import ScribeDomainRunner
+from loop_engine.runners.slicer_runner import SlicerDomainRunner
 
 
 # -----------------------------------------------------------------------------
@@ -166,7 +167,9 @@ def test_matrix_03_artifact_registry_idempotency_constraint(tmp_path):
 
     # Verify single database row
     with kdb.get_connection() as conn:
-        count = conn.execute("SELECT COUNT(*) FROM artifacts WHERE idempotency_key = ?;", (rec1.idempotency_key,)).fetchone()[0]
+        count = conn.execute(
+            "SELECT COUNT(*) FROM artifacts WHERE idempotency_key = ?;", (rec1.idempotency_key,)
+        ).fetchone()[0]
         assert count == 1
 
 

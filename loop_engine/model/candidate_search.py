@@ -9,9 +9,10 @@ bounded, causally distilled repair context for attempt N+1.
 
 from __future__ import annotations
 
-from enum import Enum
 import hashlib
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
 from pydantic import BaseModel, Field
 
 from loop_engine.model.boundary import (
@@ -21,13 +22,13 @@ from loop_engine.model.boundary import (
     ModelResponse,
     ProviderExecutionReceipt,
 )
-from loop_engine.model.context_compiler import ContextCompiler, CompiledContext
+from loop_engine.model.context_compiler import CompiledContext, ContextCompiler
 
 
 class TaskDifficulty(str, Enum):
-    LOW = "LOW"        # Reversible, simple routine generation (1 candidate)
+    LOW = "LOW"  # Reversible, simple routine generation (1 candidate)
     MEDIUM = "MEDIUM"  # Moderate complexity, unverified edge cases (1 candidate + critique/repair)
-    HIGH = "HIGH"      # High risk, irreversible, novel domain, or prior failure (Multi-candidate search)
+    HIGH = "HIGH"  # High risk, irreversible, novel domain, or prior failure (Multi-candidate search)
 
 
 class SearchPolicy(str, Enum):
@@ -40,6 +41,7 @@ class CandidateEvaluation(BaseModel):
     """
     Physical evaluation result of a generated candidate.
     """
+
     candidate_id: str
     payload: Any
     is_valid: bool
@@ -58,6 +60,7 @@ class SearchEngine:
     Coordinates candidate generation, physical evaluation ranking,
     and structured failure feedback loop.
     """
+
     def __init__(
         self,
         context_compiler: ContextCompiler,
@@ -206,17 +209,21 @@ class SearchEngine:
                 # None passed: compile best failure for next attempt
                 evaluated_batch.sort(key=lambda x: x.score, reverse=True)
                 worst_eval = evaluated_batch[0]
-                failure_history.append({
-                    "signature": worst_eval.failure_signature or f"FAIL_ATTEMPT_{attempt}",
-                    "classification": worst_eval.failure_classification or "CANDIDATE_FAILURE",
-                    "root_cause": worst_eval.execution_trace or "Evaluator rejected candidate",
-                    "negative_constraint": worst_eval.negative_constraint or f"DO NOT REPEAT attempt {attempt}",
-                })
+                failure_history.append(
+                    {
+                        "signature": worst_eval.failure_signature or f"FAIL_ATTEMPT_{attempt}",
+                        "classification": worst_eval.failure_classification or "CANDIDATE_FAILURE",
+                        "root_cause": worst_eval.execution_trace or "Evaluator rejected candidate",
+                        "negative_constraint": worst_eval.negative_constraint or f"DO NOT REPEAT attempt {attempt}",
+                    }
+                )
 
             else:
                 # Single candidate generation
                 request.candidate_count = 1
-                request.inference_effort = InferenceEffort.STANDARD if policy == SearchPolicy.CRITIQUE_REPAIR else InferenceEffort.FAST
+                request.inference_effort = (
+                    InferenceEffort.STANDARD if policy == SearchPolicy.CRITIQUE_REPAIR else InferenceEffort.FAST
+                )
                 response = adapter.execute(request)
                 model_calls += 1
 
@@ -229,12 +236,14 @@ class SearchEngine:
                     return eval_result, all_evals, model_calls
 
                 # Candidate failed: compile causal failure packet
-                failure_history.append({
-                    "signature": eval_result.failure_signature or f"FAIL_ATTEMPT_{attempt}",
-                    "classification": eval_result.failure_classification or "CANDIDATE_FAILURE",
-                    "root_cause": eval_result.execution_trace or "Evaluator rejected candidate",
-                    "negative_constraint": eval_result.negative_constraint or f"DO NOT REPEAT attempt {attempt}",
-                })
+                failure_history.append(
+                    {
+                        "signature": eval_result.failure_signature or f"FAIL_ATTEMPT_{attempt}",
+                        "classification": eval_result.failure_classification or "CANDIDATE_FAILURE",
+                        "root_cause": eval_result.execution_trace or "Evaluator rejected candidate",
+                        "negative_constraint": eval_result.negative_constraint or f"DO NOT REPEAT attempt {attempt}",
+                    }
+                )
 
         # Return best evaluation found even if invalid after exhausting attempts
         all_evals.sort(key=lambda x: x.score, reverse=True)

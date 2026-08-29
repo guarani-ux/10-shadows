@@ -2,12 +2,14 @@
 protocol.py — Language-Neutral Worker Invocation Protocol for 10 SHADOWS.
 Defines the strictly typed schema for Worker Authorization and Worker Execution Result.
 """
+
 from __future__ import annotations
 
 import hashlib
 import json
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 
@@ -34,7 +36,9 @@ def compute_authorization_token(
     attempt_number: int,
 ) -> str:
     """Cryptographically binds the authorization token to run, workspace, baseline, and attempt."""
-    raw = f"{run_id}:{task_id}:{invocation_id}:{objective_hash}:{baseline_sha}:{governed_workspace_path}:{attempt_number}"
+    raw = (
+        f"{run_id}:{task_id}:{invocation_id}:{objective_hash}:{baseline_sha}:{governed_workspace_path}:{attempt_number}"
+    )
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
@@ -43,6 +47,7 @@ class WorkerAuthorization(BaseModel):
     Physical authorization token issued exclusively by the Trusted Kernel.
     Governs the boundary, constraints, and identity of the authorized worker.
     """
+
     protocol_version: str = "1.0.0"
     run_id: str
     task_id: str
@@ -87,6 +92,7 @@ class WorkerExecutionResult(BaseModel):
     """
     Physical execution result emitted by the Worker Dispatcher upon completion.
     """
+
     protocol_version: str = "1.0.0"
     run_id: str
     invocation_id: str

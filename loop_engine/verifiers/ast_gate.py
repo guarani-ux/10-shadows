@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 class ASTSecurityViolation(Exception):
     """Raised when an AST node contains prohibited or dangerous operations."""
+
     pass
 
 
@@ -34,9 +35,7 @@ class ASTSecurityVisitor(ast.NodeVisitor):
         # 1. Direct function calls: eval(...), exec(...)
         if isinstance(node.func, ast.Name):
             if node.func.id in self.BANNED_CALL_NAMES:
-                self.violations.append(
-                    f"Line {node.lineno}: Banned function call '{node.func.id}()'"
-                )
+                self.violations.append(f"Line {node.lineno}: Banned function call '{node.func.id}()'")
 
         # 2. Attribute calls: os.system(...), subprocess.Popen(...) without guard, importlib.import_module(...)
         elif isinstance(node.func, ast.Attribute):
@@ -44,29 +43,21 @@ class ASTSecurityVisitor(ast.NodeVisitor):
                 mod_name = node.func.value.id
                 attr_name = node.func.attr
                 if mod_name == "os" and attr_name in {"system", "popen", "spawnl", "execv"}:
-                    self.violations.append(
-                        f"Line {node.lineno}: Banned execution call '{mod_name}.{attr_name}()'"
-                    )
+                    self.violations.append(f"Line {node.lineno}: Banned execution call '{mod_name}.{attr_name}()'")
                 elif mod_name == "importlib" and attr_name in {"import_module", "__import__"}:
-                    self.violations.append(
-                        f"Line {node.lineno}: Banned dynamic import '{mod_name}.{attr_name}()'"
-                    )
+                    self.violations.append(f"Line {node.lineno}: Banned dynamic import '{mod_name}.{attr_name}()'")
 
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             if alias.name in {"socket", "telnetlib", "ftplib"}:
-                self.violations.append(
-                    f"Line {node.lineno}: Banned network module import '{alias.name}'"
-                )
+                self.violations.append(f"Line {node.lineno}: Banned network module import '{alias.name}'")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         if node.module in {"socket", "telnetlib", "ftplib"}:
-            self.violations.append(
-                f"Line {node.lineno}: Banned network module import from '{node.module}'"
-            )
+            self.violations.append(f"Line {node.lineno}: Banned network module import from '{node.module}'")
         self.generic_visit(node)
 
 

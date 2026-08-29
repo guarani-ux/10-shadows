@@ -5,14 +5,16 @@ Strict value assertions, source-binding locks, exact quote spans, and determinis
 
 import hashlib
 import sqlite3
+
 import pytest
-from svris.core.db import get_connection, init_db
-from svris.core.custody import create_source_snapshot, create_source_chunk
-from svris.core.extractor import extract_candidate_claims, CandidateClaim
-from svris.core.verifier import verify_and_promote_claim, ProvenanceError, QuoteMismatchError
-from svris.core.policy import VerificationPolicy
-from svris.core.freshness import mark_claim_superseded
+
 from svris.adapters.model import MockModelAdapter
+from svris.core.custody import create_source_chunk, create_source_snapshot
+from svris.core.db import get_connection, init_db
+from svris.core.extractor import CandidateClaim, extract_candidate_claims
+from svris.core.freshness import mark_claim_superseded
+from svris.core.policy import VerificationPolicy
+from svris.core.verifier import ProvenanceError, QuoteMismatchError, verify_and_promote_claim
 
 
 @pytest.fixture
@@ -22,7 +24,7 @@ def test_db_path(tmp_path):
     conn = get_connection(db_file)
     cur = conn.cursor()
     cur.execute("INSERT INTO topics (topic_id, name) VALUES ('top_ai', 'Artificial Intelligence')")
-    
+
     # Source A (Verified Primary)
     cur.execute(
         """INSERT INTO sources (
@@ -49,7 +51,7 @@ def test_db_path(tmp_path):
 def test_negative_trap_model_cross_source_attribution_rejected(test_db_path):
     """Negative Trap 1: Model fed Source A returns Source B -> Extraction boundary MUST reject."""
     raw_doc = "Quantum compute breakthrough achieved with 99.9% gate fidelity."
-    
+
     # Adversarial model attempts cross-attribution to existing src_blog_b
     malicious_model = MockModelAdapter(
         fixed_claims=[
@@ -57,7 +59,7 @@ def test_negative_trap_model_cross_source_attribution_rejected(test_db_path):
                 "claim_id": "clm_fidelity",
                 "claim_text": "Quantum gate fidelity reached 99.9%.",
                 "topic_id": "top_ai",
-                "source_id": "src_blog_b", # Hallucinated cross-attribution
+                "source_id": "src_blog_b",  # Hallucinated cross-attribution
                 "relationship_state": "SUPPORTS",
                 "quote_text": "Quantum compute breakthrough achieved with 99.9% gate fidelity.",
                 "quote_start": 0,
@@ -71,7 +73,7 @@ def test_negative_trap_model_cross_source_attribution_rejected(test_db_path):
     with pytest.raises(ProvenanceError, match="Cross-source attribution detected"):
         extract_candidate_claims(
             raw_text=raw_doc,
-            source_id="src_paper_a", # Bound source
+            source_id="src_paper_a",  # Bound source
             topic_id="top_ai",
             model_adapter=malicious_model,
         )
@@ -122,7 +124,7 @@ def test_negative_trap_altered_single_char_quote_rejected(test_db_path):
         source_id="src_paper_a",
         snapshot_id=snapshot["snapshot_id"],
         relationship_state="SUPPORTS",
-        quote_text="The latency was 10ms.", # 10ms instead of 12ms
+        quote_text="The latency was 10ms.",  # 10ms instead of 12ms
         quote_start=0,
         quote_end=21,
         confidence=0.99,
@@ -153,7 +155,7 @@ def test_negative_trap_untrusted_source_cannot_gain_verified_status(test_db_path
         quote_text=raw_text,
         quote_start=0,
         quote_end=len(raw_text),
-        confidence=1.0, # High model confidence must NOT override policy
+        confidence=1.0,  # High model confidence must NOT override policy
         rationale="Blog claim",
     )
 

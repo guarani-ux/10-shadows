@@ -2,16 +2,21 @@ name: Ten Shadows CI
 
 on:
   push:
+    branches: [ master, main, 'release/**', 'feat/**', 'fix/**' ]
   pull_request:
+    branches: [ master, main ]
 
 permissions:
   contents: read
 
-jobs:
-  test:
-    name: Run Test Suite
-    runs-on: ubuntu-latest
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
+jobs:
+  lint-and-format:
+    name: Code Style & Quality Gates
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout commit
         uses: actions/checkout@v4
@@ -23,22 +28,86 @@ jobs:
           cache: 'pip'
           cache-dependency-path: requirements-dev.txt
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+      - name: Install Python quality tools
+        run: pip install ruff
 
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-
-      - name: Configure Git User for Test Sandboxes
+      - name: Python Format & Lint Checks (Ruff)
         run: |
-          git config --global user.name "CI Bot"
-          git config --global user.email "bot@ten.shadows"
+          ruff check .
+          ruff format --check .
 
-      - name: Run test suite
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust Formatting Check (rustfmt)
+        run: cargo fmt --check
+
+      - name: Rust Static Quality Check (clippy)
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test-rust-kernel:
+    name: Rust Trusted Kernel Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v4
+
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Kernel Workspace
+        run: cargo build --workspace --all-targets
+
+      - name: Run Sovereign Kernel Adversarial Authority Tests
+        run: cargo test --workspace -- --nocapture
+
+  test-python-ecosystem:
+    name: Python Ecosystem & Epistemic Tests
+    runs-on: ubuntu-latest
+    needs: [lint-and-format]
+    steps:
+      - name: Checkout commit
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+          cache: 'pip'
+          cache-dependency-path: requirements-dev.txt
+
+      - name: Install Python Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Configure Git Identity for Test Sandboxes
+        run: |
+          git config --global user.name "Ten Shadows CI"
+          git config --global user.email "ci@ten-shadows.local"
+
+      - name: Execute Deterministic Preflight Health Check
+        run: python scripts/preflight.py
+
+      - name: Execute Full Pytest Suite
         shell: bash
         run: |
           set -o pipefail
           python -m pytest -q --tb=short 2>&1 | tee test_out.txt
+
+      - name: Verify Working Tree Cleanliness Post-Test
+        run: |
+          STATUS=$(git status --porcelain)
+          if [ -n "$STATUS" ]; then
+            echo "::error::Working directory is dirty after running test suite! Leaked artifacts:"
+            echo "$STATUS"
+            exit 1
+          fi
 
       - name: Publish Summary
         if: always()

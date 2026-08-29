@@ -1,11 +1,14 @@
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
+
 from loop_engine.alchemist.trace_parser import CrashDiagnostic
 
 
 class SurgicalPatch(BaseModel):
     """A minimal repair patch target."""
+
     target_file: str
     target_line: int
     original_snippet: str
@@ -16,7 +19,7 @@ class SurgicalPatch(BaseModel):
 class RepairStrategyEngine:
     """
     Shadow 9 (The Alchemist) Self-Healing & Patch Generator.
-    
+
     Generates minimal, non-destructive surgical repair diffs
     from structured crash diagnostics without rewriting entire files.
     """
@@ -63,10 +66,14 @@ class RepairStrategyEngine:
             rationale = f"[{exc}] Add zero denominator condition check with safe 0.0 fallback."
         elif exc == "KeyError":
             key_name = diagnostic.error_message.strip("'\"")
-            if f"['{key_name}']" in stripped:
-                replacement = f"{indent_str}{stripped.replace(f'[\'{key_name}\']', f'.get(\'{key_name}\')')}"
-            elif f'["{key_name}"]' in stripped:
-                replacement = f"{indent_str}{stripped.replace(f'[\"{key_name}\"]', f'.get(\"{key_name}\")')}"
+            target_sq = f"['{key_name}']"
+            target_dq = f'["{key_name}"]'
+            repl_sq = f".get('{key_name}')"
+            repl_dq = f'.get("{key_name}")'
+            if target_sq in stripped:
+                replacement = f"{indent_str}{stripped.replace(target_sq, repl_sq)}"
+            elif target_dq in stripped:
+                replacement = f"{indent_str}{stripped.replace(target_dq, repl_dq)}"
             else:
                 replacement = f"{indent_str}{stripped}"
             rationale = f"[{exc}] Replace direct dictionary subscript with safe dict.get() fallback."

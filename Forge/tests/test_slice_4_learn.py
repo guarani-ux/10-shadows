@@ -15,7 +15,7 @@ def test_learn_clean_run_no_noise(test_store):
         "success_conditions": ["Produces valid text"],
         "requires_external_action": False,
         "reversibility": "REVERSIBLE",
-        "risk": "LOW"
+        "risk": "LOW",
     }
 
     result = {"status": "COMPLETE", "result": "Clean output"}
@@ -44,7 +44,7 @@ def test_learn_permission_error_promotes_regression_test(test_store):
         "success_conditions": ["File exists with expected bytes"],
         "requires_external_action": True,
         "reversibility": "REVERSIBLE",
-        "risk": "MEDIUM"
+        "risk": "MEDIUM",
     }
 
     receipt = {
@@ -56,7 +56,7 @@ def test_learn_permission_error_promotes_regression_test(test_store):
         "outcome": "FAILED",
         "side_effect_committed": False,
         "output": {},
-        "error": "PermissionError: Target path escapes sandbox root"
+        "error": "PermissionError: Target path escapes sandbox root",
     }
 
     ev = evaluate(task_spec, receipt)

@@ -5,7 +5,7 @@ from typing import List, Tuple
 class CinematographyValidator:
     """
     Shadow 3 (The Herald) Cinematography & Production Realism Engine.
-    
+
     Validates that video/visual directions are grounded in physical production physics:
     1. Realistic camera focal lengths (e.g. 24mm, 35mm, 50mm, 85mm, 135mm).
     2. Motivated lighting contrast ratios (e.g. 2:1, 4:1, 8:1).
@@ -16,8 +16,17 @@ class CinematographyValidator:
     ALLOWED_FOCAL_LENGTHS = {"24mm", "28mm", "35mm", "50mm", "85mm", "105mm", "135mm", "70-200mm", "24-70mm"}
     ALLOWED_LIGHTING_RATIOS = {"2:1", "3:1", "4:1", "8:1", "1:1"}
     ALLOWED_SHOT_TYPES = {
-        "ECU", "CU", "MCU", "Medium Shot", "Wide Shot", "Extreme Wide Shot",
-        "Over-the-shoulder", "OTS", "POV Tracking", "Insert Cut", "B-Roll"
+        "ECU",
+        "CU",
+        "MCU",
+        "Medium Shot",
+        "Wide Shot",
+        "Extreme Wide Shot",
+        "Over-the-shoulder",
+        "OTS",
+        "POV Tracking",
+        "Insert Cut",
+        "B-Roll",
     }
 
     UNREALISTIC_TROPES = {
@@ -39,11 +48,19 @@ class CinematographyValidator:
         # Check for unrealistic Hollywood tropes
         for trope in cls.UNREALISTIC_TROPES:
             if trope in text_lower:
-                violations.append(f"Violation: Unrealistic production trope '{trope}' detected. Ground in achievable camera physics.")
+                violations.append(
+                    f"Violation: Unrealistic production trope '{trope}' detected. Ground in achievable camera physics."
+                )
 
         # Ensure at least one grounded shot type or framing cue is present
-        has_framing = any(st.lower() in text_lower for st in cls.ALLOWED_SHOT_TYPES) or "shot" in text_lower or "cut to" in text_lower
+        has_framing = (
+            any(st.lower() in text_lower for st in cls.ALLOWED_SHOT_TYPES)
+            or "shot" in text_lower
+            or "cut to" in text_lower
+        )
         if not has_framing:
-            violations.append("Violation: Visual direction must specify an explicit camera shot size or framing cue (e.g. Wide Shot, MCU, Close-Up, B-Roll).")
+            violations.append(
+                "Violation: Visual direction must specify an explicit camera shot size or framing cue (e.g. Wide Shot, MCU, Close-Up, B-Roll)."
+            )
 
         return len(violations) == 0, violations

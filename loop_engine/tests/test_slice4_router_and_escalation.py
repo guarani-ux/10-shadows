@@ -1,12 +1,19 @@
-import pytest
 from pathlib import Path
-from loop_engine.router import BoundedShadowRouter, RoutePlan, RouteStep, HumanEscalationRecord
-from loop_engine.canonical_objective import CanonicalObjective, EvidenceReference, UnknownReference, ConstraintSet
+
+import pytest
+
+from loop_engine.artifacts import (
+    ArtifactRegistry,
+    MasterAVScriptArtifact,
+    ProductionPlanDAGArtifact,
+    StructuredSourceArtifact,
+)
+from loop_engine.canonical_objective import CanonicalObjective, ConstraintSet, EvidenceReference, UnknownReference
 from loop_engine.context import RunContext
-from loop_engine.kernel_db import KernelDatabase
-from loop_engine.artifacts import ArtifactRegistry, StructuredSourceArtifact, MasterAVScriptArtifact, ProductionPlanDAGArtifact
 from loop_engine.governor import StepGovernor
+from loop_engine.kernel_db import KernelDatabase
 from loop_engine.receipts import ReceiptStore
+from loop_engine.router import BoundedShadowRouter, HumanEscalationRecord, RoutePlan, RouteStep
 
 
 def test_plan_route_minimal_shadow_selection_and_deterministic_hash():

@@ -17,9 +17,9 @@ from typing import Dict, List, Optional, Set, Tuple
 from loop_engine.relational.graph_db import RelationalGraphStore
 from loop_engine.relational.schema import (
     EpistemicStatus,
-    RelationType,
     RelationalEdge,
     RelationalNode,
+    RelationType,
 )
 
 

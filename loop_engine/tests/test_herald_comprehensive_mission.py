@@ -1,13 +1,14 @@
 import pytest
+
+from loop_engine.herald.generator import IntelligentAVScriptGenerator
 from loop_engine.herald.input_contract import (
     CanonicalMediaBrief,
     EvidenceItem,
-    UnknownItem,
     ProductionConstraints,
+    UnknownItem,
 )
-from loop_engine.herald.generator import IntelligentAVScriptGenerator
-from loop_engine.herald.validators import DeterministicScriptValidator
 from loop_engine.herald.renderer import MasterAVMarkdownRenderer
+from loop_engine.herald.validators import DeterministicScriptValidator
 
 
 def test_calgary_public_library_fixture():

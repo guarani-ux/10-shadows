@@ -11,11 +11,11 @@ Enforces:
 
 from __future__ import annotations
 
+import hashlib
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-import hashlib
-import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from forge.core.substrate import EvidenceClass, compute_digest
@@ -59,6 +59,7 @@ class VerifierSpecification:
     Independent specification of what a verifier must test, what modality it uses,
     and what it explicitly DOES NOT establish.
     """
+
     spec_id: str
     target_claim_id: str
     verification_modality: str  # DETERMINISTIC_TEST | STATIC_AST | PROPERTY_ORACLE | ADVERSARIAL_MUTATION
@@ -72,16 +73,18 @@ class VerifierSpecification:
 
     @property
     def spec_digest(self) -> str:
-        return compute_digest({
-            "id": self.spec_id,
-            "claim": self.target_claim_id,
-            "modality": self.verification_modality,
-            "scope": self.expected_scope,
-            "candidate": self.target_candidate_sha,
-            "env": self.required_environment_pattern,
-            "non_claims": self.explicit_non_claims,
-            "verifier": self.verifier_identity,
-        })
+        return compute_digest(
+            {
+                "id": self.spec_id,
+                "claim": self.target_claim_id,
+                "modality": self.verification_modality,
+                "scope": self.expected_scope,
+                "candidate": self.target_candidate_sha,
+                "env": self.required_environment_pattern,
+                "non_claims": self.explicit_non_claims,
+                "verifier": self.verifier_identity,
+            }
+        )
 
 
 @dataclass
@@ -90,6 +93,7 @@ class VerifierExecutionObservation:
     Empirical observation recorded by executing a verifier adapter.
     Derived mechanically from the execution process; cannot self-declare semantic authority.
     """
+
     observation_id: str
     spec_digest: str
     executed_command: str
@@ -110,18 +114,20 @@ class VerifierExecutionObservation:
 
     @property
     def observation_digest(self) -> str:
-        return compute_digest({
-            "id": self.observation_id,
-            "spec_digest": self.spec_digest,
-            "cmd": self.executed_command,
-            "exit": self.exit_code,
-            "passed": self.tests_passed,
-            "failed": self.tests_failed,
-            "coverage": self.coverage_percentage,
-            "candidate": self.candidate_sha,
-            "env": self.environment_fingerprint,
-            "status": self.observation_status.value,
-        })
+        return compute_digest(
+            {
+                "id": self.observation_id,
+                "spec_digest": self.spec_digest,
+                "cmd": self.executed_command,
+                "exit": self.exit_code,
+                "passed": self.tests_passed,
+                "failed": self.tests_failed,
+                "coverage": self.coverage_percentage,
+                "candidate": self.candidate_sha,
+                "env": self.environment_fingerprint,
+                "status": self.observation_status.value,
+            }
+        )
 
 
 @dataclass
@@ -130,6 +136,7 @@ class QualifiedEvidence:
     Qualified evidence relationship binding an independent specification
     to an execution observation and evidence class.
     """
+
     evidence_id: str
     specification: VerifierSpecification
     observation: VerifierExecutionObservation
@@ -138,12 +145,14 @@ class QualifiedEvidence:
 
     @property
     def evidence_digest(self) -> str:
-        return compute_digest({
-            "id": self.evidence_id,
-            "spec": self.specification.spec_digest,
-            "obs": self.observation.observation_digest,
-            "class": self.evidence_class.value,
-        })
+        return compute_digest(
+            {
+                "id": self.evidence_id,
+                "spec": self.specification.spec_digest,
+                "obs": self.observation.observation_digest,
+                "class": self.evidence_class.value,
+            }
+        )
 
 
 @dataclass
@@ -151,6 +160,7 @@ class EpistemicClaim:
     """
     Discrete epistemic assertion of fact, behavior, or requirement satisfaction.
     """
+
     claim_id: str
     subject: str
     predicate: str
@@ -191,10 +201,12 @@ class RelationalEvidenceEvaluator:
 
         for ev in evidence_list:
             # 1. Deduplicate identical observation/specification pairings
-            obs_binding_digest = compute_digest({
-                "spec": ev.specification.spec_digest,
-                "obs": ev.observation.observation_digest,
-            })
+            obs_binding_digest = compute_digest(
+                {
+                    "spec": ev.specification.spec_digest,
+                    "obs": ev.observation.observation_digest,
+                }
+            )
             if obs_binding_digest in seen_digests:
                 continue
             seen_digests.add(obs_binding_digest)

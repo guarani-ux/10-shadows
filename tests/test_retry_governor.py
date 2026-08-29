@@ -1,7 +1,8 @@
 import time
-import pytest
-from loop_engine.governor import RetryGovernor, TokenBucketRateLimiter
 
+import pytest
+
+from loop_engine.governor import RetryGovernor, TokenBucketRateLimiter
 
 
 class TestRetryGovernorConstruction:
@@ -194,4 +195,3 @@ class TestTokenBucketRateLimiter:
             TokenBucketRateLimiter(capacity=0, refill_rate=1.0)
         with pytest.raises(ValueError):
             TokenBucketRateLimiter(capacity=5.0, refill_rate=-1.0)
-

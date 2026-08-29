@@ -5,7 +5,7 @@ from typing import List, Tuple
 class AntiAILinguisticGuard:
     """
     Shadow 3 (The Herald) Linguistic Integrity Engine.
-    
+
     Enforces human, conversational spoken English:
     1. Zero em-dashes (—) or en-dashes (–) used as punctuation.
     2. Banned vocabulary list: 'delve', 'tapestry', 'seamlessly', 'testament', 'revolutionize', etc.
@@ -13,13 +13,20 @@ class AntiAILinguisticGuard:
     """
 
     BANNED_WORDS = {
-        "delve", "delving", "delves",
-        "tapestry", "tapestries",
-        "seamlessly", "seamless",
+        "delve",
+        "delving",
+        "delves",
+        "tapestry",
+        "tapestries",
+        "seamlessly",
+        "seamless",
         "testament",
-        "revolutionize", "revolutionizing", "revolutionized",
+        "revolutionize",
+        "revolutionizing",
+        "revolutionized",
         "beacon",
-        "game-changer", "gamechanger",
+        "game-changer",
+        "gamechanger",
         "furthermore",
         "moreover",
         "in conclusion",
@@ -40,13 +47,17 @@ class AntiAILinguisticGuard:
 
         # 1. Em-dash & En-dash scan
         if "—" in text or "–" in text:
-            violations.append("Violation: Em-dash ('—') or en-dash ('–') detected. People speak with natural pauses (commas, periods, ellipses), not em-dashes.")
+            violations.append(
+                "Violation: Em-dash ('—') or en-dash ('–') detected. People speak with natural pauses (commas, periods, ellipses), not em-dashes."
+            )
 
         # 2. Banned vocabulary scan (case-insensitive word boundary match)
         for word in cls.BANNED_WORDS:
             pattern = rf"\b{re.escape(word)}\b"
             if re.search(pattern, text, re.IGNORECASE):
-                violations.append(f"Violation: Banned AI-speak word '{word}' detected. Replace with natural, plainspoken language.")
+                violations.append(
+                    f"Violation: Banned AI-speak word '{word}' detected. Replace with natural, plainspoken language."
+                )
 
         # 3. Spoken sentence length scan
         sentences = [s.strip() for s in re.split(r"[.!?]+", text) if s.strip()]

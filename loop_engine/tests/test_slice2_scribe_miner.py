@@ -1,4 +1,5 @@
 import pytest
+
 from loop_engine.scribe.memory_store import ScribeMemoryStore
 from loop_engine.scribe.pattern_miner import ScribePatternMiner
 

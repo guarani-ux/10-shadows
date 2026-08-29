@@ -12,6 +12,7 @@ from __future__ import annotations
 import abc
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+
 from pydantic import BaseModel, Field
 
 from loop_engine.model.boundary import (
@@ -21,13 +22,14 @@ from loop_engine.model.boundary import (
     ModelRequest,
     ModelResponse,
 )
-from loop_engine.model.context_compiler import ContextCompiler, CompiledContext
+from loop_engine.model.context_compiler import CompiledContext, ContextCompiler
 
 
 class DeficitProvisionResult(BaseModel):
     """
     Result of attempting to provision a declared deficit.
     """
+
     deficit: DeficitDeclaration
     is_resolved: bool
     provisioned_data: Optional[Dict[str, Any]] = None
@@ -38,6 +40,7 @@ class DeficitResolver(abc.ABC):
     """
     Abstract interface for provisioning declared deficits.
     """
+
     @abc.abstractmethod
     def can_resolve(self, deficit: DeficitDeclaration) -> bool:
         """Returns True if this resolver can satisfy the declared deficit."""
@@ -53,6 +56,7 @@ class InProcessDeficitResolver(DeficitResolver):
     """
     Configurable in-process resolver for knowledge, evidence, tools, and domain rules.
     """
+
     def __init__(
         self,
         knowledge_base: Optional[Dict[str, Any]] = None,
@@ -117,6 +121,7 @@ class DeficitResolutionLoop:
     Coordinates model candidate execution with automatic deficit detection,
     system-side provisioning, context recompilation, and retry.
     """
+
     def __init__(
         self,
         context_compiler: ContextCompiler,

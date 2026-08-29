@@ -16,6 +16,7 @@ Validates:
 """
 
 from pathlib import Path
+
 import pytest
 
 from forge.core.adequacy import IntentCoverageEvaluator, RawClauseTokenizer
@@ -37,10 +38,10 @@ from forge.core.substrate import (
     EvidenceRequirement,
     ObjectiveAdequacyState,
     OperatorType,
+    RequiredOperation,
     RequirementDisposition,
     RequirementOrigin,
     RequirementTrace,
-    RequiredOperation,
     VerificationContract,
 )
 from forge.forge import ForgeEngine
@@ -200,10 +201,7 @@ def test_representation_break_warehouse_logistics(system_forge):
 # -----------------------------------------------------------------------------
 def test_upstream_adversarial_requirement_omission(system_forge):
     evaluator = system_forge.adequacy_evaluator
-    raw_intent = (
-        "Generate user report in CSV format with ISO timestamps. "
-        "Do not overwrite previous audit records."
-    )
+    raw_intent = "Generate user report in CSV format with ISO timestamps. Do not overwrite previous audit records."
     raw_clauses = RawClauseTokenizer.tokenize(raw_intent)
     assert len(raw_clauses) >= 2
 
@@ -280,8 +278,12 @@ def test_decomposition_coverage_deficit_blocks_compilation(system_forge):
     compiler = system_forge.compiler
 
     reqs = [
-        CanonicalRequirement(requirement_id="r1", description="Extract telemetry", origin=RequirementOrigin.SOURCE_EXPLICIT),
-        CanonicalRequirement(requirement_id="r2", description="Generate verified plot artifact", origin=RequirementOrigin.SOURCE_EXPLICIT),
+        CanonicalRequirement(
+            requirement_id="r1", description="Extract telemetry", origin=RequirementOrigin.SOURCE_EXPLICIT
+        ),
+        CanonicalRequirement(
+            requirement_id="r2", description="Generate verified plot artifact", origin=RequirementOrigin.SOURCE_EXPLICIT
+        ),
     ]
 
     # Operation only outputs telemetry, misses plot artifact
@@ -340,9 +342,7 @@ def test_anti_cheating_oracle_rejected_when_closure_open(system_forge):
     )
 
     # Empty evidence pool (or model supplying UNVERIFIED_MODEL_PRIOR)
-    evidence_pool = {
-        "ev_biometric_proof": {"evidence_class": EvidenceClass.UNVERIFIED_MODEL_PRIOR.value}
-    }
+    evidence_pool = {"ev_biometric_proof": {"evidence_class": EvidenceClass.UNVERIFIED_MODEL_PRIOR.value}}
 
     closure_report = closure_gate.evaluate_closure([op], evidence_pool)
     assert closure_report.is_closed is False

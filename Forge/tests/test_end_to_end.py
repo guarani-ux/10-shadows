@@ -6,7 +6,7 @@ def test_acceptance_test_a_direct(test_store, mock_model, temp_dir):
         store=test_store,
         model_adapter=mock_model,
         sandbox_dir=temp_dir / "sandbox",
-        artifacts_dir=temp_dir / "artifacts"
+        artifacts_dir=temp_dir / "artifacts",
     )
 
     request = {
@@ -14,7 +14,7 @@ def test_acceptance_test_a_direct(test_store, mock_model, temp_dir):
         "intent": "Explain an unfamiliar concept and give me the decision-relevant implications.",
         "context": [],
         "constraints": ["Keep concise"],
-        "requested_surface": "ANSWER"
+        "requested_surface": "ANSWER",
     }
 
     result = engine.run_legacy(request)
@@ -30,7 +30,7 @@ def test_acceptance_test_b_build(test_store, mock_model, temp_dir):
         store=test_store,
         model_adapter=mock_model,
         sandbox_dir=temp_dir / "sandbox",
-        artifacts_dir=temp_dir / "artifacts"
+        artifacts_dir=temp_dir / "artifacts",
     )
 
     request = {
@@ -38,7 +38,7 @@ def test_acceptance_test_b_build(test_store, mock_model, temp_dir):
         "intent": "Make a reusable processor that turns this recurring input into this recurring output.",
         "context": [],
         "constraints": ["Single processor"],
-        "requested_surface": "SYSTEM"
+        "requested_surface": "SYSTEM",
     }
 
     result = engine.run_legacy(request)
@@ -61,29 +61,32 @@ def test_acceptance_test_c_act(test_store, mock_model, sandbox_adapter, temp_dir
         model_adapter=mock_model,
         action_adapter=sandbox_adapter,
         sandbox_dir=temp_dir / "sandbox",
-        artifacts_dir=temp_dir / "artifacts"
+        artifacts_dir=temp_dir / "artifacts",
     )
 
     # Preprogram mock model to signal external mutation needed
-    mock_model.register_response("normalize", {
-        "objective": "Write the generated result to a controlled external target.",
-        "deliverable": {"kind": "ACTION", "description": "Write target file"},
-        "constraints": [],
-        "knowns": [],
-        "unknowns": [],
-        "assumptions": [],
-        "success_conditions": ["Side effect committed and physical file exists"],
-        "requires_external_action": True,
-        "reversibility": "REVERSIBLE",
-        "risk": "LOW"
-    })
+    mock_model.register_response(
+        "normalize",
+        {
+            "objective": "Write the generated result to a controlled external target.",
+            "deliverable": {"kind": "ACTION", "description": "Write target file"},
+            "constraints": [],
+            "knowns": [],
+            "unknowns": [],
+            "assumptions": [],
+            "success_conditions": ["Side effect committed and physical file exists"],
+            "requires_external_action": True,
+            "reversibility": "REVERSIBLE",
+            "risk": "LOW",
+        },
+    )
 
     request = {
         "request_id": "req-acceptance-c",
         "intent": "Write the generated result to a controlled external target.",
         "context": [],
         "constraints": [],
-        "requested_surface": "ACTION"
+        "requested_surface": "ACTION",
     }
 
     result = engine.run_legacy(request)
@@ -105,28 +108,31 @@ def test_acceptance_test_d_learn(test_store, mock_model, temp_dir):
         model_adapter=mock_model,
         action_adapter=CrashingSandboxAdapter(),
         sandbox_dir=temp_dir / "sandbox",
-        artifacts_dir=temp_dir / "artifacts"
+        artifacts_dir=temp_dir / "artifacts",
     )
 
-    mock_model.register_response("normalize", {
-        "objective": "Controlled failure action",
-        "deliverable": {"kind": "ACTION", "description": "Trigger failure"},
-        "constraints": [],
-        "knowns": [],
-        "unknowns": [],
-        "assumptions": [],
-        "success_conditions": ["Must execute"],
-        "requires_external_action": True,
-        "reversibility": "REVERSIBLE",
-        "risk": "LOW"
-    })
+    mock_model.register_response(
+        "normalize",
+        {
+            "objective": "Controlled failure action",
+            "deliverable": {"kind": "ACTION", "description": "Trigger failure"},
+            "constraints": [],
+            "knowns": [],
+            "unknowns": [],
+            "assumptions": [],
+            "success_conditions": ["Must execute"],
+            "requires_external_action": True,
+            "reversibility": "REVERSIBLE",
+            "risk": "LOW",
+        },
+    )
 
     request = {
         "request_id": "req-acceptance-d",
         "intent": "Controlled failure action",
         "context": [],
         "constraints": [],
-        "requested_surface": "ACTION"
+        "requested_surface": "ACTION",
     }
 
     result = engine.run_legacy(request)

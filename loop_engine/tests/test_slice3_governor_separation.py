@@ -1,13 +1,15 @@
-import pytest
 from pathlib import Path
-from loop_engine.governor import StepGovernor, StepExecutionResult
+
+import pytest
+
+from loop_engine.canonical_objective import CanonicalObjective
+from loop_engine.context import RunContext
+from loop_engine.governor import StepExecutionResult, StepGovernor
+from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
+from loop_engine.receipts import ReceiptStore
 from loop_engine.runners.herald_runner import HeraldAVScriptDomainRunner
 from loop_engine.runners.scribe_runner import ScribeDomainRunner
 from loop_engine.runners.slicer_runner import SlicerDomainRunner
-from loop_engine.herald.input_contract import CanonicalMediaBrief, ProductionConstraints
-from loop_engine.canonical_objective import CanonicalObjective
-from loop_engine.context import RunContext
-from loop_engine.receipts import ReceiptStore
 
 
 def test_step_governor_execution_and_metrics_injection(tmp_path):

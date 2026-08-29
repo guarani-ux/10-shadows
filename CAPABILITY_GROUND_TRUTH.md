@@ -1,73 +1,98 @@
 # CAPABILITY GROUND TRUTH
 
-This ledger separates present-tense repository capability from architectural intent.
+This is the canonical present-tense capability ledger for the Ten Shadows reconciliation candidate.
 
-Audit baseline: `master` commit `34fc01643d21d392d1ddb5fbbfc85ebecd0dfb94`, GitHub Actions run #37.
+Reconciliation baseline: `master` remained at `34fc01643d21d392d1ddb5fbbfc85ebecd0dfb94` while all changes were developed on `docs/ground-truth-capability-audit`.
 
-## Status definitions
+Evidence anchor before this truth-surface update: GitHub Actions run #161 on candidate commit `a4fc49c8ac4cc19a399c2701ee86de1ec7b89032` completed successfully. It independently passed Python lint, Python formatting, Rust formatting/clippy, Rust authority tests, fresh-checkout reconstruction, capability-claim discipline, and the full Python ecosystem suite. The Python suite executed 537 tests with no failures and left the checkout clean.
 
-- **VERIFIED**: current relevant verification evidence passes.
-- **IMPLEMENTED**: executable implementation exists; broader claim is not currently proven.
-- **EXPERIMENTAL**: executable implementation exists but integration/reliability/scope remains under validation.
-- **SCAFFOLDED**: interface or structural implementation exists without a complete demonstrated path.
-- **PLANNED**: milestone/specification target, not a completed capability.
-- **BLOCKED**: an otherwise implemented path is prevented from completing by a known current failure.
+A green suite is evidence for the behaviors it exercises. It is not universal proof of every architectural ambition.
 
-## Current capability ledger
+## Evidence vocabulary
 
-| Capability | Status | Ground truth |
-|---|---|---|
-| Canonical `ts_run.py` CLI | IMPLEMENTED | `run`, `verify`, and `capabilities list` commands exist and route into current implementation. |
-| Governed objective establishment | IMPLEMENTED | Orchestrator establishes kernel run before builder invocation. |
-| Bounded attempt loop | IMPLEMENTED | Canonical orchestrator bounds attempts with `max_attempts`. |
-| Worker authorization token verification | IMPLEMENTED | Provider paths reject invalid authorization tokens. |
-| Filesystem before/after observation | IMPLEMENTED | Orchestrator hashes workspace files and records created/modified/deleted effects. |
-| Candidate capability registration | IMPLEMENTED | Candidate capabilities are registered as unqualified before verification. |
-| Capability qualification after verification | IMPLEMENTED | Qualification path is invoked only after independent verification passes. |
-| Persistent capability lookup/reuse mechanism | IMPLEMENTED / EXPERIMENTAL | Registry lookup is wired into canonical orchestrator; broad usefulness across arbitrary domains is not established. |
-| Independent receipt verification command | IMPLEMENTED | `ts_run.py verify` calls receipt verification and fails closed on invalid evidence. |
-| Rust trusted-kernel build | VERIFIED in CI #37 | `cargo build --workspace --all-targets` passes. |
-| Rust adversarial authority suite | BLOCKED / PARTIAL | 22/25 pass in CI #37; 3 dispatcher tests fail because Python `pydantic` is unavailable in the Rust test job. |
-| Full Python ecosystem qualification | NOT CURRENTLY VERIFIED | CI #37 skips this job after the Ruff quality-gate failure. |
-| Deterministic general-purpose builder | NOT IMPLEMENTED | Current deterministic provider supports a small explicit set of objective patterns and fails closed otherwise. |
-| Deterministic temperature conversion synthesis | IMPLEMENTED | Explicit code/test synthesis path exists. |
-| Deterministic hydraulic transient synthesis | IMPLEMENTED | Explicit code/test synthesis path exists. |
-| Gemini live builder through canonical provider | SCAFFOLDED | Adapter exists but intentionally returns provider unavailable; live network generation is not enabled in this path. |
-| Antigravity worker bridge | EXPERIMENTAL / ENVIRONMENT-DEPENDENT | Adapter requires `ANTIGRAVITY_CLI`; current success path reports completion but does not by itself establish broad task execution. |
-| Fully integrated Scribe -> Herald -> Slicer shared-kernel route | PLANNED / IN PROGRESS | Explicitly identified as Milestone A in `CURRENT_OBJECTIVE.md`. |
-| General autonomous capability acquisition | NOT VERIFIED | Registry/candidate/qualification mechanisms exist, but arbitrary-domain discovery, synthesis, validation, and reuse are not demonstrated as a general closed loop. |
-| Universal autonomous cognitive operating system | NOT VERIFIED | Architectural aspiration exceeds current demonstrated scope. |
-| Production readiness | NOT VERIFIED | Current `master` CI is red. |
+- **VERIFIED CAPABILITY** — current executable evidence demonstrates the stated behavior within the stated scope.
+- **IMPLEMENTED BUT UNVERIFIED** — an executable path exists, but current evidence is insufficient for the broader claim.
+- **PARTIAL / EXPERIMENTAL** — implementation exists while scope, reliability, integration, or usefulness remains under validation.
+- **SCAFFOLDED / PLANNED** — interfaces, design structure, or an explicit target exists without a complete demonstrated path.
+- **UNSUPPORTED CLAIM** — repository language exceeds implementation or evidence and is not a valid present-tense capability claim.
 
-## Current CI evidence
+## VERIFIED CAPABILITY
 
-GitHub Actions run #37 on the audit baseline reports:
+| Capability | What current evidence establishes |
+|---|---|
+| Reconstructable repository setup | A fresh GitHub checkout can install documented dependencies, import the core packages, run preflight, load the public CLI, and execute the representative deterministic path without hidden local state. |
+| Non-promoting public default | `ts_run.py run` leaves the target unchanged unless explicit promotion is requested. Clean-room CI checks this physically. |
+| Kernel-established governed runs | The canonical Python path records a run before invoking a worker and seals a receipt afterward. |
+| Bounded attempts | The canonical orchestrator accepts only 1–3 attempts and stops at that bound. This proves bounded retries, not a broader root-cause intelligence. |
+| Worker result fidelity | Recorded worker invocation status reflects the worker's actual exit status rather than being automatically labelled successful. |
+| Builder/verifier separation | Verification records reject identical builder/verifier identities, and the canonical deterministic builder no longer writes the tests used to qualify its own candidate. |
+| Fail-closed unsupported objectives | Controlled objectives outside the implemented deterministic family are reported as capability/verifier deficits instead of being silently treated as success. |
+| Narrow deterministic synthesis | The explicit temperature-conversion and hydraulic-transient fixture families can be built and checked by system-owned deterministic oracles. |
+| Candidate-first capability status | Newly registered or re-registered capability candidates are UNQUALIFIED before evidence-based qualification. |
+| Evidence-gated qualification | Qualification requires passing independent evidence, physical artifact presence, matching hashes, a falsification attempt, and a non-builder verification type. |
+| Bounded persistent capability reuse | In the demonstrated temperature fixture, Ten Shadows creates a capability, independently verifies it, preserves its hash-bound artifact, finds it on a later compatible run against another empty target, reuses it, and retains it. |
+| Receipt tamper detection anchored to persisted state | Recomputing the receipt's SHA-256 integrity digest after altering a receipt does not make the altered receipt valid; verification also requires equality with the authoritative persisted receipt record. This does not protect against an attacker who can rewrite the authoritative database itself. |
+| Verification-scope discipline | Candidate-workspace evidence cannot be silently relabelled as proof that a target repository was behaviorally tested. |
+| Dispatcher fail-closed boundaries | The alternate Rust/Python dispatcher rejects mismatched workspace declarations, the authoritative Ten Shadows source as a worker workspace, invalid binding digests, unregistered providers, and missing Gemini credentials. |
+| Rust authority test route | The Rust workspace builds and its current authority/adversarial tests pass in CI with its required Python dispatcher dependencies installed. |
+| Claim-inflation gate | CI runs `scripts/check_capability_claims.py`, and regression tests prevent known inflated current-state phrases from re-entering canonical truth surfaces. |
 
-- `Code Style & Quality Gates`: failed at Ruff;
-- `Rust Trusted Kernel Tests`: build passed, tests failed;
-- Rust adversarial suite: 25 collected, 22 passed, 3 failed;
-- failing Rust tests: `test_14_worker_dispatch_through_python_dispatcher`, `test_15_repair_loop_multi_attempt_retention`, `test_16_shadow_domain_forge_dispatch`;
-- common observed cause for those three failures: Python dispatcher import fails with `ModuleNotFoundError: No module named 'pydantic'`;
-- `Python Ecosystem & Epistemic Tests`: skipped because it depends on the failed quality-gate job.
+## IMPLEMENTED BUT UNVERIFIED
 
-This means failures in run #37 should not automatically be interpreted as proof that the underlying Rust authority semantics are incorrect; three observed failures are currently CI environment/dependency integration failures. They still count as failures until repaired and rerun.
+| Capability | Current boundary |
+|---|---|
+| Explicit copy-based target promotion | An opt-in verified-copy path exists. It is not atomic Git promotion, does not support deletion semantics, and is not promoted here to a stronger guarantee than its tests establish. |
+| Alternate Gemini network adapter | The Rust/Python dispatcher has code capable of making a Gemini network request when configured. No live credential-backed canonical evidence currently proves successful external execution through the complete governed route. |
+| Git worktree harness | Worktree creation, teardown, source-protection, and merge infrastructure exists separately. The canonical Python `ts_run.py` path does not currently use this harness as its execution workspace. |
+| Numerous Shadow-specific runners and engines | Forge, svris, Herald, Scout/media, Scribe, Slicer, Warden, Alchemist, and Game Master components contain executable code and tests, but repository presence does not establish one unified ten-Shadow runtime. |
 
-## Known description drift found by this audit
+## PARTIAL / EXPERIMENTAL
 
-1. The old README called Ten Shadows a `zero-trust autonomous cognitive compiler and execution operating system` without distinguishing aspiration from demonstrated scope.
-2. The old README stated that CI enforces a `Full 500+ unit, integration, and property test battery` while the current CI run does not reach the full Python ecosystem suite. The exact current total was therefore not treated as a verified present-tense claim.
-3. The old README described Gemini and Antigravity alongside executable system components without making their current canonical-provider limitations clear.
-4. `CURRENT_GOAL.md` still described an older Herald-specific AV-script mission while `CURRENT_OBJECTIVE.md` identifies Shared Kernel Closure / Milestone A as the active repository mission.
-5. `FAILURE_LEDGER.md` reports zero active receipt failures, while repository CI is red. That file is an automated Game Master projection with a narrower evidence scope and must not be interpreted as repository-wide health status.
+| Capability | Current boundary |
+|---|---|
+| Capability relevance selection | Persistent retrieval affects future execution, but current matching is lexical/keyword-based, not demonstrated semantic understanding. |
+| Recovery and repair | Retry, failure evidence, repair fixtures, governors, and Alchemist-related machinery exist, but broad autonomous root-cause repair is not demonstrated through the canonical path. |
+| Workspace isolation | Canonical Python execution is confined by declared paths, authorization bindings, and controlled adapters. This is a governed staging boundary, not an operating-system security sandbox against arbitrary hostile code. |
+| Cross-Shadow integration | Multiple integration paths exist, but the active shared-kernel Scribe -> Herald -> Slicer route is not yet established as the canonical fully proven runtime. |
+| Local telemetry/HUD | Game Master telemetry can observe local Git/filesystem/receipt structure, but it is intentionally not allowed to translate module presence or historical receipts into capability proof. |
+
+## SCAFFOLDED / PLANNED
+
+| Capability | Current boundary |
+|---|---|
+| Canonical live Gemini builder | The canonical `loop_engine/providers/gemini_provider.py` path fails closed; live generation is not enabled there. |
+| Canonical Antigravity worker bridge | The adapter fails closed without a real bridge and does not count as an operational provider merely because a configuration hook exists. |
+| General autonomous capability acquisition | Ten Shadows has pieces of the loop, but it has not demonstrated open-ended recognition, construction/acquisition, verification, preservation, and reuse across unfamiliar domains. |
+| Shared-kernel Scribe -> Herald -> Slicer closure | This remains a development target after reconciliation, not a completed capability. |
+| Atomic Git promotion in the canonical execution path | Worktree/promotion infrastructure exists elsewhere, but canonical atomic promotion remains future work. |
+
+## UNSUPPORTED CLAIM
+
+The following are not valid present-tense descriptions of Ten Shadows:
+
+- general-purpose autonomous cognitive operating system;
+- production-ready universal execution platform;
+- universally self-expanding or self-improving intelligence;
+- every Shadow is operational or production-ready because its module, runner, tests, or historical receipts exist;
+- canonical Python workspaces provide OS-level sandbox security;
+- the SHA-256 authorization binding digest is an unforgeable authorization credential;
+- the SHA-256 receipt digest is a cryptographic identity signature;
+- behavioral tests automatically prove semantic satisfaction of an open-ended objective;
+- broad autonomous self-healing has been demonstrated;
+- external providers are operational merely because adapters or configuration variables exist.
+
+## Canonical system truth
+
+Ten Shadows is currently best described as an **experimental governed execution environment for AI-assisted and deterministic work**.
+
+Its demonstrated core is not “an AI that can do anything.” Its demonstrated core is a set of mechanisms that make a bounded worker's activity more accountable: establish the run, constrain the declared work boundary, record what happened, separate candidate work from verification authority, fail closed when capability or evidence is missing, preserve qualified capability artifacts, reuse a demonstrated capability later, and keep claims narrower than the evidence.
+
+The strongest learning claim supported today is **bounded persistent capability reuse for an explicit deterministic fixture family**. General capability expansion remains unproven.
 
 ## Claim policy
 
-When documentation and implementation disagree, implementation wins.
+Implementation outranks description. Current executable evidence outranks implementation intent. The narrowest defensible claim wins.
 
-When implementation and current verification disagree, the claim must stop at **IMPLEMENTED** or **EXPERIMENTAL** rather than **VERIFIED**.
+A module name, architecture diagram, test filename, passing test, local receipt count, generated status file, model statement, or historical milestone may contribute evidence but may not independently upgrade a major capability to VERIFIED.
 
-When CI is red, repository-wide descriptions must not imply a fully qualified state.
-
-When a capability is a milestone target, describe it as planned/in progress until its stated gates pass.
-
-This ledger should be updated whenever a change materially alters capability status.
+If current evidence is removed or stops passing, the corresponding VERIFIED label must be downgraded until evidence is restored.

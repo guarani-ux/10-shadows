@@ -1,12 +1,9 @@
-import os
 import sqlite3
-import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-# Ensure project root in sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
@@ -16,9 +13,12 @@ from loop_engine.gamemaster.state_projector import SovereignStateProjector
 
 class MarkdownProjector:
     """
-    Generates dynamic, physical-evidence-backed SYSTEM_STATE.md and FAILURE_LEDGER.md
-    directly from Git metadata, filesystem inspection, and SQLite WAL database records.
-    Zero manual or invented status claims.
+    Generate local telemetry projections from Git metadata, selected filesystem
+    observations, and local SQLite receipt records.
+
+    These projections are deliberately not capability certification. Presence of
+    code, tests, runners, or historical receipts cannot by itself upgrade a
+    capability to VERIFIED.
     """
 
     def __init__(self, root_dir: Optional[Path] = None):
@@ -26,53 +26,43 @@ class MarkdownProjector:
         self.state_projector = SovereignStateProjector(root_dir=self.root_dir)
 
     def generate_system_state_markdown(self) -> str:
-        """Projects SYSTEM_STATE.md from physical disk truth and runtime proof suites."""
+        """Project a scoped local telemetry snapshot without self-certification."""
         hud = self.state_projector.project_hud()
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
 
-        # Map domain status to the governing status model:
-        # Exists | Contracted | Unit-proven | Route-proven | Failure-proven | Operationally proven
-        classification_map = {
-            1: "Route-proven",  # Forge
-            2: "Operationally proven",  # svris
-            3: "Operationally proven",  # Herald
-            4: "Route-proven",  # Scout
-            5: "Unit-proven",  # Inquisitor (Skill)
-            6: "Route-proven",  # Scribe
-            7: "Route-proven",  # Slicer
-            8: "Operationally proven",  # Warden
-            9: "Operationally proven",  # Alchemist
-            10: "Operationally proven",  # Game Master
-        }
-
         lines = [
-            "# SYSTEM_STATE: 10 SHADOWS Master Domain & Runtime Truth",
+            "# SYSTEM_STATE: Local Telemetry Snapshot",
+            "",
+            "> **Scope warning:** this file reports local structural/runtime observations only. It is not repository qualification, CI health, or proof that a Shadow is operational. Current capability status is governed by `CAPABILITY_GROUND_TRUTH.md` and current verification evidence.",
             "",
             f"* **Generated At:** `{timestamp}`",
-            f"* **Runtime Version:** `{hud.runtime_version}`",
+            f"* **Telemetry Schema:** `{hud.runtime_version}`",
             f"* **Git Branch:** `{hud.git_branch}` | **Physical Commit SHA:** `{hud.git_commit}`",
             f"* **Working Tree Clean:** `{'YES' if hud.working_tree_clean else 'NO'}`",
-            f"* **Discovered Test Files:** `{hud.discovered_test_files}`",
-            f"* **Total WAL Receipts Recorded:** `{hud.total_wal_receipts}`",
+            f"* **Discovered loop_engine Test Files:** `{hud.discovered_test_files}`",
+            f"* **Local Receipt Records:** `{hud.total_wal_receipts}`",
             "",
-            "## 1. Domain Status Matrix (Evidence-Derived)",
+            "## 1. Domain Structural Presence",
             "",
-            "| Shadow ID | Domain Name | Code Name | Classification | Module Present | Runner Present | Test Files | Receipts |",
+            "The classifications below mean only that expected repository structures were observed. They do not mean the capability passed its tests or is operationally proven.",
+            "",
+            "| Shadow ID | Domain Name | Code Name | Structural Status | Module Present | Runner Present | Named Test Files | Local Receipts |",
             "| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
         ]
 
-        for d in hud.domains:
-            c_label = classification_map.get(d.shadow_id, "Exists")
-            m_str = "YES" if d.has_module else "NO"
-            r_str = "YES" if d.has_runner else "NO"
+        for domain in hud.domains:
+            module_status = "YES" if domain.has_module else "NO"
+            runner_status = "YES" if domain.has_runner else "NO"
             lines.append(
-                f"| **Shadow {d.shadow_id}** | {d.name} | `{d.code_name}` | **{c_label}** | {m_str} | {r_str} | {d.test_files_count} | {d.receipts_count} |"
+                f"| **Shadow {domain.shadow_id}** | {domain.name} | `{domain.code_name}` | **{domain.status}** | {module_status} | {runner_status} | {domain.test_files_count} | {domain.receipts_count} |"
             )
 
         lines.extend(
             [
                 "",
-                "## 2. Receipt Status Distribution",
+                "## 2. Local Receipt Status Distribution",
+                "",
+                "Receipt counts are historical/runtime records from the local database. A `COMMITTED` receipt is not equivalent to current repository-wide verification.",
                 "",
                 "| Status | Count |",
                 "| :--- | :--- |",
@@ -80,8 +70,8 @@ class MarkdownProjector:
         )
 
         if hud.receipts_by_status:
-            for st, cnt in sorted(hud.receipts_by_status.items()):
-                lines.append(f"| `{st}` | {cnt} |")
+            for status, count in sorted(hud.receipts_by_status.items()):
+                lines.append(f"| `{status}` | {count} |")
         else:
             lines.append("| `NONE_RECORDED` | 0 |")
 
@@ -89,7 +79,7 @@ class MarkdownProjector:
             [
                 "",
                 "---",
-                "*This document is an automated projection generated by `loop_engine.gamemaster.project_markdown`. Do not edit manually.*",
+                "*This document is an automated local telemetry projection generated by `loop_engine.gamemaster.project_markdown`. It must not be used as a substitute for current verification evidence.*",
                 "",
             ]
         )
@@ -97,11 +87,12 @@ class MarkdownProjector:
         return "\n".join(lines)
 
     def generate_failure_ledger_markdown(self) -> str:
-        """Projects FAILURE_LEDGER.md from SQLite failure logs and negative constraint history."""
+        """Project failures visible to the local receipts database query only."""
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
         db_path = self.root_dir / "scratch" / "receipts.db"
 
         failures: List[Dict[str, Any]] = []
+        query_error: Optional[str] = None
         if db_path.exists():
             try:
                 conn = sqlite3.connect(str(db_path))
@@ -109,16 +100,19 @@ class MarkdownProjector:
                 rows = conn.execute(
                     "SELECT * FROM receipts WHERE failure_code IS NOT NULL OR status IN ('ABORTED', 'FAILED') ORDER BY id DESC"
                 ).fetchall()
-                failures = [dict(r) for r in rows]
+                failures = [dict(row) for row in rows]
                 conn.close()
-            except Exception:
-                failures = []
+            except Exception as exc:
+                query_error = type(exc).__name__
 
         lines = [
-            "# FAILURE_LEDGER: Recurring Failure Signatures & Scar Registry",
+            "# FAILURE_LEDGER: Local Receipt Failure Projection",
+            "",
+            "> **Scope warning:** this file records only failures discoverable through the local receipt database query. Zero rows here does not mean CI is green, the repository is healthy, or no failures exist elsewhere.",
             "",
             f"* **Generated At:** `{timestamp}`",
-            f"* **Active Failure Signatures Recorded:** `{len(failures)}`",
+            f"* **Failure Records Visible To This Query:** `{len(failures)}`",
+            f"* **Receipt Database Present:** `{'YES' if db_path.exists() else 'NO'}`",
             "",
             "## 1. Governed Scar Rule Policy",
             "",
@@ -130,25 +124,29 @@ class MarkdownProjector:
             "",
         ]
 
-        if failures:
+        if query_error:
+            lines.append(f"*Failure query could not be completed (`{query_error}`). No health inference is permitted from this projection.*")
+        elif failures:
             lines.extend(
                 [
                     "| ID | Task ID | Domain | Failure Code | Repair Strategy | Strikes | Created At |",
                     "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |",
                 ]
             )
-            for f in failures:
+            for failure in failures:
                 lines.append(
-                    f"| {f.get('id')} | `{f.get('task_id')}` | `{f.get('domain_code')}` | `{f.get('failure_code') or 'UNSPECIFIED'}` | {f.get('repair_strategy') or 'None'} | {f.get('strikes_used')} | {f.get('created_at')} |"
+                    f"| {failure.get('id')} | `{failure.get('task_id')}` | `{failure.get('domain_code')}` | `{failure.get('failure_code') or 'UNSPECIFIED'}` | {failure.get('repair_strategy') or 'None'} | {failure.get('strikes_used')} | {failure.get('created_at')} |"
                 )
         else:
-            lines.append("*Zero unmitigated failures currently recorded in active receipts.*")
+            lines.append(
+                "*No failure rows were visible to this local receipt query. This is a narrow observation, not a repository-wide success claim.*"
+            )
 
         lines.extend(
             [
                 "",
                 "---",
-                "*This document is an automated projection generated by `loop_engine.gamemaster.project_markdown`. Do not edit manually.*",
+                "*This document is an automated local projection generated by `loop_engine.gamemaster.project_markdown`. Consult current CI and `CAPABILITY_GROUND_TRUTH.md` for broader system status.*",
                 "",
             ]
         )
@@ -156,7 +154,7 @@ class MarkdownProjector:
         return "\n".join(lines)
 
     def write_all(self) -> Dict[str, str]:
-        """Writes SYSTEM_STATE.md and FAILURE_LEDGER.md directly to repository root."""
+        """Write the two local telemetry projections to repository root."""
         state_md = self.generate_system_state_markdown()
         ledger_md = self.generate_failure_ledger_markdown()
 

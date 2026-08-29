@@ -92,6 +92,10 @@ pub struct IndependentVerificationRecord {
     pub falsification_attempted: bool,
     pub verified_status: String,
     pub execution_trace: Option<String>,
+    #[serde(default)]
+    pub tested_effect: Option<String>,
+    #[serde(default)]
+    pub verifier_spec_digest: Option<String>,
     pub timestamp: String,
 }
 

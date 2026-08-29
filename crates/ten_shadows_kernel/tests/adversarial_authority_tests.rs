@@ -78,6 +78,8 @@ fn test_01_post_hoc_candidate_fails_production_custody() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -196,6 +198,8 @@ fn test_03_self_certification_rejected() {
         falsification_attempted: false,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -256,6 +260,8 @@ fn test_04_stale_receipt_replay_rejected() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -296,7 +302,14 @@ fn test_06_valid_governed_production_success() {
     let db_dir = create_test_dir("db_gov");
     let db = KernelDb::open(&db_dir).unwrap();
 
-    let run = KernelRun::new("Governed code improvement", &disposable_repo, None);
+    let contract = ObjectiveContract::new(
+        "contract_gov_01",
+        "Governed code improvement",
+        vec![Obligation::new("ob_gov", "Implement feature in governed workspace", "GOVERNED_FEATURE", true)],
+        SufficiencyRule::AllMandatory,
+    );
+    let run = KernelRun::new("Governed code improvement", &disposable_repo, None)
+        .with_objective_contract(contract);
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
@@ -353,6 +366,8 @@ fn test_06_valid_governed_production_success() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("5 passed".into()),
+        tested_effect: Some("GOVERNED_FEATURE".into()),
+        verifier_spec_digest: Some("spec_gov_01".into()),
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -403,6 +418,8 @@ fn test_07_retroactive_worker_fails_lineage() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -489,6 +506,8 @@ fn test_08_wrong_baseline_fails_lineage() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -589,6 +608,8 @@ fn test_09_failed_verification_rejects_promotion() {
         falsification_attempted: true,
         verified_status: "FAIL".into(),
         execution_trace: Some("2 failed".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -647,6 +668,8 @@ fn test_10_missing_empirical_provider_receipt_fails() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -781,6 +804,8 @@ fn test_12_diverged_authoritative_target_rejects_promotion() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: None,
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -856,7 +881,14 @@ fn test_15_repair_loop_multi_attempt_retention() {
     let db_dir = create_test_dir("db_rep");
     let db = KernelDb::open(&db_dir).unwrap();
 
-    let run = KernelRun::new("fail_attempt_1 and repair", &disposable_repo, None);
+    let contract = ObjectiveContract::new(
+        "contract_rep",
+        "fail_attempt_1 and repair",
+        vec![Obligation::new("ob_rep", "Repair feature", "REPAIR_FEATURE", true)],
+        SufficiencyRule::AllMandatory,
+    );
+    let run = KernelRun::new("fail_attempt_1 and repair", &disposable_repo, None)
+        .with_objective_contract(contract);
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
@@ -886,6 +918,8 @@ fn test_15_repair_loop_multi_attempt_retention() {
         falsification_attempted: true,
         verified_status: "FAIL".into(),
         execution_trace: Some("assert False".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -915,6 +949,8 @@ fn test_15_repair_loop_multi_attempt_retention() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("1 passed".into()),
+        tested_effect: Some("REPAIR_FEATURE".into()),
+        verifier_spec_digest: Some("spec_rep".into()),
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -936,7 +972,14 @@ fn test_16_shadow_domain_forge_dispatch() {
     let db_dir = create_test_dir("db_sh_f");
     let db = KernelDb::open(&db_dir).unwrap();
 
-    let run = KernelRun::new("Synthesize Forge module", &disposable_repo, None);
+    let contract = ObjectiveContract::new(
+        "contract_sh_f",
+        "Synthesize Forge module",
+        vec![Obligation::new("ob_sh_f", "Synthesize Forge module", "FORGE_SYNTHESIS", true)],
+        SufficiencyRule::AllMandatory,
+    );
+    let run = KernelRun::new("Synthesize Forge module", &disposable_repo, None)
+        .with_objective_contract(contract);
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
@@ -972,6 +1015,8 @@ fn test_16_shadow_domain_forge_dispatch() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("PASSED".into()),
+        tested_effect: Some("FORGE_SYNTHESIS".into()),
+        verifier_spec_digest: Some("spec_sh_f".into()),
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1053,6 +1098,8 @@ fn test_18_zero_mutation_governed_candidate_rejected() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("PASSED".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1099,6 +1146,8 @@ fn test_19_external_candidate_verified_emits_external_audit_status() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("PASSED".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1172,6 +1221,8 @@ fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("PASSED".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1194,7 +1245,14 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
     let db_dir = create_test_dir("db_neg_ctrl");
     let db = KernelDb::open(&db_dir).unwrap();
 
-    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
+    let contract = ObjectiveContract::new(
+        "contract_mult_neg",
+        "Add multiplication capability",
+        vec![Obligation::new("ob_mult", "Multiply", "ARITHMETIC_MULTIPLICATION", true)],
+        SufficiencyRule::AllMandatory,
+    );
+    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None)
+        .with_objective_contract(contract);
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
@@ -1250,6 +1308,8 @@ fn test_21_negative_control_irrelevant_passing_test_rejects_objective_accomplish
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("test_addition PASSED (multiplication not tested)".into()),
+        tested_effect: Some("ARITHMETIC_ADDITION".into()),
+        verifier_spec_digest: Some("spec_add_v1".into()),
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1277,7 +1337,14 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
     let db_dir = create_test_dir("db_pos_ctrl");
     let db = KernelDb::open(&db_dir).unwrap();
 
-    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None);
+    let contract = ObjectiveContract::new(
+        "contract_mult_pos",
+        "Add multiplication capability",
+        vec![Obligation::new("ob_mult", "Multiply", "ARITHMETIC_MULTIPLICATION", true)],
+        SufficiencyRule::AllMandatory,
+    );
+    let run = KernelRun::new("Add multiplication capability", &disposable_repo, None)
+        .with_objective_contract(contract);
     let run_id = run.run_id.clone();
     let task_id = run.task_id.clone();
     let obj_hash = run.objective_hash.clone();
@@ -1333,6 +1400,8 @@ fn test_22_positive_control_multiplication_objective_accomplished() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("test_multiply PASSED (multiplication verified)".into()),
+        tested_effect: Some("ARITHMETIC_MULTIPLICATION".into()),
+        verifier_spec_digest: Some("spec_mult_v1".into()),
         timestamp: current_timestamp_rfc3339(),
     };
 
@@ -1434,6 +1503,8 @@ fn test_25_tampered_proof_digest_rejected() {
         falsification_attempted: true,
         verified_status: "PASS".into(),
         execution_trace: Some("PASSED".into()),
+        tested_effect: None,
+        verifier_spec_digest: None,
         timestamp: current_timestamp_rfc3339(),
     };
 

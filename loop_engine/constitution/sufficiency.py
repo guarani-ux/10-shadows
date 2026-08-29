@@ -1,15 +1,13 @@
 """
 loop_engine/constitution/sufficiency.py
-Law 6 Objective Sufficiency, Decomposed Success, and Epistemic Closure for 10 SHADOWS.
+Law 6 Objective Sufficiency Engine with Live JTMS Invalidation Integration.
 
 Enforces:
-- LAW 6 — SUFFICIENCY / OBJECTIVE SATISFACTION:
-  No higher-order conclusion (such as objective accomplishment) may become authoritative
-  solely from the local success of its components. An explicit, qualified sufficiency
-  evaluation over verified satisfaction obligations must authorize that conclusion.
-- Prevention of 0-obligation false-success exploits.
-- Logical composition enforcement (workers cannot downgrade conjunction to disjunction).
-- Strict separation of behavioral verification from semantic objective satisfaction.
+- Law 6 Objective Sufficiency is mathematically derived from authoritative evidence.
+- Direct query of live JTMS / RelationalGraphStore: Retracted or falsified evidence nodes
+  immediately invalidate claim qualification and reopen dependent requirements.
+- 0-requirement and dropped-requirement exploits fail closed.
+- Disjunctive bypasses cannot skip unresolved mandatory blocking requirements.
 """
 
 from __future__ import annotations
@@ -33,6 +31,8 @@ from loop_engine.constitution.lifecycle import (
     SemanticQualificationStatus,
     VersionedObjectiveSpecification,
 )
+from loop_engine.relational.graph_db import RelationalGraphStore
+from loop_engine.relational.schema import EpistemicStatus
 
 
 class CompositionRule(str, Enum):
@@ -61,6 +61,7 @@ class ObjectiveSufficiencyProof:
 class Law6SufficiencyEngine:
     """
     Evaluates whether an objective is legitimately accomplished under Law 6.
+    Integrates directly with live JTMS relational store for real-time invalidation.
     """
 
     @staticmethod
@@ -69,11 +70,14 @@ class Law6SufficiencyEngine:
         claims: Dict[str, EpistemicClaim],
         evidence_by_claim: Dict[str, List[QualifiedEvidence]],
         active_candidate_sha: Optional[str] = None,
+        active_environment_fingerprint: Optional[str] = None,
         composition_rule: CompositionRule = CompositionRule.MANDATORY_CONJUNCTION,
         alternative_ids: Optional[List[str]] = None,
+        jtms_store: Optional[RelationalGraphStore] = None,
     ) -> ObjectiveSufficiencyProof:
         """
-        Evaluates the objective specification against qualified epistemic claims and evidence.
+        Evaluates the objective specification against qualified epistemic claims,
+        evidence, and live JTMS dependency state.
         """
         satisfied_ids: List[str] = []
         unresolved_mandatory: List[str] = []
@@ -102,11 +106,31 @@ class Law6SufficiencyEngine:
                     unresolved_mandatory.append(req.requirement_id)
                 continue
 
+            # JTMS Live Invalidation Check
+            if jtms_store:
+                node = jtms_store.get_node(req.requirement_id)
+                if node and node.epistemic_status in (EpistemicStatus.INVALIDATED, EpistemicStatus.CONTESTED, EpistemicStatus.PROPOSED):
+                    if req.is_blocking:
+                        unresolved_mandatory.append(req.requirement_id)
+                    continue
+
             ev_list = evidence_by_claim.get(claim.claim_id, [])
+
+            # Filter evidence against live JTMS store
+            if jtms_store:
+                filtered_ev: List[QualifiedEvidence] = []
+                for ev in ev_list:
+                    ev_node = jtms_store.get_node(ev.evidence_id)
+                    if ev_node and ev_node.epistemic_status in (EpistemicStatus.INVALIDATED, EpistemicStatus.CONTESTED, EpistemicStatus.PROPOSED):
+                        continue
+                    filtered_ev.append(ev)
+                ev_list = filtered_ev
+
             ep_status, app_status, _note = RelationalEvidenceEvaluator.evaluate_claim(
                 claim=claim,
                 evidence_list=ev_list,
                 active_candidate_sha=active_candidate_sha,
+                active_environment_fingerprint=active_environment_fingerprint,
             )
 
             if ep_status == EpistemicDimension.SUPPORTED and app_status == ApplicabilityDimension.APPLICABLE:

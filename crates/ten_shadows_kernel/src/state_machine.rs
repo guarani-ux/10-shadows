@@ -3,16 +3,19 @@
 //! Enforces that illegal lifecycle transitions are mathematically unrepresentable.
 
 use crate::candidate::{CandidateClassification, CandidateLineage, ExternalCandidate, GovernedCandidate};
-use crate::constitution::{EvidenceEntailment, ObjectiveContract, Obligation, SufficiencyRule};
+use crate::constitution::{EvidenceEntailment, ObjectiveContract};
 use crate::dispatcher::{WorkerAuthorization, WorkerDispatcher};
-use crate::evidence::{EvidenceModality, VerificationType};
+use crate::evidence::EvidenceModality;
 use crate::receipt::{
     DisaggregatedEpistemicClaims, ExecutionAttemptRecord, IndependentVerificationRecord,
     ProviderExecutionReceipt, RoutingStrategy, RunStatus, TenShadowsReceipt, WorkerInvocationRecord, WorkerRole,
 };
 use crate::repository::{AuthoritativeSource, GovernedWorkspace, RepositoryRoleError};
 use crate::time_utils::current_timestamp_rfc3339;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use std::collections::BTreeMap;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -81,7 +84,6 @@ impl KernelRun<Created> {
 
         let (strategy, caps) = Self::characterize_objective(objective);
         let routing_digest = Self::compute_routing_digest(&run_id, &strategy, &caps);
-        let default_contract = Self::derive_default_contract(&tid, objective);
 
         Self {
             run_id,
@@ -103,45 +105,10 @@ impl KernelRun<Created> {
             attempts: Vec::new(),
             verification: None,
             final_head: None,
-            objective_contract: Some(default_contract),
+            objective_contract: None,
             created_at: current_timestamp_rfc3339(),
             state_marker: std::marker::PhantomData,
         }
-    }
-
-    fn derive_default_contract(task_id: &str, objective: &str) -> ObjectiveContract {
-        let lower = objective.to_lowercase();
-        let mut obligations = Vec::new();
-
-        if lower.contains("multiply") || lower.contains("multiplication") {
-            obligations.push(Obligation::new(
-                &format!("ob_{}_multiply", task_id),
-                "Implement and verify arithmetic multiplication function",
-                "ARITHMETIC_MULTIPLICATION",
-                true,
-            ));
-        } else if lower.contains("add") || lower.contains("addition") {
-            obligations.push(Obligation::new(
-                &format!("ob_{}_add", task_id),
-                "Implement and verify arithmetic addition function",
-                "ARITHMETIC_ADDITION",
-                true,
-            ));
-        } else {
-            obligations.push(Obligation::new(
-                &format!("ob_{}_core", task_id),
-                "Satisfy declared core objective obligations",
-                "CORE_OBJECTIVE_SATISFACTION",
-                true,
-            ));
-        }
-
-        ObjectiveContract::new(
-            &format!("contract_{}", task_id),
-            objective,
-            obligations,
-            SufficiencyRule::AllMandatory,
-        )
     }
 
     fn characterize_objective(obj: &str) -> (RoutingStrategy, Vec<String>) {
@@ -636,18 +603,13 @@ impl KernelRun<Verified> {
         let (objective_satisfied, sufficiency_proof) = if let Some(ref mut contract) = self.objective_contract {
             if let Some(ref ver) = self.verification {
                 if ver.verified_status == "PASS" && ver.exit_code == 0 {
-                    let trace = ver.execution_trace.as_deref().unwrap_or("");
+                    let tested = ver.tested_effect.as_deref().unwrap_or("");
+                    let spec_digest = ver.verifier_spec_digest.as_deref().unwrap_or("");
                     for ob in &mut contract.obligations {
                         let entailment = EvidenceEntailment::verify_entailment(
-                            &ver.test_digest,
+                            spec_digest,
                             ob,
-                            if trace.to_lowercase().contains("multiply") || ver.test_digest.to_lowercase().contains("multiply") {
-                                "ARITHMETIC_MULTIPLICATION"
-                            } else if trace.to_lowercase().contains("add") || ver.test_digest.to_lowercase().contains("add") {
-                                "ARITHMETIC_ADDITION"
-                            } else {
-                                "CORE_OBJECTIVE_SATISFACTION"
-                            },
+                            tested,
                         );
 
                         if entailment.is_applicable {
@@ -661,8 +623,7 @@ impl KernelRun<Verified> {
             let proof = contract.evaluate_sufficiency();
             (proof.is_satisfied, Some(proof))
         } else {
-            let is_sem = self.verification.as_ref().map(|v| v.verifier_type == VerificationType::IndependentSemanticFalsification).unwrap_or(false);
-            (is_sem, None)
+            (false, None)
         };
 
         let final_status = if is_verified && is_governed && promotion_succeeded {

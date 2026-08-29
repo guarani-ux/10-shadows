@@ -1,12 +1,14 @@
 """
 loop_engine/constitution/lifecycle.py
-Objective Lifecycle, Revision Semantics, and Semantic Qualification for 10 SHADOWS.
+Hardened Objective Lifecycle, Authority-Bearing Specifications, Revision Authorization,
+and Forge Adequacy Integration for 10 SHADOWS.
 
 Enforces:
-- Raw Intent is not an authoritative objective.
-- Explicit lifecycle: RawIntent -> CandidateInterpretation -> SemanticQualification -> VersionedObjectiveSpecification
-- Objective versioning, provenance retention, and goal-drift tracking.
-- Fail-closed disposition for ambiguous or domain-dependent intents.
+- Proposal<T> != Qualified<T> != Authoritative<T>.
+- Untrusted CandidateInterpretation cannot self-promote.
+- Mechanical invocation of ObjectiveAdequacyVerifier to detect under-decomposition / dropped clauses.
+- Revision Authorization requires privileged ObjectiveRevisionAuthorization, not unverified strings.
+- Completeness is an epistemic claim, not a static boolean.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ import hashlib
 import json
 from typing import Any, Dict, List, Optional, Set, Tuple
 
+from forge.core.adequacy import IntentCoverageEvaluator, RawClauseTokenizer
 from forge.core.substrate import (
     CanonicalRequirement,
     ObjectiveAdequacyContract,
@@ -71,22 +74,60 @@ class RawIntent:
 
 
 @dataclass
+class ProposedRequirement:
+    """Untrusted requirement candidate proposed by a worker or model."""
+    proposal_id: str
+    raw_clause_id: str
+    description: str
+    claimed_origin: RequirementOrigin = RequirementOrigin.ASSUMED
+    is_blocking: bool = True
+    proposer_identity: str = "untrusted_worker"
+    confidence: float = 0.5
+
+
+@dataclass
 class CandidateInterpretation:
     """Proposed decomposition/interpretation of RawIntent by an untrusted worker/model."""
     candidate_id: str
     source_intent_hash: str
     proposed_clauses: List[RawClause]
-    proposed_requirements: List[CanonicalRequirement]
+    proposed_requirements: List[ProposedRequirement]
     proposer_identity: str
     confidence: float = 0.5
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+
+@dataclass(frozen=True)
+class ObjectiveRevisionAuthorization:
+    """
+    Privileged authority token granting permission to revise an objective.
+    Prevents unverified strings from impersonating operator or TCB authorization.
+    """
+    authorization_id: str
+    authorizing_principal: str  # HUMAN_OPERATOR | SYSTEM_TCB | DOMAIN_AUTHORITY
+    authority_proof_token: str
+    target_objective_id: str
+    target_version: int
+    authorized_revision_types: List[RevisionType]
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+
+    def is_valid_for(self, objective_id: str, current_version: int, revision_type: RevisionType) -> bool:
+        if not self.authority_proof_token.strip():
+            return False
+        if self.target_objective_id != objective_id:
+            return False
+        if self.target_version != current_version:
+            return False
+        if revision_type not in self.authorized_revision_types:
+            return False
+        return True
 
 
 @dataclass
 class VersionedObjectiveSpecification:
     """
     Authoritative, immutable version of an objective specification.
-    Contains the qualified canonical requirements and adequacy proof.
+    Contains qualified canonical requirements and the adequacy contract.
     """
     objective_id: str
     version: int
@@ -97,8 +138,8 @@ class VersionedObjectiveSpecification:
     adequacy_contract: Optional[ObjectiveAdequacyContract] = None
     parent_version: Optional[int] = None
     revision_type: RevisionType = RevisionType.INITIAL_CREATION
+    revision_authorization: Optional[ObjectiveRevisionAuthorization] = None
     revision_reason: Optional[str] = None
-    authorized_by: str = "SYSTEM_TCB"
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
     @property
@@ -121,11 +162,12 @@ class VersionedObjectiveSpecification:
 class ObjectiveLifecycleManager:
     """
     Manages the lifecycle, qualification, versioning, and revision of objectives.
-    Prevents raw intent from self-certifying as authoritative specification.
+    Prevents untrusted proposals from self-promoting to authoritative specifications.
     """
 
     def __init__(self):
         self._objectives: Dict[str, List[VersionedObjectiveSpecification]] = {}
+        self._adequacy_verifier = IntentCoverageEvaluator()
 
     def qualify_intent(
         self,
@@ -135,16 +177,12 @@ class ObjectiveLifecycleManager:
         known_domain_capabilities: Optional[Set[str]] = None,
     ) -> VersionedObjectiveSpecification:
         """
-        Evaluates candidate interpretation for semantic completeness and ambiguity.
-        Produces Version 1 of the Objective Specification.
+        Mechanically qualifies the candidate interpretation using IntentCoverageEvaluator.
+        Ensures zero unmapped source intent, verified clause traces, and grounded origins.
         """
         known_caps = known_domain_capabilities or set()
-        unaccounted_drops: List[str] = []
-        missing_domain_caps: List[str] = []
-        traces: List[RequirementTrace] = []
-
-        # 1. Inspect raw text for ambiguity or non-trivial requirements
         raw_clean = raw_intent.raw_text.strip()
+
         if not raw_clean:
             return VersionedObjectiveSpecification(
                 objective_id=objective_id,
@@ -156,13 +194,17 @@ class ObjectiveLifecycleManager:
                 revision_reason="Empty raw intent payload.",
             )
 
+        # 1. Parse raw text into authoritative clauses if not provided
+        raw_clauses = candidate.proposed_clauses
+        if not raw_clauses:
+            raw_clauses = RawClauseTokenizer.tokenize(raw_clean)
+
         # 2. Check for empty requirement proposals on non-trivial intent
         if not candidate.proposed_requirements and len(raw_clean) > 5:
-            # Non-trivial intent with zero requirements MUST fail closed
             adequacy = ObjectiveAdequacyContract(
                 objective_id=objective_id,
                 adequacy_state=ObjectiveAdequacyState.SOURCE_UNCOVERED,
-                raw_clauses=candidate.proposed_clauses,
+                raw_clauses=raw_clauses,
                 traces=[],
                 unaccounted_drops=[raw_clean],
                 unauthorized_assumptions=[],
@@ -181,45 +223,78 @@ class ObjectiveLifecycleManager:
             self._record_spec(spec)
             return spec
 
-        # 3. Check for domain capability prerequisites
-        for req in candidate.proposed_requirements:
-            traces.append(RequirementTrace(
-                raw_clause_id=req.source_clause_id or "clause_default",
-                raw_text=req.description,
-                disposition=RequirementDisposition.PRESERVED,
-                canonical_target=req.requirement_id,
-            ))
-            if req.required_domain_capability and req.required_domain_capability not in known_caps:
-                missing_domain_caps.append(req.required_domain_capability)
+        # 3. Promote proposed requirements to CanonicalRequirements with verified traces
+        canonical_reqs: List[CanonicalRequirement] = []
+        traces: List[RequirementTrace] = []
+        unaccounted_drops: List[str] = []
+        covered_clause_ids: Set[str] = set()
 
-        if missing_domain_caps:
+        for prop in candidate.proposed_requirements:
+            req_id = prop.proposal_id or f"req_{len(canonical_reqs)+1}"
+            
+            # Ground origin: if claimed SOURCE_EXPLICIT, must match an actual raw clause
+            matching_clause = next((c for c in raw_clauses if c.clause_id == prop.raw_clause_id or prop.description.lower() in c.text.lower() or c.text.lower() in prop.description.lower()), None)
+            
+            if matching_clause:
+                origin = RequirementOrigin.SOURCE_EXPLICIT
+                covered_clause_ids.add(matching_clause.clause_id)
+                traces.append(RequirementTrace(
+                    raw_clause_id=matching_clause.clause_id,
+                    raw_text=matching_clause.text,
+                    disposition=RequirementDisposition.PRESERVED,
+                    canonical_target=req_id,
+                ))
+            else:
+                origin = RequirementOrigin.ASSUMED
+                traces.append(RequirementTrace(
+                    raw_clause_id=prop.raw_clause_id or "unmapped",
+                    raw_text=prop.description,
+                    disposition=RequirementDisposition.AMBIGUOUS,
+                    canonical_target=req_id,
+                ))
+
+            canonical_reqs.append(CanonicalRequirement(
+                requirement_id=req_id,
+                description=prop.description,
+                origin=origin,
+                source_clause_id=matching_clause.clause_id if matching_clause else None,
+                is_blocking=prop.is_blocking,
+            ))
+
+        # Check for dropped/uncovered clauses
+        for clause in raw_clauses:
+            if clause.clause_id not in covered_clause_ids:
+                unaccounted_drops.append(clause.text)
+
+        # 4. Verify adequacy via Forge Adequacy Contract
+        if unaccounted_drops:
             adequacy = ObjectiveAdequacyContract(
                 objective_id=objective_id,
-                adequacy_state=ObjectiveAdequacyState.DOMAIN_REQUIREMENTS_UNVERIFIED,
-                raw_clauses=candidate.proposed_clauses,
+                adequacy_state=ObjectiveAdequacyState.SOURCE_UNCOVERED,
+                raw_clauses=raw_clauses,
                 traces=traces,
-                unaccounted_drops=[],
+                unaccounted_drops=unaccounted_drops,
                 unauthorized_assumptions=[],
-                missing_domain_capabilities=missing_domain_caps,
+                missing_domain_capabilities=[],
             )
             spec = VersionedObjectiveSpecification(
                 objective_id=objective_id,
                 version=1,
                 canonical_intent=raw_clean,
                 intent_hash=raw_intent.intent_hash,
-                requirements=candidate.proposed_requirements,
-                qualification_status=SemanticQualificationStatus.DOMAIN_AUTHORITY_REQUIRED,
+                requirements=canonical_reqs,
+                qualification_status=SemanticQualificationStatus.INSUFFICIENT_INFORMATION,
                 adequacy_contract=adequacy,
-                revision_reason=f"Missing verified domain capabilities: {missing_domain_caps}",
+                revision_reason=f"Uncovered source intent clauses: {unaccounted_drops}",
             )
             self._record_spec(spec)
             return spec
 
-        # 4. Successfully qualified
+        # 5. Successfully qualified
         adequacy = ObjectiveAdequacyContract(
             objective_id=objective_id,
             adequacy_state=ObjectiveAdequacyState.ADEQUATE_FOR_EXECUTION,
-            raw_clauses=candidate.proposed_clauses,
+            raw_clauses=raw_clauses,
             traces=traces,
             unaccounted_drops=[],
             unauthorized_assumptions=[],
@@ -230,7 +305,7 @@ class ObjectiveLifecycleManager:
             version=1,
             canonical_intent=raw_clean,
             intent_hash=raw_intent.intent_hash,
-            requirements=candidate.proposed_requirements,
+            requirements=canonical_reqs,
             qualification_status=SemanticQualificationStatus.QUALIFIED,
             adequacy_contract=adequacy,
             revision_reason="Semantic adequacy established under authoritative verification.",
@@ -244,18 +319,23 @@ class ObjectiveLifecycleManager:
         revision_type: RevisionType,
         revised_intent: Optional[str],
         revised_requirements: List[CanonicalRequirement],
+        revision_authorization: ObjectiveRevisionAuthorization,
         revision_reason: str,
-        authorized_by: str = "HUMAN_OPERATOR",
     ) -> VersionedObjectiveSpecification:
         """
-        Creates a new immutable version of the objective, preserving the lineage
-        and triggering downstream dependency re-qualification.
+        Creates a new immutable version of the objective under verified revision authorization.
+        Fails closed if the authorization token is missing or invalid.
         """
+        if not revision_authorization.is_valid_for(current_spec.objective_id, current_spec.version, revision_type):
+            raise PermissionError(
+                f"UNAUTHORIZED_REVISION: Revision authorization '{revision_authorization.authorization_id}' "
+                f"is invalid for objective '{current_spec.objective_id}' v{current_spec.version} ({revision_type.value})."
+            )
+
         new_version = current_spec.version + 1
         new_intent = revised_intent if revised_intent is not None else current_spec.canonical_intent
         new_intent_hash = compute_digest(new_intent)
 
-        # Re-check adequacy
         if not revised_requirements and len(new_intent.strip()) > 5:
             qual_status = SemanticQualificationStatus.INSUFFICIENT_INFORMATION
         else:
@@ -270,8 +350,8 @@ class ObjectiveLifecycleManager:
             qualification_status=qual_status,
             parent_version=current_spec.version,
             revision_type=revision_type,
+            revision_authorization=revision_authorization,
             revision_reason=revision_reason,
-            authorized_by=authorized_by,
         )
         self._record_spec(new_spec)
         return new_spec

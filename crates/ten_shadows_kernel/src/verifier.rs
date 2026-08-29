@@ -69,6 +69,8 @@ impl SubprocessVerifier {
                     falsification_attempted: true,
                     verified_status: status.into(),
                     execution_trace: Some(full_trace.chars().take(2000).collect()),
+                    tested_effect: None,
+                    verifier_spec_digest: None,
                     timestamp: current_timestamp_rfc3339(),
                 }
             }
@@ -88,6 +90,8 @@ impl SubprocessVerifier {
                     falsification_attempted: true,
                     verified_status: "FAIL".into(),
                     execution_trace: Some(format!("Subprocess execution failed: {}", e)),
+                    tested_effect: None,
+                    verifier_spec_digest: None,
                     timestamp: current_timestamp_rfc3339(),
                 }
             }

@@ -1,14 +1,11 @@
 """
 loop_engine/constitution/capability.py
-Conditional Capability Representation, Reachability, and Transition-Derived Deficits.
+Hardened Conditional Capability Representation, Scoped Applicability, and Transition-Derived Deficits.
 
 Enforces:
-- Capability is conditional: Actor A can perform Operation O under Conditions K
-  using Resources R in Environment E with Evidence V at Reliability Q.
-- Capability is distinct from Evidence of Capability.
-- Deficits derive from required state transitions:
-  Unresolved Requirement -> Required Operation -> Missing Qualified Capability -> CAPABILITY_DEFICIT.
-- Reachability in the graph is non-authoritative (navigation/dependency search, not truth authority).
+- Elimination of silent wildcard/universal capability defaults.
+- Explicit requirement for supported environment fingerprints and operational conditions.
+- Deficits derived strictly from required state transitions.
 """
 
 from __future__ import annotations
@@ -45,7 +42,7 @@ class CapabilityEpistemicStatus(str, Enum):
 class OperationalCondition:
     condition_id: str
     description: str
-    required_environment_pattern: Optional[str] = None
+    required_environment: str
     required_resources: List[str] = field(default_factory=list)
 
 
@@ -53,17 +50,18 @@ class OperationalCondition:
 class ConditionalCapability:
     """
     Rich representation of an operational capability.
+    Requires explicit supported environments and operational conditions.
     """
     capability_id: str
     actor_id: str
     operator_type: OperatorType
+    supported_environments: Set[str]
     supported_conditions: List[OperationalCondition]
     required_evidence_classes: List[EvidenceClass]
     reliability_score: float = 1.0
     kind: CapabilityKind = CapabilityKind.REAL_PHYSICAL_ADAPTER
     lifecycle_state: CapabilityLifecycleState = CapabilityLifecycleState.CANDIDATE
     epistemic_status: CapabilityEpistemicStatus = CapabilityEpistemicStatus.HYPOTHESIS
-    supported_environments: Set[str] = field(default_factory=lambda: {"*"})
     limitations: List[str] = field(default_factory=list)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
 
@@ -73,6 +71,7 @@ class ConditionalCapability:
             "id": self.capability_id,
             "actor": self.actor_id,
             "op": self.operator_type.value,
+            "envs": sorted(list(self.supported_environments)),
             "conditions": [c.condition_id for c in self.supported_conditions],
             "kind": self.kind.value,
             "lifecycle": self.lifecycle_state.value,
@@ -88,14 +87,19 @@ class ConditionalCapability:
         ):
             return False
 
-        if "*" not in self.supported_environments and environment_fingerprint not in self.supported_environments:
+        if environment_fingerprint not in self.supported_environments:
             return False
 
-        # Check resource availability
-        for c in self.supported_conditions:
-            for r in required_resources:
-                if r not in c.required_resources and "*" not in c.required_resources:
-                    return False
+        # Check resource availability under conditions
+        if self.supported_conditions:
+            cond_matched = False
+            for c in self.supported_conditions:
+                if c.required_environment == environment_fingerprint or c.required_environment == "*":
+                    if all(r in c.required_resources for r in required_resources):
+                        cond_matched = True
+                        break
+            if not cond_matched:
+                return False
 
         return True
 
@@ -114,7 +118,7 @@ class CapabilityDeficitEngine:
     def evaluate_required_operations(
         self,
         required_ops: List[RequiredOperation],
-        environment_fingerprint: str = "default_env",
+        environment_fingerprint: str,
     ) -> Tuple[List[ConditionalCapability], List[CapabilityDeficit]]:
         """
         Matches required operations against registered conditional capabilities.

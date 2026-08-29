@@ -310,6 +310,22 @@ def verify_execution_receipt(
     elif run_record["objective_hash"] != receipt.objective_hash:
         errors.append("Objective hash mismatch between receipt and KernelDatabase.")
 
+    with db.get_connection() as conn:
+        anchored_row = conn.execute(
+            "SELECT receipt_json FROM receipts WHERE run_id = ? ORDER BY id DESC LIMIT 1",
+            (receipt.run_id,),
+        ).fetchone()
+    if anchored_row is None or not anchored_row["receipt_json"]:
+        errors.append("Receipt has no authoritative persisted receipt record in KernelDatabase.")
+    else:
+        try:
+            anchored_receipt = json.loads(anchored_row["receipt_json"])
+            presented_receipt = json.loads(receipt.model_dump_json())
+            if anchored_receipt != presented_receipt:
+                errors.append("Receipt contents do not match the authoritative persisted receipt record.")
+        except Exception as exc:
+            errors.append(f"Failed to compare receipt against authoritative persisted record: {exc}")
+
     if receipt.verification:
         verification = receipt.verification
         if verification.builder_id and verification.verifier_id and verification.builder_id == verification.verifier_id:

@@ -1,0 +1,37 @@
+name: Reconciliation One-Shot Format
+
+on:
+  push:
+    branches: [ 'docs/ground-truth-capability-audit' ]
+
+permissions:
+  contents: write
+
+jobs:
+  format-reconciliation-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          ref: docs/ground-truth-capability-audit
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install Ruff
+        run: pip install ruff
+      - name: Apply Ruff formatter
+        run: ruff format .
+      - name: Commit formatter output if needed
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "No formatting changes required."
+            exit 0
+          fi
+          git config user.name "Ten Shadows Reconciliation"
+          git config user.email "reconciliation@ten-shadows.local"
+          git add -A
+          git commit -m "format reconciliation Python sources"
+          git push origin HEAD:docs/ground-truth-capability-audit

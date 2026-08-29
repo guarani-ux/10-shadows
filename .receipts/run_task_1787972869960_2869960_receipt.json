@@ -1,0 +1,66 @@
+{
+  "receipt_version": "3.0.0",
+  "kernel_version": "TEN_SHADOWS_TRUSTED_KERNEL_RUST_v3",
+  "run_id": "run_task_1787972869960_2869960",
+  "task_id": "task_1787972869960",
+  "objective": "Audit external code",
+  "objective_hash": "f5c512188f3406109d7f403dd64b0bf050a0a14b3b65d848234689d69be8a4cc",
+  "target_path": "\\\\?\\C:\\Users\\flowe\\AppData\\Local\\Temp\\audit_neg_ctrl_d932e97f9ea54bc2991f0475067a02f9",
+  "starting_head": "30240127683c9f30fc169ac85a23fd32f6f56a54",
+  "final_head": "30240127683c9f30fc169ac85a23fd32f6f56a54",
+  "candidate_classification": {
+    "kind": "External",
+    "details": {
+      "candidate_sha": "30240127683c9f30fc169ac85a23fd32f6f56a54",
+      "source_note": "Baseline audit execution (zero mutations)"
+    }
+  },
+  "routing_strategy": "ADVERSARIAL_AUDIT",
+  "routing_decision_digest": "124fa3c8324efd564e7116dc9d22514fe26c31ccb098dd276c49624b83ab89e3",
+  "capabilities_selected": [
+    "STATIC_INSPECTION",
+    "ADVERSARIAL_FALSIFICATION",
+    "CONTRACT_VERIFICATION"
+  ],
+  "attempts": [],
+  "worker_invocations": [],
+  "artifacts_produced": [],
+  "verification": {
+    "verifier_id": "svris_independent_verifier_task_1787972869960",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "svris_auditor_task_1787972869960",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "81b67354ff06e1066b0d1d5d623f554a6a31bf47071e78c5fca86c7c5c0585f8",
+    "tests_collected": 1,
+    "tests_passed": 1,
+    "tests_failed": 0,
+    "exit_code": 0,
+    "duration_seconds": 3.416,
+    "falsification_attempted": true,
+    "verified_status": "PASS",
+    "execution_trace": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\flowe\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\ncachedir: .pytest_cache\r\nrootdir: C:\\Users\\flowe\\AppData\\Local\\Temp\\audit_neg_ctrl_d932e97f9ea54bc2991f0475067a02f9\r\nplugins: anyio-4.12.1, ddtrace-4.7.1, Faker-40.15.0, langsmith-0.7.36, logfire-4.32.1, cov-7.1.0, typeguard-4.4.3\r\ncollecting ... collected 1 item\r\n\r\ntest_ext.py::test_ext PASSED                                             [100%]\r\n\r\n============================== 1 passed in 0.13s ==============================\r\n\n",
+    "timestamp": "2026-08-29T03:07:53.443Z"
+  },
+  "promotion": {
+    "head": "30240127683c9f30fc169ac85a23fd32f6f56a54",
+    "rejection_reason": null,
+    "status": "REJECTED"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": false,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": false,
+    "claim_candidate_produced_under_custody": false,
+    "claim_independently_verified": true,
+    "claim_promoted": false,
+    "claim_target_behaviorally_tested": true,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "EXTERNAL_AUDIT_VERIFIED",
+  "created_at": "2026-08-29T03:07:49.960Z",
+  "sealed_at": "2026-08-29T03:07:53.443Z",
+  "receipt_signature": "7aa6dffed86323c4395a23209e6491ef65b0c1bc612730c0a4fda6294a4034d4"
+}

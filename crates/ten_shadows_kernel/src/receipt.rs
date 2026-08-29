@@ -14,6 +14,7 @@ pub enum RunStatus {
     Running,
     Verifying,
     VerifiedSuccess,
+    ExternalAuditVerified,
     CompletedUnverified,
     Failed,
     Blocked,

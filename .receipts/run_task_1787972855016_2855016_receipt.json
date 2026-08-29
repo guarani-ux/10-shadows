@@ -1,0 +1,89 @@
+{
+  "receipt_version": "3.0.0",
+  "kernel_version": "TEN_SHADOWS_TRUSTED_KERNEL_RUST_v3",
+  "run_id": "run_task_1787972855016_2855016",
+  "task_id": "task_1787972855016",
+  "objective": "Enhance math library with multiply function",
+  "objective_hash": "a71b7f878c53890d18e3b08bef19aa02f2f348042157090a1dfd9fd169ba1b5c",
+  "target_path": "\\\\?\\C:\\Users\\flowe\\AppData\\Local\\Temp\\audit_pos_ctrl_6270282744da41b4ae8055b24f078978",
+  "starting_head": "994e87e2bb6f0c43d6a592c1c38035dfbfc48ffa",
+  "final_head": "330dd974b1dabfb3e2268f0608e45fc7fda291d5",
+  "candidate_classification": {
+    "kind": "Governed",
+    "details": {
+      "lineage": {
+        "parent_baseline_sha": "994e87e2bb6f0c43d6a592c1c38035dfbfc48ffa",
+        "workspace_id": "\\\\?\\C:\\Users\\flowe\\AppData\\Local\\Temp\\10_shadows_worktrees\\wt_run_task_1787972855016_2855016",
+        "worker_invocation_id": "inv_task_1787972855016_1",
+        "mutations_count": 1,
+        "candidate_sha": "330dd974b1dabfb3e2268f0608e45fc7fda291d5",
+        "created_at": "2026-08-29T03:07:36.548Z"
+      }
+    }
+  },
+  "routing_strategy": "GOAL_DECOMPOSITION",
+  "routing_decision_digest": "6768b1868d5369fe8a3d25910960b5fa903b47cd488102cce7470dd0fa154582",
+  "capabilities_selected": [
+    "INTENT_ADEQUACY",
+    "OBLIGATION_DERIVATION",
+    "BUILD_COMPILATION",
+    "INDEPENDENT_VERIFICATION"
+  ],
+  "attempts": [],
+  "worker_invocations": [
+    {
+      "invocation_id": "inv_task_1787972855016_1",
+      "worker_id": "forge_builder_task_1787972855016",
+      "provider": "deterministic_test_harness",
+      "model": "deterministic-v1",
+      "role": "BUILDER",
+      "modality": "STRUCTURAL",
+      "input_digest": "a71b7f878c53890d18e3b08bef19aa02f2f348042157090a1dfd9fd169ba1b5c",
+      "output_digest": "952ace974827fa5d39c7f7d871647c6b0446865b93ae725af6ae212d83c949d1",
+      "started_at": "2026-08-29T03:07:36.153392+00:00",
+      "ended_at": "2026-08-29T03:07:36.464905+00:00",
+      "duration_seconds": 0.312,
+      "status": "SUCCESS",
+      "provider_receipt": null
+    }
+  ],
+  "artifacts_produced": [],
+  "verification": {
+    "verifier_id": "svris_independent_verifier_task_1787972855016",
+    "verifier_type": "INDEPENDENT_BEHAVIORAL_ORACLE",
+    "builder_id": "forge_builder_task_1787972855016",
+    "modality": "DETERMINISTIC_TEST",
+    "purpose": "BEHAVIORAL_VERIFICATION",
+    "test_digest": "d6a31256e0f558c4dce4ea73cc7ee5d8abe5c6ab9aa878cc692c32a6e0acc980",
+    "tests_collected": 1,
+    "tests_passed": 1,
+    "tests_failed": 0,
+    "exit_code": 0,
+    "duration_seconds": 3.342,
+    "falsification_attempted": true,
+    "verified_status": "PASS",
+    "execution_trace": "============================= test session starts =============================\r\nplatform win32 -- Python 3.13.12, pytest-9.0.3, pluggy-1.6.0 -- C:\\Users\\flowe\\AppData\\Local\\Programs\\Python\\Python313\\python.exe\r\ncachedir: .pytest_cache\r\nrootdir: C:\\Users\\flowe\\AppData\\Local\\Temp\\10_shadows_worktrees\\wt_run_task_1787972855016_2855016\r\nplugins: anyio-4.12.1, ddtrace-4.7.1, Faker-40.15.0, langsmith-0.7.36, logfire-4.32.1, cov-7.1.0, typeguard-4.4.3\r\ncollecting ... collected 1 item\r\n\r\ntest_math.py::test_add PASSED                                            [100%]\r\n\r\n============================== 1 passed in 0.12s ==============================\r\n\n",
+    "timestamp": "2026-08-29T03:07:39.890Z"
+  },
+  "promotion": {
+    "head": "330dd974b1dabfb3e2268f0608e45fc7fda291d5",
+    "rejection_reason": null,
+    "status": "PROMOTED"
+  },
+  "epistemic_claims": {
+    "claim_kernel_run_created": true,
+    "claim_kernel_routed": true,
+    "claim_worker_executed": true,
+    "claim_empirical_provider_invoked": false,
+    "claim_candidate_mutated": true,
+    "claim_candidate_produced_under_custody": true,
+    "claim_independently_verified": true,
+    "claim_promoted": true,
+    "claim_target_behaviorally_tested": true,
+    "claim_semantic_objective_satisfied": false
+  },
+  "final_status": "VERIFIED_SUCCESS",
+  "created_at": "2026-08-29T03:07:35.016Z",
+  "sealed_at": "2026-08-29T03:07:40.070Z",
+  "receipt_signature": "3c5d505e4f53c5535a8137cd98ed59fe912b70ca7475dfe9e7b41a41c73972eb"
+}

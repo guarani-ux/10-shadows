@@ -359,17 +359,35 @@ impl KernelRun<WorkerAuthorized> {
         let parent_sha = self.starting_head.clone().unwrap_or_else(|| "UNKNOWN".into());
         let ws_id = self.workspace_path.as_ref().map(|p| p.display().to_string()).unwrap_or_default();
         
-        let lineage = CandidateLineage {
-            parent_baseline_sha: parent_sha,
-            workspace_id: ws_id,
-            worker_invocation_id: worker_record.invocation_id.clone(),
-            mutations_count,
-            candidate_sha: candidate_sha.to_string(),
-            created_at: current_timestamp_rfc3339(),
-        };
+        let is_valid_governed = mutations_count > 0 
+            && candidate_sha != parent_sha 
+            && self.governed_workspace.is_some()
+            && self.authorized_worker_id.is_some();
+
+        if is_valid_governed {
+            let lineage = CandidateLineage {
+                parent_baseline_sha: parent_sha,
+                workspace_id: ws_id,
+                worker_invocation_id: worker_record.invocation_id.clone(),
+                mutations_count,
+                candidate_sha: candidate_sha.to_string(),
+                created_at: current_timestamp_rfc3339(),
+            };
+            self.candidate_classification = Some(CandidateClassification::Governed(GovernedCandidate { lineage }));
+        } else {
+            self.candidate_classification = Some(CandidateClassification::External(ExternalCandidate {
+                candidate_sha: candidate_sha.to_string(),
+                source_note: if candidate_sha == parent_sha {
+                    "Zero mutations produced: Candidate SHA is identical to starting baseline".into()
+                } else if self.governed_workspace.is_none() {
+                    "Candidate produced outside isolated GovernedWorkspace".into()
+                } else {
+                    "Invalid governed production parameters".into()
+                },
+            }));
+        }
 
         self.worker_invocations.push(worker_record);
-        self.candidate_classification = Some(CandidateClassification::Governed(GovernedCandidate { lineage }));
         self.final_head = Some(candidate_sha.to_string());
 
         KernelRun {
@@ -562,8 +580,10 @@ impl KernelRun<Verified> {
             }
         }
 
-        let final_status = if is_verified && (promotion_succeeded || !is_governed) {
+        let final_status = if is_verified && is_governed && promotion_succeeded {
             RunStatus::VerifiedSuccess
+        } else if is_verified && !is_governed {
+            RunStatus::ExternalAuditVerified
         } else {
             RunStatus::Failed
         };
@@ -573,8 +593,8 @@ impl KernelRun<Verified> {
             claim_kernel_routed: true,
             claim_worker_executed: !self.worker_invocations.is_empty(),
             claim_empirical_provider_invoked: has_empirical,
-            claim_candidate_mutated: is_governed,
-            claim_candidate_produced_under_custody: is_governed,
+            claim_candidate_mutated: is_governed && promotion_succeeded,
+            claim_candidate_produced_under_custody: is_governed && promotion_succeeded,
             claim_independently_verified: is_verified,
             claim_promoted: promotion_succeeded,
             claim_target_behaviorally_tested: is_verified,

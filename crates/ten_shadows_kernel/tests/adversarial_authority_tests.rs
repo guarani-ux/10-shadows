@@ -988,3 +988,186 @@ fn test_17_relational_graph_epistemic_monotonicity() {
     assert!(EpistemicStatus::Verified.can_transition_to(EpistemicStatus::Contested));
     assert!(EpistemicStatus::Verified.can_transition_to(EpistemicStatus::Invalidated));
 }
+
+#[test]
+fn test_18_zero_mutation_governed_candidate_rejected() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("zero_mut");
+    let db_dir = create_test_dir("db_zero_mut");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("Zero mutation attempt", &disposable_repo, None);
+    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_zero_mut");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let run_auth = run_ws.authorize_worker("test_worker");
+
+    let mock_worker = WorkerInvocationRecord {
+        invocation_id: "inv_zero_mut".into(),
+        worker_id: "test_worker".into(),
+        provider: "deterministic".into(),
+        model: "deterministic-v1".into(),
+        role: WorkerRole::Builder,
+        modality: EvidenceModality::DeterministicTest,
+        input_digest: "hash".into(),
+        output_digest: "hash".into(),
+        started_at: current_timestamp_rfc3339(),
+        ended_at: current_timestamp_rfc3339(),
+        duration_seconds: 0.1,
+        status: "SUCCESS".into(),
+        provider_receipt: None,
+    };
+
+    // Attempting to record governed candidate with identical SHA and 0 mutations
+    let run_cand = run_auth.record_governed_candidate(&baseline_sha, mock_worker, 0);
+
+    // Must be classified as External, NOT Governed!
+    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+
+    let mock_ver = IndependentVerificationRecord {
+        verifier_id: "svris_verifier".into(),
+        builder_id: "test_worker".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        purpose: EvidencePurpose::BehavioralVerification,
+        modality: EvidenceModality::DeterministicTest,
+        test_digest: "digest".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("PASSED".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(mock_ver);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    // Final status must be ExternalAuditVerified, NOT VerifiedSuccess
+    assert_eq!(receipt.final_status, RunStatus::ExternalAuditVerified);
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(!report.is_production_valid);
+}
+
+#[test]
+fn test_19_external_candidate_verified_emits_external_audit_status() {
+    let (disposable_repo, baseline_sha) = create_disposable_git_repo("ext_audit");
+    let db_dir = create_test_dir("db_ext_audit");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    let run = KernelRun::new("External audit", &disposable_repo, None);
+    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &baseline_sha).unwrap();
+
+    let run_base = run.capture_baseline(Some(baseline_sha.clone()));
+    let wt_tmp = create_test_dir("wts_ext_audit");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let run_auth = run_ws.authorize_worker("test_worker");
+
+    let run_cand = run_auth.record_external_candidate("external_sha_12345", "Pre-existing external candidate");
+    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+
+    let mock_ver = IndependentVerificationRecord {
+        verifier_id: "svris_verifier".into(),
+        builder_id: "test_worker".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        purpose: EvidencePurpose::BehavioralVerification,
+        modality: EvidenceModality::DeterministicTest,
+        test_digest: "digest".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("PASSED".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(mock_ver);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    assert_eq!(receipt.final_status, RunStatus::ExternalAuditVerified);
+    assert!(!receipt.epistemic_claims.claim_candidate_produced_under_custody);
+    assert!(!receipt.epistemic_claims.claim_promoted);
+
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(!report.is_production_valid);
+}
+
+#[test]
+fn test_20_post_hoc_external_worker_cannot_claim_governed_production() {
+    let (disposable_repo, _baseline_sha) = create_disposable_git_repo("post_hoc");
+    let db_dir = create_test_dir("db_post_hoc");
+    let db = KernelDb::open(&db_dir).unwrap();
+
+    // 1. External AI writes and commits to target repo before Ten Shadows runs
+    fs::write(disposable_repo.join("feature.txt"), "External work").unwrap();
+    Command::new("git").args(["add", "feature.txt"]).current_dir(&disposable_repo).output().unwrap();
+    Command::new("git").args(["commit", "-m", "feat: external commit"]).current_dir(&disposable_repo).output().unwrap();
+    let external_head = AuthoritativeSource::new(&disposable_repo).unwrap().capture_head().unwrap();
+
+    // 2. Ten Shadows is invoked post-hoc
+    let run = KernelRun::new("Audit external work", &disposable_repo, None);
+    db.record_run_created(&run.run_id, &run.task_id, &run.objective_hash, &external_head).unwrap();
+
+    let run_base = run.capture_baseline(Some(external_head.clone()));
+    assert_eq!(run_base.starting_head.as_ref().unwrap(), &external_head);
+
+    let wt_tmp = create_test_dir("wts_post_hoc");
+    let run_ws = run_base.prepare_governed_workspace(Some(&wt_tmp)).unwrap();
+    let run_auth = run_ws.authorize_worker("auditor_worker");
+
+    // Auditor inspects existing external work (zero new mutations under run)
+    let mock_worker = WorkerInvocationRecord {
+        invocation_id: "inv_audit".into(),
+        worker_id: "auditor_worker".into(),
+        provider: "deterministic".into(),
+        model: "deterministic-v1".into(),
+        role: WorkerRole::Auditor,
+        modality: EvidenceModality::DeterministicTest,
+        input_digest: "hash".into(),
+        output_digest: "hash".into(),
+        started_at: current_timestamp_rfc3339(),
+        ended_at: current_timestamp_rfc3339(),
+        duration_seconds: 0.1,
+        status: "SUCCESS".into(),
+        provider_receipt: None,
+    };
+
+    let run_cand = run_auth.record_governed_candidate(&external_head, mock_worker, 0);
+    assert!(!run_cand.candidate_classification.as_ref().unwrap().is_governed());
+
+    let mock_ver = IndependentVerificationRecord {
+        verifier_id: "svris_verifier".into(),
+        builder_id: "auditor_worker".into(),
+        verifier_type: VerificationType::IndependentBehavioralOracle,
+        purpose: EvidencePurpose::BehavioralVerification,
+        modality: EvidenceModality::DeterministicTest,
+        test_digest: "digest".into(),
+        tests_collected: 1,
+        tests_passed: 1,
+        tests_failed: 0,
+        exit_code: 0,
+        duration_seconds: 0.05,
+        falsification_attempted: true,
+        verified_status: "PASS".into(),
+        execution_trace: Some("PASSED".into()),
+        timestamp: current_timestamp_rfc3339(),
+    };
+
+    let run_ver = run_cand.record_verification(mock_ver);
+    let (_promoted, receipt) = run_ver.promote_and_seal();
+
+    assert_eq!(receipt.final_status, RunStatus::ExternalAuditVerified);
+    let report = evaluate_receipt(&receipt, Some(&db));
+    assert!(report.is_execution_valid);
+    assert!(!report.is_production_valid);
+    assert!(report.errors.iter().any(|e| e.contains("ExternalCandidate")));
+}

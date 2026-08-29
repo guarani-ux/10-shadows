@@ -111,6 +111,12 @@ pub fn evaluate_receipt(
             if !receipt.epistemic_claims.claim_candidate_produced_under_custody {
                 prod_errors.push("Epistemic claims do not assert candidate was produced under custody.".into());
             }
+            if g.lineage.mutations_count == 0 {
+                prod_errors.push("Lineage indicates ZERO mutations produced under custody.".into());
+            }
+            if g.lineage.candidate_sha == g.lineage.parent_baseline_sha {
+                prod_errors.push("Candidate SHA is identical to starting baseline (No new work produced under run).".into());
+            }
             if let Some(ref start) = receipt.starting_head {
                 if g.lineage.parent_baseline_sha != *start {
                     prod_errors.push(format!(

@@ -219,7 +219,26 @@ class TenShadowsOrchestrator:
                     dest_file.parent.mkdir(parents=True, exist_ok=True)
                     shutil.copy2(source_file, dest_file)
 
-        # Step 6: Initialize Loop State
+        # Step 6: Write Active Run Lease for Gate Validation
+        lease_file = SCRATCH_DIR / "active_run_lease.json"
+        lease_payload = {
+            "run_id": run_ctx.run_id,
+            "task_id": run_ctx.task_id,
+            "workspace_path": str(workspace_dir),
+            "token": compute_authorization_token(
+                run_id=run_ctx.run_id,
+                task_id=run_ctx.task_id,
+                invocation_id="master_lease",
+                objective_hash=run_ctx.objective_hash,
+                baseline_sha=starting_head or "UNKNOWN_NON_GIT_TARGET",
+                governed_workspace_path=str(workspace_dir),
+                attempt_number=0,
+            ),
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        lease_file.write_text(json.dumps(lease_payload, indent=2), encoding="utf-8")
+
+        # Step 7: Initialize Loop State
         builder = self._resolve_provider(builder_provider)
         attempts_records: List[ExecutionAttemptRecord] = []
         invocations_records: List[WorkerInvocationRecord] = []
@@ -439,6 +458,13 @@ class TenShadowsOrchestrator:
         if receipt_path.exists():
             is_valid, errs = verify_execution_receipt(receipt_path, kernel_db=self.db)
             is_receipt_valid = is_valid and len(errs) == 0
+
+        # Clean up active run lease
+        if lease_file.exists():
+            try:
+                lease_file.unlink()
+            except Exception:
+                pass
 
         # Step 13: Construct and Return Final Report
         report = OrchestratorExecutionReport(

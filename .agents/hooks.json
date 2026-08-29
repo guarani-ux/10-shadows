@@ -1,16 +1,23 @@
 {
-  "pre-tool-audit-gate": {
+  "ten-shadows-execution-gate": {
     "enabled": true,
     "PreToolUse": [
       {
-        "matcher": "write_to_file|replace_file_content|multi_replace_file_content",
+        "matcher": "write_to_file|replace_file_content|multi_replace_file_content|run_command",
         "hooks": [
           {
             "type": "command",
-            "command": "python ../scripts/verify_plan_audit.py",
+            "command": "python ../scripts/antigravity_execution_gate.py",
             "timeout": 15
           }
         ]
+      }
+    ],
+    "PreInvocation": [
+      {
+        "type": "command",
+        "command": "python ../scripts/antigravity_ingress_advisor.py",
+        "timeout": 10
       }
     ]
   }

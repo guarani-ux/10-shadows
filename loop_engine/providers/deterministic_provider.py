@@ -157,23 +157,23 @@ class DeterministicBuilderProvider(BaseWorkerProvider):
                 }
             )
 
-        # Generic default case
+        # Unknown or unsupported objective: fail closed with CAPABILITY_DEFICIT
         else:
-            module_code = (
-                f'"""Generic synthesis for objective: {objective}"""\n\n'
-                "def execute_task():\n"
-                "    return {'status': 'COMPLETED', 'objective_satisfied': True}\n"
+            duration = time.time() - start_time
+            end_iso = datetime.now(timezone.utc).isoformat()
+            return WorkerExecutionResult(
+                worker_id=authorization.worker_id,
+                provider="deterministic",
+                model="deterministic-v1",
+                role=WorkerRole.BUILDER,
+                modality=EvidenceModality.DETERMINISTIC_TEST,
+                started_at=start_iso,
+                ended_at=end_iso,
+                duration_seconds=round(duration, 3),
+                exit_status="FAILURE",
+                output_payload=f"CAPABILITY_DEFICIT: Deterministic provider has no qualified implementation or verification oracle for objective: '{objective}'",
+                error_message="CAPABILITY_DEFICIT",
             )
-            target_file = workspace / "solution.py"
-            target_file.write_text(module_code, encoding="utf-8")
-            test_content = (
-                "from solution import execute_task\n\n"
-                "def test_execute_task():\n"
-                "    res = execute_task()\n"
-                "    assert res['status'] == 'COMPLETED'\n"
-            )
-            (tests_dir / "test_solution.py").write_text(test_content, encoding="utf-8")
-            output_msg = f"Synthesized generic solution for: {objective}"
 
         duration = time.time() - start_time
         end_iso = datetime.now(timezone.utc).isoformat()

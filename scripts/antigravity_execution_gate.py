@@ -40,7 +40,11 @@ def is_active_run_authorized(target_path: Optional[str] = None) -> bool:
         if target_path and "workspace_path" in data:
             target_norm = os.path.normpath(os.path.abspath(target_path))
             ws_norm = os.path.normpath(os.path.abspath(data["workspace_path"]))
-            if not target_norm.startswith(ws_norm):
+            if not (
+                target_norm.lower().startswith(ws_norm.lower())
+                if os.name == chr(110) + chr(116)
+                else target_norm.startswith(ws_norm)
+            ):
                 # Target is outside the authorized workspace for this active run
                 return False
         return True
@@ -73,7 +77,7 @@ def evaluate_write_tool(args: Dict[str, Any]) -> Tuple[str, str]:
     ]
 
     for s in allowed_subdirs:
-        if norm_path.startswith(s):
+        if norm_path.lower().startswith(s.lower()) if os.name == chr(110) + chr(116) else norm_path.startswith(s):
             return "allow", f"Modifications inside '{s}' are permitted."
 
     # Check if target is inside an active governed workspace

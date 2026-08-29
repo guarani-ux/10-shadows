@@ -89,7 +89,7 @@ class OrchestratorExecutionReport:
 
     def print_summary(self) -> None:
         print("=" * 60)
-        print("10 SHADOWS — CANONICAL EXECUTION RECEIPT SUMMARY")
+        print("10 SHADOWS - CANONICAL EXECUTION RECEIPT SUMMARY")
         print("=" * 60)
         print(f"RUN_ID:                 {self.run_id}")
         print(f"STATUS:                 {self.status}")
@@ -346,13 +346,31 @@ class TenShadowsOrchestrator:
 
             # Step 8: Execute Independent Verification Harness
             verifier_id = f"independent_verifier_{run_ctx.task_id}_{attempt_number}"
-            verification_rec = self.kernel.execute_independent_verification(
-                run_ctx=run_ctx,
-                target_path=workspace_dir,
-                builder_id=worker_id,
-                test_cwd=workspace_dir,
-                verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
-            )
+            if worker_res.exit_status != "SUCCESS":
+                verification_rec = IndependentVerificationRecord(
+                    verifier_id=verifier_id,
+                    verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
+                    builder_id=worker_id,
+                    modality=EvidenceModality.DETERMINISTIC_TEST,
+                    purpose=EvidencePurpose.BEHAVIORAL_VERIFICATION,
+                    test_digest=hashlib.sha256(worker_res.output_payload.encode("utf-8")).hexdigest(),
+                    tests_collected=0,
+                    tests_passed=0,
+                    tests_failed=1,
+                    exit_code=1,
+                    duration_seconds=0.001,
+                    falsification_attempted=True,
+                    verified_status="FAIL",
+                    execution_trace=worker_res.output_payload,
+                )
+            else:
+                verification_rec = self.kernel.execute_independent_verification(
+                    run_ctx=run_ctx,
+                    target_path=workspace_dir,
+                    builder_id=worker_id,
+                    test_cwd=workspace_dir,
+                    verifier_type=VerificationType.INDEPENDENT_BEHAVIORAL_ORACLE,
+                )
             last_verification = verification_rec
 
             # Record Attempt Record
@@ -432,7 +450,16 @@ class TenShadowsOrchestrator:
             }
 
         # Step 11: Seal and Persist Execution Receipt
-        final_status = RunStatus.VERIFIED_SUCCESS if is_success else RunStatus.FAILED
+        if is_success:
+            final_status = RunStatus.VERIFIED_SUCCESS
+            objective_status = "SATISFIED"
+        elif worker_res.error_message == "CAPABILITY_DEFICIT":
+            final_status = RunStatus.BLOCKED
+            objective_status = "CAPABILITY_DEFICIT"
+        else:
+            final_status = RunStatus.FAILED
+            objective_status = "OBJECTIVE_UNRESOLVED"
+
         artifacts_produced = [{"path": p, "sha256": h} for p, h in snapshot_after.items()]
 
         receipt = self.kernel.seal_and_persist_receipt(
@@ -471,7 +498,7 @@ class TenShadowsOrchestrator:
             run_id=run_ctx.run_id,
             task_id=run_ctx.task_id,
             status=final_status.value,
-            objective_status="SATISFIED" if is_success else "FAILED",
+            objective_status=objective_status,
             routing_strategy=routing_strategy.value,
             capabilities_used=caps_used_ids,
             capabilities_created=all_created_caps,

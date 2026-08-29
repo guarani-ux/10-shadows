@@ -90,7 +90,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
         print(json.dumps({"receipt_path": str(receipt_path), "is_valid": is_valid, "errors": errors}, indent=2))
     else:
         print("=" * 60)
-        print("10 SHADOWS — RECEIPT INDEPENDENT VERIFICATION")
+        print("10 SHADOWS - RECEIPT INDEPENDENT VERIFICATION")
         print("=" * 60)
         print(f"RECEIPT_PATH:       {receipt_path}")
         print(f"RECEIPT_VALID:      {is_valid}")
@@ -109,7 +109,7 @@ def cmd_capabilities(args: argparse.Namespace) -> int:
         print(json.dumps([c.to_dict() for c in caps], indent=2, sort_keys=True))
     else:
         print("=" * 60)
-        print("10 SHADOWS — CAPABILITY REGISTRY")
+        print("10 SHADOWS - CAPABILITY REGISTRY")
         print("=" * 60)
         if not caps:
             print("No capabilities found matching filter.")

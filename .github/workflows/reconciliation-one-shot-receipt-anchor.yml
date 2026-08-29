@@ -1,0 +1,52 @@
+name: Reconciliation One-Shot Receipt Anchor
+
+on:
+  push:
+    branches: [ 'docs/ground-truth-capability-audit' ]
+
+permissions:
+  contents: write
+
+jobs:
+  harden-receipt-anchor:
+    if: github.event.head_commit.message == 'add one-shot receipt anchoring hardening'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout reconciliation branch
+        uses: actions/checkout@v4
+        with:
+          ref: docs/ground-truth-capability-audit
+          fetch-depth: 0
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Patch receipt verification and add adversarial proof
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          authority = Path('loop_engine/execution_authority.py')
+          text = authority.read_text(encoding='utf-8')
+          old = '''    db = kernel_db or KernelDatabase()\n    run_record = db.get_run(receipt.run_id)\n    if not run_record:\n        errors.append(f"Run '{receipt.run_id}' does not exist in authoritative KernelDatabase.")\n    elif run_record["objective_hash"] != receipt.objective_hash:\n        errors.append("Objective hash mismatch between receipt and KernelDatabase.")\n\n    if receipt.verification:\n'''
+          new = '''    db = kernel_db or KernelDatabase()\n    run_record = db.get_run(receipt.run_id)\n    if not run_record:\n        errors.append(f"Run '{receipt.run_id}' does not exist in authoritative KernelDatabase.")\n    elif run_record["objective_hash"] != receipt.objective_hash:\n        errors.append("Objective hash mismatch between receipt and KernelDatabase.")\n\n    with db.get_connection() as conn:\n        anchored_row = conn.execute(\n            "SELECT receipt_json FROM receipts WHERE run_id = ? ORDER BY id DESC LIMIT 1",\n            (receipt.run_id,),\n        ).fetchone()\n    if anchored_row is None or not anchored_row["receipt_json"]:\n        errors.append("Receipt has no authoritative persisted receipt record in KernelDatabase.")\n    else:\n        try:\n            anchored_receipt = json.loads(anchored_row["receipt_json"])\n            presented_receipt = json.loads(receipt.model_dump_json())\n            if anchored_receipt != presented_receipt:\n                errors.append("Receipt contents do not match the authoritative persisted receipt record.")\n        except Exception as exc:\n            errors.append(f"Failed to compare receipt against authoritative persisted record: {exc}")\n\n    if receipt.verification:\n'''
+          if old not in text:
+              raise SystemExit('expected receipt verification anchor not found')
+          authority.write_text(text.replace(old, new), encoding='utf-8')
+
+          test = Path('tests/test_receipt_db_anchor.py')
+          test.write_text('''from __future__ import annotations\n\nimport json\n\nfrom loop_engine.execution_authority import (\n    RunStatus,\n    TenShadowsKernel,\n    TenShadowsReceipt,\n    verify_execution_receipt,\n)\nfrom loop_engine.kernel_db import KernelDatabase\n\n\ndef test_recomputed_receipt_digest_cannot_override_authoritative_db_record(tmp_path):\n    db = KernelDatabase(db_path=tmp_path / "kernel.db")\n    receipts_dir = tmp_path / "receipts"\n    receipts_dir.mkdir()\n    target = tmp_path / "target"\n    target.mkdir()\n    kernel = TenShadowsKernel(kernel_db=db, receipts_dir=receipts_dir)\n\n    run_ctx = kernel.establish_run("trivial: receipt anchor proof", target)\n    strategy, capabilities, route_digest = kernel.determine_route(run_ctx, "trivial: receipt anchor proof")\n    receipt = kernel.seal_and_persist_receipt(\n        run_ctx=run_ctx,\n        objective="trivial: receipt anchor proof",\n        target_path=target,\n        starting_head=None,\n        final_head=None,\n        routing_strategy=strategy,\n        routing_decision_digest=route_digest,\n        capabilities_selected=capabilities,\n        attempts=[],\n        worker_invocations=[],\n        artifacts_produced=[],\n        verification=None,\n        promotion=None,\n        final_status=RunStatus.COMPLETED_UNVERIFIED,\n        verification_scope="unknown",\n    )\n\n    original_valid, original_errors = verify_execution_receipt(receipt.model_dump(), kernel_db=db)\n    assert original_valid is True\n    assert original_errors == []\n\n    forged_data = json.loads(receipt.model_dump_json())\n    forged_data["routing_decision_digest"] = "f" * 64\n    forged = TenShadowsReceipt.model_validate(forged_data)\n    forged.receipt_signature = forged.compute_signature()\n\n    forged_valid, forged_errors = verify_execution_receipt(forged.model_dump(), kernel_db=db)\n    assert forged_valid is False\n    assert any("authoritative persisted receipt record" in error for error in forged_errors)\n''', encoding='utf-8')
+          PY
+      - name: Format and lint changed Python
+        run: |
+          pip install ruff
+          ruff format loop_engine/execution_authority.py tests/test_receipt_db_anchor.py
+          ruff check loop_engine/execution_authority.py tests/test_receipt_db_anchor.py
+      - name: Commit receipt hardening
+        run: |
+          git config user.name "Ten Shadows Reconciliation"
+          git config user.email "reconciliation@ten-shadows.local"
+          git add loop_engine/execution_authority.py tests/test_receipt_db_anchor.py
+          git commit -m "anchor receipts to authoritative persisted state"
+          git push origin HEAD:docs/ground-truth-capability-audit

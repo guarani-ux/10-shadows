@@ -1,7 +1,8 @@
-"""
-loop_engine/providers/antigravity_provider.py
-Antigravity Worker Environment Provider Adapter for 10 SHADOWS.
-Antigravity is treated strictly as an untrusted worker environment, not the governing authority.
+"""Canonical Antigravity provider scaffold for Ten Shadows.
+
+Antigravity is treated as an untrusted external worker. The current canonical
+adapter has no defined, evidence-bearing bridge protocol, so it fails closed
+rather than reporting success merely because an environment variable exists.
 """
 
 from __future__ import annotations
@@ -10,17 +11,15 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from loop_engine.dispatcher.protocol import WorkerAuthorization
 from loop_engine.execution_authority import EvidenceModality, WorkerRole
-from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult
+from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult, workspace_matches_authorization
 
 
 class AntigravityBuilderProvider(BaseWorkerProvider):
-    """
-    Antigravity agent / environment worker adapter.
-    """
+    """Fail-closed canonical adapter pending a real governed bridge contract."""
 
     def execute(
         self,
@@ -34,37 +33,52 @@ class AntigravityBuilderProvider(BaseWorkerProvider):
         start_iso = datetime.now(timezone.utc).isoformat()
 
         if not authorization.verify_token():
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="antigravity",
-                model=authorization.requested_model,
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.STRUCTURAL,
-                started_at=start_iso,
-                ended_at=datetime.now(timezone.utc).isoformat(),
-                duration_seconds=time.time() - start_time,
-                exit_status="REJECTED",
-                output_payload="Authorization token verification failed.",
-                error_message="AUTHORIZATION_TOKEN_INVALID",
+            return self._result(
+                authorization,
+                start_time,
+                start_iso,
+                "REJECTED",
+                "Authorization token verification failed.",
+                "AUTHORIZATION_TOKEN_INVALID",
             )
 
-        # Check if Antigravity subprocess CLI / agent bridge is available
-        agy_cli = os.environ.get("ANTIGRAVITY_CLI")
-        if not agy_cli:
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="antigravity",
-                model=authorization.requested_model,
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.STRUCTURAL,
-                started_at=start_iso,
-                ended_at=datetime.now(timezone.utc).isoformat(),
-                duration_seconds=time.time() - start_time,
-                exit_status="FAILURE",
-                output_payload="Antigravity programmatic agent bridge is not active.",
-                error_message="CAPABILITY_PROVIDER_UNAVAILABLE",
+        if not workspace_matches_authorization(authorization, workspace_path):
+            return self._result(
+                authorization,
+                start_time,
+                start_iso,
+                "REJECTED",
+                "Requested workspace does not match the authorized filesystem boundary.",
+                "WORKSPACE_BOUNDARY_MISMATCH",
             )
 
+        configured_bridge = os.environ.get("ANTIGRAVITY_CLI")
+        if configured_bridge:
+            message = (
+                "ANTIGRAVITY_CLI is configured, but the canonical adapter has no implemented "
+                "invocation/receipt contract and will not fabricate execution success."
+            )
+        else:
+            message = "Antigravity programmatic bridge is not configured."
+
+        return self._result(
+            authorization,
+            start_time,
+            start_iso,
+            "FAILURE",
+            message,
+            "CAPABILITY_PROVIDER_UNAVAILABLE",
+        )
+
+    @staticmethod
+    def _result(
+        authorization: WorkerAuthorization,
+        start_time: float,
+        start_iso: str,
+        exit_status: str,
+        message: str,
+        error_code: str,
+    ) -> WorkerExecutionResult:
         return WorkerExecutionResult(
             worker_id=authorization.worker_id,
             provider="antigravity",
@@ -74,6 +88,7 @@ class AntigravityBuilderProvider(BaseWorkerProvider):
             started_at=start_iso,
             ended_at=datetime.now(timezone.utc).isoformat(),
             duration_seconds=time.time() - start_time,
-            exit_status="SUCCESS",
-            output_payload="Antigravity execution completed.",
+            exit_status=exit_status,
+            output_payload=message,
+            error_message=error_code,
         )

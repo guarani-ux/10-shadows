@@ -1,5 +1,8 @@
 # Synthesis Plan: Konohagakure (Konoha 0.1.0)
 
+> **LEGACY SOURCE ANALYSIS — NOT TEN SHADOWS CURRENT STATE.** This document summarizes the separate Konoha 0.1.0 system and its lessons. Claims below describe that source material or historical assessment, not present-tense Ten Shadows capability. Current Ten Shadows status is governed by `CAPABILITY_GROUND_TRUTH.md`.
+
+
 ## System Overview
 **Konohagakure (`konoha`)** is a local, deterministic, evidence-preserving decision and outcome journal designed to evaluate proposals/work under uncertainty.
 

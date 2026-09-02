@@ -1,6 +1,4 @@
 import argparse
-import sys
-from pathlib import Path
 
 from loop_engine.base import PROJECT_ROOT
 from loop_engine.gamemaster.hud_view import TerminalHUDView
@@ -8,27 +6,24 @@ from loop_engine.gamemaster.state_projector import SovereignStateProjector
 
 
 def run_cli():
-    """
-    Shadow 10 (The Game Master) CLI Entrypoint.
-    Executes master system projections and domain status queries.
-    """
+    """Render scoped local telemetry and domain-structure observations."""
     parser = argparse.ArgumentParser(
         prog="10shadows",
-        description="10 SHADOWS: Zero-Trust Autonomous Execution Operating System",
+        description="10 SHADOWS: governed-execution development tools and local telemetry",
     )
 
     parser.add_argument(
         "--hud",
         action="store_true",
-        help="Project real-time system health and domain matrix HUD.",
+        help="Project local repository/runtime telemetry and domain structural presence.",
     )
     parser.add_argument(
         "--version",
         action="version",
-        version="10 SHADOWS v3.0.0-SOVEREIGN",
+        version="10 SHADOWS telemetry-v1",
     )
 
-    args = parser.parse_args()
+    parser.parse_args()
 
     projector = SovereignStateProjector(root_dir=PROJECT_ROOT)
     hud = projector.project_hud()

@@ -1,12 +1,14 @@
-"""
-protocol.py — Language-Neutral Worker Invocation Protocol for 10 SHADOWS.
-Defines the strictly typed schema for Worker Authorization and Worker Execution Result.
+"""Language-neutral worker invocation protocol for Ten Shadows.
+
+The current ``authorization_token`` field is a deterministic SHA-256 binding
+digest over the declared invocation envelope. It detects accidental or naive
+tampering, but because no secret key is involved it is not an unforgeable
+credential and must not be treated as a standalone privilege boundary.
 """
 
 from __future__ import annotations
 
 import hashlib
-import json
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -35,7 +37,7 @@ def compute_authorization_token(
     governed_workspace_path: str,
     attempt_number: int,
 ) -> str:
-    """Cryptographically binds the authorization token to run, workspace, baseline, and attempt."""
+    """Compute a deterministic binding digest for the declared invocation envelope."""
     raw = (
         f"{run_id}:{task_id}:{invocation_id}:{objective_hash}:{baseline_sha}:{governed_workspace_path}:{attempt_number}"
     )
@@ -43,9 +45,11 @@ def compute_authorization_token(
 
 
 class WorkerAuthorization(BaseModel):
-    """
-    Physical authorization token issued exclusively by the Trusted Kernel.
-    Governs the boundary, constraints, and identity of the authorized worker.
+    """Typed invocation envelope issued by a governing execution path.
+
+    ``verify_token`` verifies internal field binding only. Callers must enforce
+    actual execution authority through kernel state, process privilege, explicit
+    promotion gates, or another independently privileged mechanism.
     """
 
     protocol_version: str = "1.0.0"
@@ -59,7 +63,7 @@ class WorkerAuthorization(BaseModel):
     baseline_sha: str
     governed_workspace_path: str
     governed_workspace_identity: str
-    requested_provider: str = "gemini"  # "gemini" | "deterministic" | "openai" | "claude"
+    requested_provider: str = "gemini"
     requested_model: str = "gemini-3.7-flash"
     allowed_capabilities: List[str] = Field(default_factory=list)
     filesystem_boundary: str
@@ -89,9 +93,7 @@ class ProviderUsage(BaseModel):
 
 
 class WorkerExecutionResult(BaseModel):
-    """
-    Physical execution result emitted by the Worker Dispatcher upon completion.
-    """
+    """Structured execution result emitted by a dispatcher/provider path."""
 
     protocol_version: str = "1.0.0"
     run_id: str
@@ -100,13 +102,13 @@ class WorkerExecutionResult(BaseModel):
     requested_provider: str
     requested_model: str
     resolved_provider: str
-    resolved_model: str  # e.g. "gemini-3.7-flash", "deterministic-v1", or "UNPROVEN"
+    resolved_model: str
     provider_invocation_id: Optional[str] = None
     modality: WorkerEvidenceModality = WorkerEvidenceModality.STRUCTURAL
     started_at: str
     ended_at: str
     duration_seconds: float
-    exit_status: str  # "SUCCESS" | "FAILURE" | "TIMEOUT" | "REJECTED"
+    exit_status: str
     usage: Optional[ProviderUsage] = None
     output_digest: str
     workspace_before_sha: str

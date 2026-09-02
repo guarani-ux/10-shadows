@@ -1,27 +1,24 @@
-"""
-loop_engine/providers/deterministic_provider.py
-Deterministic Local Builder Provider for 10 SHADOWS.
-Generates and writes physical Python code into the governed workspace without network dependencies.
+"""Deterministic local builder for a small explicit objective family.
+
+This worker writes candidate implementation artifacts only. It deliberately does
+not write its own verification tests: canonical verification evidence is owned by
+Ten Shadows, not by the builder being evaluated.
 """
 
 from __future__ import annotations
 
-import hashlib
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from loop_engine.dispatcher.protocol import WorkerAuthorization
 from loop_engine.execution_authority import EvidenceModality, WorkerRole
-from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult
+from loop_engine.providers.base import BaseWorkerProvider, WorkerExecutionResult, workspace_matches_authorization
 
 
 class DeterministicBuilderProvider(BaseWorkerProvider):
-    """
-    Deterministic builder that writes concrete Python implementations based on objective contracts.
-    """
+    """Write concrete candidates only for the explicitly implemented objective patterns."""
 
     def execute(
         self,
@@ -35,58 +32,41 @@ class DeterministicBuilderProvider(BaseWorkerProvider):
         start_iso = datetime.now(timezone.utc).isoformat()
 
         if not authorization.verify_token():
-            end_iso = datetime.now(timezone.utc).isoformat()
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="deterministic",
-                model="deterministic-v1",
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.STRUCTURAL,
-                started_at=start_iso,
-                ended_at=end_iso,
-                duration_seconds=time.time() - start_time,
-                exit_status="REJECTED",
-                output_payload="Authorization token verification failed.",
-                error_message="AUTHORIZATION_TOKEN_INVALID",
+            return self._rejected(
+                authorization,
+                start_time,
+                start_iso,
+                "Authorization token verification failed.",
+                "AUTHORIZATION_TOKEN_INVALID",
+            )
+
+        if not workspace_matches_authorization(authorization, workspace_path):
+            return self._rejected(
+                authorization,
+                start_time,
+                start_iso,
+                "Requested workspace does not match the cryptographically authorized filesystem boundary.",
+                "WORKSPACE_BOUNDARY_MISMATCH",
             )
 
         workspace = Path(workspace_path).resolve()
         workspace.mkdir(parents=True, exist_ok=True)
-        tests_dir = workspace / "tests"
-        tests_dir.mkdir(parents=True, exist_ok=True)
 
         obj_lower = objective.lower()
-        candidate_caps = []
-        output_msg = ""
+        candidate_caps: List[Dict[str, Any]] = []
 
-        # Case 1: Celsius to Fahrenheit Converter
-        if "celsius" in obj_lower and "fahrenheit" in obj_lower and "convert" in obj_lower:
+        if "celsius" in obj_lower and "fahrenheit" in obj_lower and "convert" in obj_lower and "100" not in obj_lower:
             code_content = (
                 '"""Temperature conversion capability."""\n\n'
                 "def celsius_to_fahrenheit(celsius: float) -> float:\n"
-                '    """Converts Celsius temperature to Fahrenheit."""\n'
+                '    """Convert Celsius temperature to Fahrenheit."""\n'
                 "    return (celsius * 9.0 / 5.0) + 32.0\n\n"
                 "def fahrenheit_to_celsius(fahrenheit: float) -> float:\n"
-                '    """Converts Fahrenheit temperature to Celsius."""\n'
+                '    """Convert Fahrenheit temperature to Celsius."""\n'
                 "    return (fahrenheit - 32.0) * 5.0 / 9.0\n"
             )
-            target_file = workspace / "temperature.py"
-            target_file.write_text(code_content, encoding="utf-8")
-
-            # Independent test specification
-            test_content = (
-                "from temperature import celsius_to_fahrenheit, fahrenheit_to_celsius\n\n"
-                "def test_celsius_to_fahrenheit_standard():\n"
-                "    assert celsius_to_fahrenheit(0.0) == 32.0\n"
-                "    assert celsius_to_fahrenheit(100.0) == 212.0\n"
-                "    assert celsius_to_fahrenheit(-40.0) == -40.0\n\n"
-                "def test_fahrenheit_to_celsius_standard():\n"
-                "    assert fahrenheit_to_celsius(32.0) == 0.0\n"
-                "    assert fahrenheit_to_celsius(212.0) == 100.0\n"
-            )
-            (tests_dir / "test_temperature.py").write_text(test_content, encoding="utf-8")
-
-            output_msg = "Synthesized temperature conversion module and test suite."
+            (workspace / "temperature.py").write_text(code_content, encoding="utf-8")
+            output_msg = "Synthesized temperature conversion candidate."
             candidate_caps.append(
                 {
                     "capability_id": "cap_temperature_conversion_v1",
@@ -97,86 +77,54 @@ class DeterministicBuilderProvider(BaseWorkerProvider):
                     "applicability_constraints": ["temperature", "celsius", "fahrenheit"],
                 }
             )
-
-        # Case 2: Using existing temperature capability to calculate 100 C
         elif "100" in obj_lower and "fahrenheit" in obj_lower and ("convert" in obj_lower or "using" in obj_lower):
-            # Check if available capability exists or synthesize evaluation script
+            if not (workspace / "temperature.py").is_file():
+                return self._failure(
+                    authorization,
+                    start_time,
+                    start_iso,
+                    "CAPABILITY_DEFICIT: the reusable temperature capability was not materialized into the workspace.",
+                    "CAPABILITY_DEFICIT",
+                )
             eval_content = (
                 "from temperature import celsius_to_fahrenheit\n\n"
                 "def calculate_target():\n"
-                "    res = celsius_to_fahrenheit(100.0)\n"
-                "    return res\n\n"
+                "    return celsius_to_fahrenheit(100.0)\n\n"
                 'if __name__ == "__main__":\n'
                 "    print(f'100 C in Fahrenheit = {calculate_target()}')\n"
             )
-            target_file = workspace / "eval_temperature.py"
-            target_file.write_text(eval_content, encoding="utf-8")
-
-            test_content = (
-                "from eval_temperature import calculate_target\n\n"
-                "def test_calculate_target():\n"
-                "    assert calculate_target() == 212.0\n"
-            )
-            (tests_dir / "test_eval_temperature.py").write_text(test_content, encoding="utf-8")
-            output_msg = "Evaluated 100 C to Fahrenheit using temperature capability: 212.0 F."
-
-        # Case 3: Hydraulic transient / pump trip capability
+            (workspace / "eval_temperature.py").write_text(eval_content, encoding="utf-8")
+            output_msg = "Created a candidate that reuses the materialized temperature capability."
         elif "hydraulic" in obj_lower or "transient" in obj_lower or "pump" in obj_lower or "valve" in obj_lower:
             hydraulic_code = (
-                '"""Hydraulic Transient Analysis Capability."""\n\n'
+                '"""Hydraulic transient analysis fixture."""\n\n'
                 "import math\n\n"
                 "def compute_joukowsky_surge(rho: float, a: float, v0: float) -> float:\n"
-                '    """Calculates instantaneous water hammer pressure surge in Pa."""\n'
                 "    return rho * a * v0\n\n"
                 "def compute_wave_speed(K: float, rho: float, D: float, E: float, e: float, c1: float = 0.91) -> float:\n"
-                '    """Calculates Korteweg elastic pipe wave speed in m/s."""\n'
                 "    denom = 1.0 + c1 * ((K * D) / (E * e))\n"
                 "    return math.sqrt((K / rho) / denom)\n"
             )
-            target_file = workspace / "hydraulic_transient.py"
-            target_file.write_text(hydraulic_code, encoding="utf-8")
-
-            test_content = (
-                "from hydraulic_transient import compute_joukowsky_surge, compute_wave_speed\n\n"
-                "def test_wave_speed_and_surge():\n"
-                "    a = compute_wave_speed(2.2e9, 998.0, 0.40, 200e9, 0.008)\n"
-                "    assert 1200.0 <= a <= 1220.0\n"
-                "    dp = compute_joukowsky_surge(998.0, a, 2.7852)\n"
-                "    assert 3.3e6 <= dp <= 3.4e6\n"
-            )
-            (tests_dir / "test_hydraulic_transient.py").write_text(test_content, encoding="utf-8")
-            output_msg = "Synthesized hydraulic transient module and verification tests."
+            (workspace / "hydraulic_transient.py").write_text(hydraulic_code, encoding="utf-8")
+            output_msg = "Synthesized hydraulic transient candidate."
             candidate_caps.append(
                 {
                     "capability_id": "cap_hydraulic_transient_v1",
                     "name": "Hydraulic Transient Analysis",
-                    "declared_purpose": "Calculate acoustic wave speeds and Joukowsky water hammer pressure surges",
+                    "declared_purpose": "Calculate wave speeds and Joukowsky pressure surges",
                     "artifact_paths": ["hydraulic_transient.py"],
                     "dependencies": [],
                     "applicability_constraints": ["hydraulic", "water hammer", "surge", "transient", "pump trip"],
                 }
             )
-
-        # Unknown or unsupported objective: fail closed with CAPABILITY_DEFICIT
         else:
-            duration = time.time() - start_time
-            end_iso = datetime.now(timezone.utc).isoformat()
-            return WorkerExecutionResult(
-                worker_id=authorization.worker_id,
-                provider="deterministic",
-                model="deterministic-v1",
-                role=WorkerRole.BUILDER,
-                modality=EvidenceModality.DETERMINISTIC_TEST,
-                started_at=start_iso,
-                ended_at=end_iso,
-                duration_seconds=round(duration, 3),
-                exit_status="FAILURE",
-                output_payload=f"CAPABILITY_DEFICIT: Deterministic provider has no qualified implementation or verification oracle for objective: '{objective}'",
-                error_message="CAPABILITY_DEFICIT",
+            return self._failure(
+                authorization,
+                start_time,
+                start_iso,
+                f"CAPABILITY_DEFICIT: deterministic provider has no implemented objective handler for '{objective}'",
+                "CAPABILITY_DEFICIT",
             )
-
-        duration = time.time() - start_time
-        end_iso = datetime.now(timezone.utc).isoformat()
 
         return WorkerExecutionResult(
             worker_id=authorization.worker_id,
@@ -185,9 +133,53 @@ class DeterministicBuilderProvider(BaseWorkerProvider):
             role=WorkerRole.BUILDER,
             modality=EvidenceModality.DETERMINISTIC_TEST,
             started_at=start_iso,
-            ended_at=end_iso,
-            duration_seconds=round(duration, 3),
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=round(time.time() - start_time, 3),
             exit_status="SUCCESS",
             output_payload=output_msg,
             candidate_capabilities=candidate_caps,
+        )
+
+    @staticmethod
+    def _failure(
+        authorization: WorkerAuthorization,
+        start_time: float,
+        start_iso: str,
+        message: str,
+        error_code: str,
+    ) -> WorkerExecutionResult:
+        return WorkerExecutionResult(
+            worker_id=authorization.worker_id,
+            provider="deterministic",
+            model="deterministic-v1",
+            role=WorkerRole.BUILDER,
+            modality=EvidenceModality.DETERMINISTIC_TEST,
+            started_at=start_iso,
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=round(time.time() - start_time, 3),
+            exit_status="FAILURE",
+            output_payload=message,
+            error_message=error_code,
+        )
+
+    @staticmethod
+    def _rejected(
+        authorization: WorkerAuthorization,
+        start_time: float,
+        start_iso: str,
+        message: str,
+        error_code: str,
+    ) -> WorkerExecutionResult:
+        return WorkerExecutionResult(
+            worker_id=authorization.worker_id,
+            provider="deterministic",
+            model="deterministic-v1",
+            role=WorkerRole.BUILDER,
+            modality=EvidenceModality.STRUCTURAL,
+            started_at=start_iso,
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=time.time() - start_time,
+            exit_status="REJECTED",
+            output_payload=message,
+            error_message=error_code,
         )

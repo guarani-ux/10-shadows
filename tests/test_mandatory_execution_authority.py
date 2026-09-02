@@ -233,9 +233,10 @@ class TestMissionJAdversarialSuite:
             target_path=target_repo,
         )
 
-        assert receipt.final_status == RunStatus.FAILED
-        assert receipt.verification.exit_code != 0
-        assert receipt.verification.tests_failed >= 1
+        # No builder exists for this compatibility-harness objective, so the
+        # truthful result is a governed BLOCKED run rather than fabricated failure evidence.
+        assert receipt.final_status == RunStatus.BLOCKED
+        assert receipt.verification is None
         assert receipt.epistemic_claims.claim_independently_verified is False
         assert receipt.epistemic_claims.claim_promoted is False
 
@@ -332,9 +333,13 @@ class TestMissionJAdversarialSuite:
             custom_verifier_cmd=["python", "-c", "import sys; sys.exit(0)"],
         )
 
-        assert receipt.final_status == RunStatus.VERIFIED_SUCCESS
+        # Routing can be proven without pretending that a passing verifier
+        # constitutes successful work when no builder ever executed.
+        assert receipt.final_status == RunStatus.BLOCKED
         assert receipt.routing_strategy == RoutingStrategy.ADVERSARIAL_AUDIT
         assert len(receipt.capabilities_selected) == 3
+        assert receipt.epistemic_claims.claim_worker_executed is False
+        assert receipt.epistemic_claims.claim_independently_verified is False
         assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
 
     def test_11_direct_delegation(self, temp_kernel, target_repo):
@@ -371,6 +376,7 @@ class TestMissionJAdversarialSuite:
             objective="Harden calculation engine with addition function",
             target_path=disposable_git_repo,
             builder_fn=builder_mutator,
+            allow_target_mutation=True,
         )
 
         assert receipt.final_status == RunStatus.VERIFIED_SUCCESS
@@ -378,7 +384,10 @@ class TestMissionJAdversarialSuite:
         assert receipt.final_head is not None
         assert receipt.final_head != starting_head
         assert receipt.verification.tests_passed == 2
-        assert receipt.epistemic_claims.claim_promoted is True
+        # This internal compatibility harness mutates the disposable target
+        # directly after explicit authorization; it does not perform a promotion step.
+        assert receipt.epistemic_claims.claim_promoted is False
+        assert receipt.verification_scope == "target"
         assert is_ten_shadows_execution(receipt.run_id, kernel_db=temp_kernel.db) is True
 
 
@@ -412,6 +421,7 @@ class TestAcceptanceAndNegativeControl:
             builder_fn=mock_builder,
             provider_name="gemini_adapter_fixture",
             model_name="gemini-2.5-flash",
+            allow_target_mutation=True,
         )
 
         assert receipt.final_status == RunStatus.VERIFIED_SUCCESS

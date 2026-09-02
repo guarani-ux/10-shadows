@@ -1,11 +1,13 @@
 # TEN SHADOWS — GLOBAL SYSTEM RULES & WORKFLOW PROTOCOLS
 
+> **Authority note:** this file defines governance rules and desired operating constraints. It is not evidence that every current code path mechanically enforces every rule. Present capability status belongs in `CAPABILITY_GROUND_TRUTH.md`; current verification evidence determines what is actually proven. Where implementation falls short of a rule, the implementation must be fixed or the shortfall must remain explicit.
+
 ## 1. Execution & Safety
 
-### 1.1 Sandbox Boundary
-All terminal commands, generated code, tests, and candidate artifacts must execute inside designated sandbox, staging, worktree, or explicitly authorized repository boundaries.
+### 1.1 Execution Boundary Policy
+All terminal commands, generated code, tests, and candidate artifacts must execute inside a designated sandbox, staging area, worktree, or explicitly authorized repository boundary.
 
-No operation may silently escape its declared execution boundary.
+No operation may silently escape its declared execution boundary. A staging-directory boundary is not to be described as an operating-system sandbox unless OS-level isolation is actually present and verified.
 
 ### 1.2 Human Authorization for Material Actions
 Do not perform material external mutations without explicit authorization when the active execution mode requires human approval.
@@ -41,16 +43,18 @@ Do not introduce unrelated:
 
 A discovered improvement outside scope becomes a recorded candidate, not an automatic mutation.
 
-### 1.5 Mandatory Sovereign Execution Entrypoint (`ts run`)
-For governed objectives, the ONLY supported sovereign execution entrypoint is:
-`python ts_run.py run "<objective>"` or `ts run "<objective>"`.
+### 1.5 Supported Governed Execution Entrypoint (`ts run`)
+For the current Python governed-execution path, the supported public entrypoint is:
+`python ts_run.py run "<objective>"` or an installed equivalent.
 
-Direct invocation of `Forge`, `Gemini`, `Antigravity`, raw worker scripts, or verifier scripts does **NOT** constitute Ten Shadows execution.
+`start_ten_shadows.py` is a compatibility launcher and delegates governed execution to `ts_run.py`.
+
+Direct invocation of `Forge`, `Gemini`, `Antigravity`, raw worker scripts, or verifier scripts does **not** by itself constitute the canonical governed execution path.
 
 **INVARIANT:**
-`NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.`
+`NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT RECORD A GOVERNED EXECUTION.`
 
-Claims of success, qualification, or capability acquisition come strictly from sealed kernel state.
+A valid execution receipt establishes only the claims explicitly supported by that receipt. It does not automatically prove semantic objective satisfaction, target promotion, or general capability acquisition.
 
 ---
 
@@ -118,6 +122,8 @@ Ten Shadows exists to improve the effective behavior of AI by preserving useful 
 
 The system should progressively convert repeated corrections into persistent environmental pressure.
 
+This is an architectural aim. General autonomous capability growth must not be claimed until demonstrated beyond the narrow capability families currently proven.
+
 ---
 
 # 4. Completion Is Contractual
@@ -157,7 +163,7 @@ Execution is not proof of correctness. Capabilities cannot self-certify semantic
 
 # 9. Three-Strike Root Cause Law
 
-Maximum 3 repair iterations before triggering Root Cause Architecture Assessment.
+No governed repair loop may exceed 3 attempts before requiring root-cause reassessment or a blocked outcome. A code path that does not mechanically implement that behavior cannot claim this law as verified.
 
 ---
 
@@ -167,9 +173,13 @@ State is authoritative only when explicitly persisted across designated boundari
 
 ---
 
-# 11. Atomic Mutation
+# 11. Mutation & Promotion Policy
 
-Material mutations use WAL or atomic replacement (`INTENT/PENDING → stage → verify → atomic promotion → receipt`).
+Material mutations should follow a staged pattern:
+
+`intent/authorization → stage → verify → explicit promotion → receipt`
+
+Do not describe a promotion mechanism as atomic, transactional, Git-based, or rollback-safe unless the specific implementation and evidence establish those properties. The current canonical Python path uses an explicit, verified copy-promotion mechanism and therefore must not inherit stronger labels from earlier architecture documents.
 
 ---
 
@@ -181,13 +191,13 @@ Prefer typed schemas, AST topology, and hashes over fragile textual heuristics.
 
 # 13. Failure Must Improve the Environment
 
-Convert verified failures into regression tests, invariants, and stronger verifiers.
+Convert verified failures into regression tests, invariants, and stronger verifiers where that change closes a recurrent failure class.
 
 ---
 
 # 14. Capability Promotion
 
-Capability authority must be earned through verified downstream outcomes.
+Capability authority must be earned through independent evidence appropriate to the claimed scope. Registration is not qualification; qualification is not generality.
 
 ---
 
@@ -199,13 +209,15 @@ Maximum signal, zero filler, explicit statements of uncertainty or failure.
 
 # 16. Auto-Boot
 
-Load physical current-state artifacts for the active repository. Generate planning artifacts only when active objective requires planning.
+Load physical current-state artifacts for the active repository. Generate planning artifacts only when the active objective requires planning.
 
 ---
 
 # 17. Legacy Synthesis
 
 Inspect actual architecture and derive minimal synthesis without persona substitution.
+
+Historical design documents remain useful as provenance but do not override current executable evidence.
 
 ---
 

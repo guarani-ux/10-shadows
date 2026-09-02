@@ -1,16 +1,14 @@
-"""
-loop_engine/capability_registry.py
-Canonical Persistent Capability Registry for 10 SHADOWS.
+"""Persistent capability registry for the current Ten Shadows execution path.
 
-Invariants:
-1. Capabilities are persisted in SQLite WAL database (scratch/capabilities.db).
-2. A newly created capability starts strictly as UNQUALIFIED.
-3. Promotion to QUALIFIED requires:
-   - Originating kernel run exists in KernelDatabase.
-   - Physical artifact files exist and match SHA-256 digests.
-   - Independent verification evidence exists, is un-falsified, and passed.
-   - Explicit applicability bounds and environment requirements are defined.
-4. Future runs query the registry to retrieve reusable qualified capabilities without re-synthesis.
+The registry stores candidates and qualified records in SQLite WAL. Registry
+state is evidence-bearing metadata, not semantic authority by itself.
+
+Key rules enforced here:
+- every candidate registration is UNQUALIFIED, including re-registration of an
+  identifier that was qualified in an earlier run;
+- qualification requires a passing verification record, matching physical
+  artifacts, and evidence of verifier/builder separation;
+- only qualified records are returned by the default reuse query.
 """
 
 from __future__ import annotations
@@ -18,16 +16,14 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
-import os
 import sqlite3
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import Any, Dict, List, Optional, Union
 
 from loop_engine.config import PROJECT_ROOT, SCRATCH_DIR
-from loop_engine.epistemic import EpistemicStatus
-from loop_engine.errors import CapabilityDeficitError, PersistenceError
+from loop_engine.errors import CapabilityDeficitError
 
 CAPABILITIES_DB_PATH = SCRATCH_DIR / "capabilities.db"
 
@@ -46,7 +42,7 @@ class CapabilityRecord:
     applicability_constraints: List[str]
     known_limitations: List[str]
     qualification_evidence: Dict[str, Any]
-    epistemic_status: str  # "UNQUALIFIED" | "QUALIFIED" | "AUTHORITATIVE" | "REJECTED"
+    epistemic_status: str
     created_at: str
     updated_at: str
 
@@ -54,7 +50,7 @@ class CapabilityRecord:
         return asdict(self)
 
     @classmethod
-    def from_row(cls, row: sqlite3.Row) -> CapabilityRecord:
+    def from_row(cls, row: sqlite3.Row) -> "CapabilityRecord":
         return cls(
             capability_id=row["capability_id"],
             version=row["version"],
@@ -75,9 +71,7 @@ class CapabilityRecord:
 
 
 class CapabilityRegistry:
-    """
-    Persistent registry governing candidate and qualified capabilities.
-    """
+    """Persistent candidate/qualification registry with fail-closed reuse queries."""
 
     def __init__(self, db_path: Optional[Union[str, Path]] = None) -> None:
         if db_path is None:
@@ -123,12 +117,7 @@ class CapabilityRegistry:
                 );
                 """
             )
-            conn.execute(
-                """
-                CREATE INDEX IF NOT EXISTS idx_capabilities_status 
-                ON capabilities(epistemic_status);
-                """
-            )
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_capabilities_status ON capabilities(epistemic_status);")
 
     def register_candidate(
         self,
@@ -144,9 +133,7 @@ class CapabilityRegistry:
         known_limitations: Optional[List[str]] = None,
         version: str = "1.0.0",
     ) -> CapabilityRecord:
-        """
-        Registers a new candidate capability in UNQUALIFIED state.
-        """
+        """Register or replace a candidate, always resetting it to UNQUALIFIED."""
         now = datetime.now(timezone.utc).isoformat()
         record = CapabilityRecord(
             capability_id=capability_id,
@@ -186,6 +173,8 @@ class CapabilityRegistry:
                     environment_requirements=excluded.environment_requirements,
                     applicability_constraints=excluded.applicability_constraints,
                     known_limitations=excluded.known_limitations,
+                    qualification_evidence='{}',
+                    epistemic_status='UNQUALIFIED',
                     updated_at=excluded.updated_at;
                 """,
                 (
@@ -206,7 +195,10 @@ class CapabilityRegistry:
                     record.updated_at,
                 ),
             )
-        return record
+        stored = self.get_capability(capability_id)
+        if stored is None:
+            raise CapabilityDeficitError(f"Candidate '{capability_id}' was not persisted")
+        return stored
 
     def qualify_capability(
         self,
@@ -215,21 +207,21 @@ class CapabilityRegistry:
         verification_record: Dict[str, Any],
         base_dir: Optional[Union[str, Path]] = None,
     ) -> CapabilityRecord:
-        """
-        Transitions an UNQUALIFIED candidate to QUALIFIED upon physical verification.
-        Fails closed if artifacts do not exist, hashes mismatch, or verification failed.
-        """
+        """Qualify a candidate only when physical artifacts and independent evidence agree."""
         record = self.get_capability(capability_id)
         if not record:
             raise CapabilityDeficitError(f"Cannot qualify non-existent capability '{capability_id}'")
-
-        # 1. Verify Verification Result
-        if verification_record.get("verified_status") != "PASS" and verification_record.get("status") != "PASS":
+        if record.epistemic_status != "UNQUALIFIED":
             raise CapabilityDeficitError(
-                f"Cannot qualify capability '{capability_id}': verification status is not PASS"
+                f"Cannot qualify capability '{capability_id}' from status '{record.epistemic_status}'"
             )
 
-        # 2. Verify Artifact Files Exist and Match Hashes
+        passed = verification_record.get("verified_status") == "PASS" or verification_record.get("status") == "PASS"
+        if not passed or verification_record.get("exit_code", 1) != 0:
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': verification did not pass cleanly"
+            )
+
         root = Path(base_dir or PROJECT_ROOT)
         for rel_path in record.artifact_paths:
             file_path = root / rel_path
@@ -238,12 +230,38 @@ class CapabilityRegistry:
                     f"Cannot qualify capability '{capability_id}': artifact '{rel_path}' does not exist at {file_path}"
                 )
             expected_hash = record.artifact_hashes.get(rel_path)
-            if expected_hash:
-                actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
-                if actual_hash != expected_hash:
-                    raise CapabilityDeficitError(
-                        f"Cannot qualify capability '{capability_id}': hash mismatch for '{rel_path}' (expected {expected_hash}, got {actual_hash})"
-                    )
+            if not expected_hash or expected_hash == "UNKNOWN":
+                raise CapabilityDeficitError(
+                    f"Cannot qualify capability '{capability_id}': no trustworthy artifact hash for '{rel_path}'"
+                )
+            actual_hash = hashlib.sha256(file_path.read_bytes()).hexdigest()
+            if actual_hash != expected_hash:
+                raise CapabilityDeficitError(
+                    f"Cannot qualify capability '{capability_id}': hash mismatch for '{rel_path}'"
+                )
+
+        evidence_verifier = verification_record.get("verifier_id")
+        builder_id = verification_record.get("builder_id")
+        if evidence_verifier and evidence_verifier != verifier_id:
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': verifier identity does not match evidence"
+            )
+        if not builder_id or not verifier_id or builder_id == verifier_id:
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': independent builder/verifier identities are required"
+            )
+        if verification_record.get("tests_passed", 0) <= 0:
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': no passing verification test was recorded"
+            )
+        if verification_record.get("falsification_attempted") is not True:
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': falsification attempt was not recorded"
+            )
+        if verification_record.get("verifier_type") == "BUILDER_TEST":
+            raise CapabilityDeficitError(
+                f"Cannot qualify capability '{capability_id}': builder-authored tests are insufficient evidence"
+            )
 
         now = datetime.now(timezone.utc).isoformat()
         evidence_payload = {
@@ -259,20 +277,21 @@ class CapabilityRegistry:
                     epistemic_status = 'QUALIFIED',
                     qualification_evidence = ?,
                     updated_at = ?
-                WHERE capability_id = ?;
+                WHERE capability_id = ? AND epistemic_status = 'UNQUALIFIED';
                 """,
                 (json.dumps(evidence_payload), now, capability_id),
             )
 
-        return self.get_capability(capability_id)  # type: ignore
+        qualified = self.get_capability(capability_id)
+        if qualified is None or qualified.epistemic_status != "QUALIFIED":
+            raise CapabilityDeficitError(f"Capability '{capability_id}' did not enter QUALIFIED state")
+        return qualified
 
     def get_capability(self, capability_id: str) -> Optional[CapabilityRecord]:
         with self._get_connection() as conn:
             cursor = conn.execute("SELECT * FROM capabilities WHERE capability_id = ?;", (capability_id,))
             row = cursor.fetchone()
-            if row:
-                return CapabilityRecord.from_row(row)
-        return None
+            return CapabilityRecord.from_row(row) if row else None
 
     def list_capabilities(self, status_filter: Optional[str] = None) -> List[CapabilityRecord]:
         with self._get_connection() as conn:
@@ -283,29 +302,24 @@ class CapabilityRegistry:
                 )
             else:
                 cursor = conn.execute("SELECT * FROM capabilities ORDER BY created_at DESC;")
-            return [CapabilityRecord.from_row(r) for r in cursor.fetchall()]
+            return [CapabilityRecord.from_row(row) for row in cursor.fetchall()]
 
-    def find_reusable_capabilities(
-        self,
-        query_text: str,
-        only_qualified: bool = True,
-    ) -> List[CapabilityRecord]:
-        """
-        Retrieves matching capabilities from the persistent registry based on semantic keywords.
-        Returns ONLY QUALIFIED capabilities when only_qualified is True.
-        """
-        words = [w.strip().lower() for w in query_text.split() if len(w.strip()) > 3]
+    def find_reusable_capabilities(self, query_text: str, only_qualified: bool = True) -> List[CapabilityRecord]:
+        """Return lexical matches, qualified-only by default. This is not semantic understanding."""
+        words = [word.strip().lower() for word in query_text.split() if len(word.strip()) > 3]
         all_caps = self.list_capabilities(status_filter="QUALIFIED" if only_qualified else None)
 
         matches = []
         for cap in all_caps:
             score = 0
-            cap_corpus = f"{cap.name} {cap.declared_purpose} {cap.capability_id} {' '.join(cap.applicability_constraints)}".lower()
-            for w in words:
-                if w in cap_corpus:
+            cap_corpus = (
+                f"{cap.name} {cap.declared_purpose} {cap.capability_id} {' '.join(cap.applicability_constraints)}"
+            ).lower()
+            for word in words:
+                if word in cap_corpus:
                     score += 1
             if score > 0 or not words:
                 matches.append((score, cap))
 
-        matches.sort(key=lambda x: x[0], reverse=True)
-        return [m[1] for m in matches]
+        matches.sort(key=lambda item: item[0], reverse=True)
+        return [item[1] for item in matches]

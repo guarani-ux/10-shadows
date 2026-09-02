@@ -1,162 +1,66 @@
 # 10 SHADOWS
 
-> **Deterministic Relational Architecture, Sovereign Trusted Kernel, and Epistemic Operating System.**
+> Experimental governed execution environment for AI-assisted and deterministic work.
 
----
+For the current evidence-backed capability ledger, see `CAPABILITY_GROUND_TRUTH.md`. For the active development target, see `CURRENT_OBJECTIVE.md`.
 
-## 1. System Overview
+## What Ten Shadows is now
 
-**10 SHADOWS** is a zero-trust autonomous cognitive compiler and execution operating system designed to prevent model-driven epistemic drift, semantic laundering, ungrounded self-certification, and accidental destructive mutation.
+Ten Shadows is a Python/Rust prototype for attempting work under explicit rules about authority, evidence, verification, persistence, and reuse. Its central design separates **workers that attempt work** from **mechanisms that decide what may be treated as successful, verified, or reusable**.
 
-The system is split into two non-overlapping authorities:
+The strongest currently demonstrated path is a narrow governed execution loop. It is not demonstrated as a general-purpose autonomous intelligence, a universally self-extending system, or a production-ready platform.
 
-1. **The Sovereign Rust Trusted Kernel (`crates/ten_shadows_kernel`)**:
-   A mathematically strict, typestate-enforced execution and custody arbiter. It owns run creation, baseline capture, ephemeral Git worktree isolation, cryptographically bound worker dispatch, independent verification receipts, and atomic promotion to authoritative branches.
-2. **The Epistemic Relational Substrate (`loop_engine`, `Forge`, `svris`, `zero_trust_engine`)**:
-   The domain and cognitive execution layer responsible for goal decomposition, relational graph planning, bounded domain routing (Forge, Scribe, Herald, Scout, Inquisitor, Slicer, Warden, Alchemist, Game Master), and just-in-time truth maintenance (JTMS).
+## Canonical Python path
 
----
+`ts_run.py` is the current public Python entrypoint. It can:
 
-## 2. Governing Substrate Invariants
+- establish a recorded run before a worker is invoked;
+- choose among explicitly supported worker adapters;
+- create a governed staging workspace;
+- bind a worker invocation to the declared workspace and run;
+- observe physical file changes;
+- use a system-owned verification oracle for the narrow deterministic objective family;
+- reject unsupported objectives and missing verifier/provider capability rather than fabricate success;
+- register candidate capabilities as unqualified first;
+- qualify candidates only after passing evidence checks;
+- preserve hash-bound qualified artifacts in a capability store;
+- retrieve and reuse a preserved qualified capability on a later compatible run;
+- seal and re-check execution receipts;
+- leave the target unchanged by default;
+- promote verified copy-based changes only when `--promote` is explicitly supplied.
 
-| Law | Principle | Physical Mechanism |
-| :--- | :--- | :--- |
-| **Law 1** | **Sandbox & Ring-Fenced Boundary** | Subprocess execution runs exclusively inside ephemeral Git worktrees with sterile environment variables (`env={...}`). |
-| **Law 2** | **Human Authorization Gate** | Material destructive actions require an explicit unbypassable confirmation token. |
-| **Law 3** | **Independence of Verification** | Proposers and builders cannot self-certify (`builder_id != verifier_id`). Verification is conducted by independent verifiers against physical AST and execution gates. |
-| **Law 4** | **Epistemic Monotonicity** | Typed metadata is not authoritative semantic evidence. Synthetic outputs cannot upgrade epistemic status without empirical or structural verification. |
-| **Law 5** | **Three-Strike Governor** | Any loop exceeding 3 failed attempts forcefully halts, rolls back the ephemeral worktree, and triggers Root Cause Architecture Assessment. |
-| **Law 6** | **Contract-Driven Sufficiency** | Objectives require versioned contracts, ground truth obligations, tested effects, and monotonic truth maintenance (JTMS) before claiming accomplishment. |
+The demonstrated capability-learning loop is deliberately narrow. It proves persistence and reuse for an explicit deterministic fixture family; it does not prove open-ended autonomous capability expansion.
 
----
+## Other implemented architecture
 
-## 3. Directory & State Topology
+The repository also contains a Rust kernel/dispatcher route, domain runners for the named Shadows, verification and epistemic machinery, worktree infrastructure, relational components, repair experiments, media/AV components, and provider adapters. These components have different maturity levels. Their presence does not mean they are all part of one proven end-to-end runtime.
 
-```
-10 SHADOWS/
-├── Cargo.toml                     # Root Rust workspace definition
-├── pyproject.toml                 # Canonical Python package manifest, pytest & ruff configs
-├── requirements.txt               # Base runtime dependencies
-├── requirements-dev.txt           # Development and verification toolchain
-├── pytest.ini                     # Pytest runner configuration
-│
-├── crates/                        # Sovereign Rust Kernel
-│   └── ten_shadows_kernel/        # Typestate state machine, SQLite WAL journal, and CLI (ts)
-│
-├── loop_engine/                   # Epistemic Operating System & Runtime Engine
-│   ├── config.py                  # Centralized path, limit, and configuration management
-│   ├── errors.py                  # Typed error and failure classification taxonomy
-│   ├── observability.py           # Structured JSON event logging and telemetry
-│   ├── constitution/              # Objective contracts, evidence entailment, JTMS sufficiency
-│   ├── dispatcher/                # Language-neutral worker dispatch protocol
-│   ├── relational/                # Knowledge graph, dependency scheduler, and gap planner
-│   └── harness/                   # Ephemeral Git worktree sandbox management
-│
-├── Forge/                         # Shadow 1: Autonomous Code Synthesis Engine
-├── svris/                         # Shadow 2: Verification, Extraction, & State Normalization
-├── zero_trust_engine/             # Shadow 8/Warden: Adversarial Plan Auditing Gate
-│
-├── scripts/                       # Standardized Quality & Verification Scripts
-│   ├── preflight.py               # Deterministic environment & health preflight check
-│   ├── check_fast.py              # Fast-tier linter, clippy, and unit test runner
-│   ├── check_full.py              # Full qualification pipeline runner
-│   ├── check-fast.sh / .ps1       # Platform shell wrappers
-│   └── check-full.sh / .ps1       # Platform shell wrappers
-│
-├── tests/                         # Integrated & Adversarial Test Suites
-│   ├── test_architectural_fitness.py # Structural fitness and boundary invariant checks
-│   ├── test_constitutional_foundation.py # Law 6 epistemic sufficiency tests
-│   └── fixtures/                  # Authoritative static test receipts and specs
-│
-├── scratch/                       # Untracked ephemeral runtime data (WAL databases, staging)
-└── .receipts/                     # Untracked physical cryptographic run receipts
-```
+In particular:
 
----
+- the Rust kernel is a separately implemented and tested authority route; the canonical Python CLI is not merely a thin wrapper around the Rust kernel;
+- the canonical Python Gemini and Antigravity providers are not currently proven operational external workers;
+- a separate Rust/Python dispatcher path contains a Gemini adapter capable of making a real network request when configured, but that alternate route is not the canonical Python `ts_run.py` provider path and must be evaluated on its own evidence;
+- the governed Python workspace is a staging boundary, not an operating-system security sandbox;
+- current copy-based promotion is not atomic Git promotion and does not support deletion semantics.
 
----
+## Evidence vocabulary
 
-## 4. Mandatory Sovereign Execution Entrypoint (`ts run`)
+Use these terms narrowly:
 
-> [!IMPORTANT]
-> **Canonical Invariant: NO VALID KERNEL-ISSUED EXECUTION RECEIPT = TEN SHADOWS DID NOT EXECUTE.**
->
-> The builder/model is never responsible for deciding whether Ten Shadows is used.
-> For governed objectives, the ONLY supported sovereign entrypoint is:
->
-> ```bash
-> python ts_run.py run "<objective>" [options]
-> # Or binary alias:
-> ts run "<objective>" [options]
-> ```
->
-> Direct invocation of `Forge`, `Gemini`, `Antigravity`, raw worker scripts, or verifier scripts does **NOT** constitute Ten Shadows execution. Claims of success, qualification, or capability acquisition are authoritative **only** when sealed and verified by the sovereign kernel receipt.
+- **VERIFIED CAPABILITY** — current evidence demonstrates the stated behavior within the stated scope.
+- **IMPLEMENTED BUT UNVERIFIED** — executable implementation exists, but evidence is insufficient for the broader claim.
+- **PARTIAL / EXPERIMENTAL** — some behavior exists while scope, reliability, or integration remains under validation.
+- **SCAFFOLDED / PLANNED** — structure or intent exists without a complete demonstrated path.
+- **UNSUPPORTED CLAIM** — repository language exceeds implementation or evidence and must be removed or corrected.
 
-### CLI Usage & Options
+A filename, architecture label, passing unit test, historical receipt, model statement, or registry record does not by itself establish a capability.
 
-```bash
-# Execute an objective through the Ten Shadows Kernel
-python ts_run.py run "Create a Python function that converts Celsius to Fahrenheit and verify it against independently specified examples."
+## Verification
 
-# Execute an objective from a file
-python ts_run.py run --file objective.md --target ./my_project
+The repository uses GitHub Actions to independently run Python lint/format checks, Rust format/clippy, Rust authority tests, the Python ecosystem suite, capability-claim discipline, and a fresh-checkout reconstruction path. A green run is evidence for the checks it actually executes; it is not universal proof of every architectural claim.
 
-# Verify cryptographic authenticity of an execution receipt
-python ts_run.py verify .receipts/run_task_20260829_065413_6453956_receipt.json
+The reconciliation branch remains a candidate until its final evidence is recorded in `CAPABILITY_GROUND_TRUTH.md` and explicitly approved for merge.
 
-# Query persistent capability registry
-python ts_run.py capabilities list --status QUALIFIED
-```
+## Current objective
 
----
-
-## 5. Quickstart & Developer Toolchain
-
-### Prerequisites
-* **Python**: `3.10` or higher (`3.13` recommended)
-* **Rust**: `stable` (with `cargo`, `rustfmt`, and `clippy`)
-* **Git**: `2.30` or higher
-
-### Environment Preflight Check
-Run the deterministic preflight check to verify that all compilers, runtimes, and storage paths are operational:
-
-```bash
-python scripts/preflight.py
-```
-
-### Fast Check (Iterative Development)
-Runs Python linting (Ruff), formatting checks, Rust formatting (`rustfmt`), Rust clippy, Rust unit/adversarial tests, and core epistemic tests:
-
-```bash
-python scripts/check_fast.py
-# Or via shell wrapper:
-./scripts/check-fast.sh       # Linux / macOS
-.\scripts\check-fast.ps1      # Windows PowerShell
-```
-
-### Full Qualification (Pre-Commit / Pre-Promotion)
-Runs the complete battery including preflight checks, full clippy with warnings denied, the entire Rust kernel test suite (25 adversarial tests), the complete Python pytest suite, and git working directory cleanliness validation:
-
-```bash
-python scripts/check_full.py
-# Or via shell wrapper:
-./scripts/check-full.sh       # Linux / macOS
-.\scripts\check-full.ps1      # Windows PowerShell
-```
-
----
-
-## 5. Continuous Integration (CI)
-
-GitHub Actions runs the unified CI workflow on every push and pull request (`.github/workflows/ci.yml`), enforcing:
-* Code style & linting gates (`ruff`, `rustfmt`, `clippy -D warnings`)
-* Sovereign kernel build & adversarial authority tests
-* Deterministic preflight execution
-* Full 500+ unit, integration, and property test battery
-* Post-test working directory cleanliness (zero leaked untracked artifacts)
-
----
-
-## 6. License & Custody
-
-Strict internal custody under the **10 SHADOWS** sovereign protocol.
+`CURRENT_OBJECTIVE.md` is the active milestone description. It is a target, not evidence that the target has already been completed.

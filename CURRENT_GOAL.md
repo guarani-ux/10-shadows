@@ -1,13 +1,11 @@
-# Current Mission: Intelligent AV Script Generation Engine (Shadow 3 - The Herald)
+# CURRENT GOAL: Reconciled Ten Shadows Candidate
 
-## Objective
-Implement an industrial-grade, 3-section Audio-Visual (AV) script generator that integrates:
-1. **Section 1:** Organizational Goal Alignment & Strategic Audience Persona.
-2. **Section 2:** Production Constraints, WPM Pacing Ceiling, and Modular Cut-Down Sub-parts (Shorts/Reels).
-3. **Section 3:** Master 3-Column AV Script Table (Section/Timecode | Spoken Human Audio | Cinematographic Video & B-Roll).
+`CURRENT_OBJECTIVE.md` is the authoritative detailed objective.
 
-## Hard Invariants & Anti-AI Linguistic Guard
-1. **Zero AI Speak:** Strictly ban em-dashes (`—`), "delve", "tapestry", "seamlessly", "testament", "revolutionize".
-2. **Spoken Cadence Synchronization:** Dialogue word count must mathematically fit shot duration (`words <= duration * (target_wpm / 60)`).
-3. **Realistic Cinematography:** Video column must use physical camera focal lengths (`24mm`, `85mm`), lighting ratios (`2:1`, `4:1`), and motivated B-roll cuts grounded in real production SOPs.
-4. **Zero-Trust Execution:** All candidate scripts generated and verified inside ephemeral Git worktree sandboxes.
+Ten Shadows is currently at the **reconciliation candidate / approval gate**.
+
+The immediate goal is not expansion. It is to hold one defensible picture of the system in which present-tense claims do not exceed implementation or evidence.
+
+The candidate must remain on its reconciliation branch until explicit approval. `master` is not part of the working change surface.
+
+After reconciliation is approved, the prior Shared Kernel Closure / Scribe -> Herald -> Slicer milestone may resume as the next development target. Until then it is a future target, not the current system state.

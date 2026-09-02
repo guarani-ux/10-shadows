@@ -1,6 +1,8 @@
-"""
-gemini_provider.py — Gemini 3.7 Flash Worker Adapter for 10 SHADOWS Dispatcher.
-Executes autonomous code generation against Google Gemini API strictly within the GovernedWorkspace.
+"""Gemini worker adapter for the alternate Rust/Python dispatcher path.
+
+A real network response can provide empirical execution evidence. Missing
+credentials, invalid bindings, parse failures, or unavailable network paths are
+not empirical execution and must not be labelled as such.
 """
 
 from __future__ import annotations
@@ -8,14 +10,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import re
 import subprocess
 import time
-import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from loop_engine.dispatcher.protocol import (
     ProviderUsage,
@@ -28,19 +28,26 @@ from loop_engine.dispatcher.providers.base import WorkerProviderAdapter
 
 def _run_git(args: List[str], cwd: Path) -> Tuple[int, str, str]:
     proc = subprocess.run(
-        ["git"] + args,
+        ["git", *args],
         cwd=str(cwd),
         capture_output=True,
         text=True,
         stdin=subprocess.DEVNULL,
+        check=False,
     )
     return proc.returncode, proc.stdout.strip(), proc.stderr.strip()
 
 
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
 class GeminiWorkerAdapter(WorkerProviderAdapter):
-    """
-    Empirical AI Worker Adapter for Google Gemini.
-    """
+    """Google Gemini adapter for an explicitly governed dispatcher workspace."""
 
     def __init__(self, api_key: Optional[str] = None):
         self._api_key = api_key or os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
@@ -49,59 +56,94 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
     def provider_name(self) -> str:
         return "gemini"
 
-    def execute(
+    def _failed(
         self,
         auth: WorkerAuthorization,
-        workspace_path: Path,
+        started_at: str,
+        start_time: float,
+        before_sha: str,
+        message: str,
+        *,
+        rejected: bool = False,
     ) -> WorkerExecutionResult:
+        duration = max(0.001, time.perf_counter() - start_time)
+        return WorkerExecutionResult(
+            protocol_version="1.0.0",
+            run_id=auth.run_id,
+            invocation_id=auth.invocation_id,
+            worker_id=auth.worker_id,
+            requested_provider="gemini",
+            requested_model=auth.requested_model,
+            resolved_provider="google",
+            resolved_model="UNPROVEN",
+            provider_invocation_id=None,
+            modality=WorkerEvidenceModality.STRUCTURAL,
+            started_at=started_at,
+            ended_at=datetime.now(timezone.utc).isoformat(),
+            duration_seconds=round(duration, 3),
+            exit_status="REJECTED" if rejected else "FAILURE",
+            usage=None,
+            output_digest=hashlib.sha256(message.encode("utf-8")).hexdigest(),
+            workspace_before_sha=before_sha,
+            workspace_after_sha=before_sha,
+            files_changed=[],
+            provider_receipt=None,
+            errors=[message],
+            completion_status="REJECTED" if rejected else "FAILED",
+        )
+
+    def execute(self, auth: WorkerAuthorization, workspace_path: Path) -> WorkerExecutionResult:
         start_time = time.perf_counter()
         started_at = datetime.now(timezone.utc).isoformat()
+        workspace = workspace_path.resolve()
 
-        # Capture workspace before SHA
-        _, before_sha, _ = _run_git(["rev-parse", "HEAD"], cwd=workspace_path)
+        _, before_sha, _ = _run_git(["rev-parse", "HEAD"], cwd=workspace)
         if not before_sha or len(before_sha) != 40:
             before_sha = auth.baseline_sha
 
-        # 1. Credential Check — Fail Closed
+        if not auth.verify_token():
+            return self._failed(
+                auth,
+                started_at,
+                start_time,
+                before_sha,
+                "Invocation binding digest is invalid.",
+                rejected=True,
+            )
+        if (
+            workspace != Path(auth.governed_workspace_path).resolve()
+            or workspace != Path(auth.filesystem_boundary).resolve()
+        ):
+            return self._failed(
+                auth,
+                started_at,
+                start_time,
+                before_sha,
+                "Workspace does not match the declared dispatcher boundary.",
+                rejected=True,
+            )
         if not self._api_key:
-            duration = max(0.001, time.perf_counter() - start_time)
-            ended_at = datetime.now(timezone.utc).isoformat()
-            return WorkerExecutionResult(
-                protocol_version="1.0.0",
-                run_id=auth.run_id,
-                invocation_id=auth.invocation_id,
-                worker_id=auth.worker_id,
-                requested_provider="gemini",
-                requested_model=auth.requested_model,
-                resolved_provider="google",
-                resolved_model="UNPROVEN",
-                provider_invocation_id=None,
-                modality=WorkerEvidenceModality.EMPIRICAL,
-                started_at=started_at,
-                ended_at=ended_at,
-                duration_seconds=round(duration, 3),
-                exit_status="FAILURE",
-                usage=None,
-                output_digest=hashlib.sha256(b"missing_credentials").hexdigest(),
-                workspace_before_sha=before_sha,
-                workspace_after_sha=before_sha,
-                files_changed=[],
-                provider_receipt=None,
-                errors=["GEMINI_API_KEY not configured in environment."],
-                completion_status="FAILED_UNAUTHORIZED",
+            return self._failed(
+                auth,
+                started_at,
+                start_time,
+                before_sha,
+                "GEMINI_API_KEY is not configured; no provider invocation occurred.",
             )
 
-        # 2. Gather Context from Workspace
         workspace_files = []
-        for p in workspace_path.rglob("*.py"):
-            if not any(part.startswith(".") or part in ("__pycache__", "venv", "target") for part in p.parts):
-                rel = p.relative_to(workspace_path)
-                try:
-                    workspace_files.append(
-                        {"path": str(rel), "content": p.read_text(encoding="utf-8", errors="replace")[:3000]}
-                    )
-                except Exception:
-                    pass
+        for path in workspace.rglob("*.py"):
+            if any(part.startswith(".") or part in {"__pycache__", "venv", "target"} for part in path.parts):
+                continue
+            try:
+                workspace_files.append(
+                    {
+                        "path": str(path.relative_to(workspace)),
+                        "content": path.read_text(encoding="utf-8", errors="replace")[:3000],
+                    }
+                )
+            except OSError:
+                continue
 
         prompt_payload = {
             "objective": auth.objective,
@@ -109,117 +151,103 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
             "failure_evidence": auth.failure_evidence,
             "workspace_files": workspace_files[:20],
             "instruction": (
-                "You are an expert software engineer operating inside an isolated git workspace. "
-                "Fulfill the objective completely. Return a JSON object with key 'files' mapping relative "
-                "file paths to their complete updated or new Python code contents: {'files': {'path/to/file.py': 'code...'}}"
+                "Fulfill the objective within the provided workspace. Return JSON with key 'files' "
+                "mapping relative file paths to complete file contents."
             ),
         }
-
         model_name = auth.requested_model or "gemini-3.7-flash"
         url = (
             f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self._api_key}"
         )
-
-        req_body = {
+        request_body = {
             "contents": [{"parts": [{"text": json.dumps(prompt_payload)}]}],
             "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"},
         }
-
-        data_bytes = json.dumps(req_body).encode("utf-8")
-        http_req = urllib.request.Request(
+        request = urllib.request.Request(
             url,
-            data=data_bytes,
+            data=json.dumps(request_body).encode("utf-8"),
             headers={"Content-Type": "application/json"},
             method="POST",
         )
 
-        files_changed = []
-        errors = []
+        files_changed: List[str] = []
+        errors: List[str] = []
         resolved_model = "UNPROVEN"
-        provider_receipt = None
+        provider_receipt: Optional[Dict[str, object]] = None
         usage_info = None
-        req_id = f"req_gemini_{auth.invocation_id}"
+        provider_invocation_id: Optional[str] = None
+        empirical_invocation_observed = False
 
         try:
-            with urllib.request.urlopen(http_req, timeout=auth.timeout_seconds) as resp:
-                resp_bytes = resp.read()
-                resp_json = json.loads(resp_bytes.decode("utf-8"))
+            with urllib.request.urlopen(request, timeout=auth.timeout_seconds) as response:
+                response_bytes = response.read()
+                response_json = json.loads(response_bytes.decode("utf-8"))
+                empirical_invocation_observed = True
+                resolved_model = response_json.get("modelVersion") or model_name
+                response_id = response_json.get("responseId") or hashlib.sha256(response_bytes).hexdigest()[:24]
+                provider_invocation_id = str(response_id)
 
-                # Check for explicit resolved model in response metadata
-                if "modelVersion" in resp_json:
-                    resolved_model = resp_json["modelVersion"]
-                elif "candidates" in resp_json and resp_json["candidates"]:
-                    # Model responded successfully to requested model name
-                    resolved_model = model_name
-                else:
-                    resolved_model = "UNPROVEN"
-
-                resp_id = resp_json.get("responseId") or f"resp_gemini_{hashlib.sha256(resp_bytes).hexdigest()[:12]}"
-
-                usage_meta = resp_json.get("usageMetadata", {})
-                p_tokens = usage_meta.get("promptTokenCount")
-                c_tokens = usage_meta.get("candidatesTokenCount")
-                t_tokens = usage_meta.get("totalTokenCount")
-                if p_tokens is not None or c_tokens is not None:
+                usage = response_json.get("usageMetadata", {})
+                prompt_tokens = usage.get("promptTokenCount")
+                candidate_tokens = usage.get("candidatesTokenCount")
+                total_tokens = usage.get("totalTokenCount")
+                if prompt_tokens is not None or candidate_tokens is not None or total_tokens is not None:
                     usage_info = ProviderUsage(
-                        prompt_tokens=p_tokens,
-                        candidate_tokens=c_tokens,
-                        total_tokens=t_tokens,
+                        prompt_tokens=prompt_tokens,
+                        candidate_tokens=candidate_tokens,
+                        total_tokens=total_tokens,
                     )
 
-                candidates = resp_json.get("candidates", [])
+                candidates = response_json.get("candidates", [])
                 if not candidates:
-                    errors.append("Gemini returned empty candidate list.")
+                    errors.append("Gemini returned no candidate payload.")
                 else:
-                    text_out = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
-                    # Parse JSON file map
-                    try:
-                        parsed = json.loads(text_out)
-                        files_map = parsed.get("files", {})
-                        if isinstance(files_map, dict):
-                            for rel_path, code in files_map.items():
-                                target_file = (workspace_path / rel_path).resolve()
-                                # Confinement check
-                                if not str(target_file).startswith(str(workspace_path.resolve())):
-                                    errors.append(f"Security violation: path traversal detected '{rel_path}'")
-                                    continue
-                                target_file.parent.mkdir(parents=True, exist_ok=True)
-                                target_file.write_text(code, encoding="utf-8")
-                                files_changed.append(rel_path)
-                    except Exception as pe:
-                        errors.append(f"Failed to parse model file payload: {pe}")
-
-                # Stage and commit mutations
-                if files_changed:
-                    _run_git(["add", "-A"], cwd=workspace_path)
-                    commit_msg = f"feat(governed): {auth.objective[:50]} (attempt {auth.attempt_number})"
-                    code, _, err = _run_git(["commit", "--no-verify", "-m", commit_msg], cwd=workspace_path)
-                    if code != 0:
-                        errors.append(f"Git commit failed: {err}")
-
-                _, after_sha, _ = _run_git(["rev-parse", "HEAD"], cwd=workspace_path)
-                if not after_sha or len(after_sha) != 40:
-                    after_sha = before_sha
+                    text_output = candidates[0].get("content", {}).get("parts", [{}])[0].get("text", "")
+                    parsed = json.loads(text_output)
+                    files_map = parsed.get("files", {})
+                    if not isinstance(files_map, dict):
+                        errors.append("Gemini response did not contain a valid files mapping.")
+                    else:
+                        for rel_path, contents in files_map.items():
+                            if not isinstance(rel_path, str) or not isinstance(contents, str):
+                                errors.append("Gemini returned a non-string file path or file content.")
+                                continue
+                            target_file = (workspace / rel_path).resolve()
+                            if not _is_within(target_file, workspace) or target_file == workspace:
+                                errors.append(f"Rejected path outside workspace: {rel_path}")
+                                continue
+                            target_file.parent.mkdir(parents=True, exist_ok=True)
+                            target_file.write_text(contents, encoding="utf-8")
+                            files_changed.append(rel_path)
 
                 provider_receipt = {
-                    "request_id": req_id,
-                    "response_id": resp_id,
+                    "response_id": response_id,
                     "provider_name": "google",
                     "model_id": resolved_model,
-                    "tokens_prompt": p_tokens,
-                    "tokens_completion": c_tokens,
-                    "tokens_total": t_tokens,
+                    "raw_response_digest": hashlib.sha256(response_bytes).hexdigest(),
+                    "tokens_prompt": prompt_tokens,
+                    "tokens_completion": candidate_tokens,
+                    "tokens_total": total_tokens,
                 }
 
-        except Exception as e:
-            errors.append(f"Gemini API execution failure: {type(e).__name__}: {str(e)}")
+                if files_changed and not errors:
+                    _run_git(["add", "-A"], cwd=workspace)
+                    code, _, error = _run_git(
+                        ["commit", "--no-verify", "-m", f"governed worker attempt {auth.attempt_number}"],
+                        cwd=workspace,
+                    )
+                    if code != 0:
+                        errors.append(f"Git commit failed: {error}")
+        except Exception as exc:
+            errors.append(f"Gemini API execution failure: {type(exc).__name__}: {exc}")
+
+        _, after_sha, _ = _run_git(["rev-parse", "HEAD"], cwd=workspace)
+        if not after_sha or len(after_sha) != 40:
             after_sha = before_sha
 
         duration = max(0.001, time.perf_counter() - start_time)
-        ended_at = datetime.now(timezone.utc).isoformat()
-        exit_status = "SUCCESS" if (files_changed and not errors) else "FAILURE"
-        output_digest = hashlib.sha256(f"{before_sha}:{after_sha}:{files_changed}".encode("utf-8")).hexdigest()
-
+        success = empirical_invocation_observed and bool(files_changed) and not errors
+        digest = hashlib.sha256(f"{before_sha}:{after_sha}:{files_changed}".encode("utf-8")).hexdigest()
         return WorkerExecutionResult(
             protocol_version="1.0.0",
             run_id=auth.run_id,
@@ -229,18 +257,20 @@ class GeminiWorkerAdapter(WorkerProviderAdapter):
             requested_model=auth.requested_model,
             resolved_provider="google",
             resolved_model=resolved_model,
-            provider_invocation_id=req_id,
-            modality=WorkerEvidenceModality.EMPIRICAL,
+            provider_invocation_id=provider_invocation_id,
+            modality=(
+                WorkerEvidenceModality.EMPIRICAL if empirical_invocation_observed else WorkerEvidenceModality.STRUCTURAL
+            ),
             started_at=started_at,
-            ended_at=ended_at,
+            ended_at=datetime.now(timezone.utc).isoformat(),
             duration_seconds=round(duration, 3),
-            exit_status=exit_status,
+            exit_status="SUCCESS" if success else "FAILURE",
             usage=usage_info,
-            output_digest=output_digest,
+            output_digest=digest,
             workspace_before_sha=before_sha,
             workspace_after_sha=after_sha,
             files_changed=files_changed,
             provider_receipt=provider_receipt,
             errors=errors,
-            completion_status="COMPLETED" if exit_status == "SUCCESS" else "FAILED",
+            completion_status="COMPLETED" if success else "FAILED",
         )

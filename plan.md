@@ -1,4 +1,7 @@
 # Grounded Satisfaction Resolution — Master Implementation Plan
+
+> **DESIGN / IMPLEMENTATION PLAN — NOT CURRENT CAPABILITY EVIDENCE.** This document describes a Grounded Satisfaction Resolution target architecture and verification plan. Items written as requirements, proposed changes, invariants, or completion criteria must not be read as implemented or verified unless `CAPABILITY_GROUND_TRUTH.md` and current executable evidence independently establish them.
+
 *Amended Architecture & Epistemic Verification Specification*
 
 ---

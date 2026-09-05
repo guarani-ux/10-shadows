@@ -31,12 +31,18 @@ def run_isolated_pytest(
     """
     execution_cwd = cwd or PROJECT_ROOT
 
-    # Build clean environment with PYTHONPATH
-    env = os.environ.copy()
-    env["PYTHONPATH"] = str(PROJECT_ROOT)
-    env["PYTHONUNBUFFERED"] = "1"
+    # Do not inherit host secrets, pytest options, or plugin configuration.
+    # Callers may explicitly provide required application variables.
+    env = {"PATH": os.defpath, "LANG": "C.UTF-8"}
+    if os.name == "nt" and "SystemRoot" in os.environ:
+        env["SystemRoot"] = os.environ["SystemRoot"]
     if extra_env:
         env.update(extra_env)
+    # These execution invariants cannot be overridden by extra_env.
+    env["PYTHONPATH"] = str(PROJECT_ROOT)
+    env["PYTHONUNBUFFERED"] = "1"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
 
     command = [
         sys.executable,

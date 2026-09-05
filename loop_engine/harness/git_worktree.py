@@ -2,7 +2,7 @@ import os
 import shutil
 import subprocess
 import tempfile
-import time
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -93,10 +93,10 @@ class GitWorktreeHarness:
         Creates an isolated Git worktree branch for the given task.
         Returns (worktree_path: Path, branch_name: str).
         """
-        timestamp = int(time.time() * 1000) % 10000000
+        identity = uuid.uuid4().hex
         safe_task_id = "".join(c if c.isalnum() or c in "_-" else "_" for c in task_id)
-        branch_name = f"sandbox/{safe_task_id}_{timestamp}"
-        worktree_path = self.worktrees_dir / f"wt_{safe_task_id}_{timestamp}"
+        branch_name = f"sandbox/{safe_task_id}_{identity}"
+        worktree_path = self.worktrees_dir / f"wt_{safe_task_id}_{identity}"
 
         # Ensure we do not add worktrees to authoritative repo during test execution
         code, out, err = run_git(

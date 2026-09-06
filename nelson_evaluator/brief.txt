@@ -1,0 +1,1 @@
+Repair real Antigravity adapter false success. Environment-variable presence without actual bridge execution must return CAPABILITY_PROVIDER_UNAVAILABLE. Do not simulate a bridge, execute model APIs or claim worker tests are sovereign runs. Auth object and good/bad modules are constructed evaluator fixtures.

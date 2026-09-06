@@ -74,6 +74,7 @@ class AntigravityBuilderProvider(BaseWorkerProvider):
             started_at=start_iso,
             ended_at=datetime.now(timezone.utc).isoformat(),
             duration_seconds=time.time() - start_time,
-            exit_status="SUCCESS",
-            output_payload="Antigravity execution completed.",
+            exit_status="FAILURE",
+            output_payload="No implemented Antigravity bridge execution mechanism is available.",
+            error_message="CAPABILITY_PROVIDER_UNAVAILABLE",
         )

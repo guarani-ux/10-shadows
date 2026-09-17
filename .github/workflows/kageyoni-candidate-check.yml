@@ -1,0 +1,74 @@
+name: Kageyoni candidate verification
+on:
+  push:
+    branches: ['kageyoni/act1-validation-20260917']
+    paths: ['.kageyoni/**', '.gitmodules', '.github/workflows/kageyoni-candidate-check.yml']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install declared development dependencies, no model providers
+        run: python -m pip install -r requirements-dev.txt pytest-timeout
+      - name: Exact before and after comparison
+        shell: python
+        run: |
+          import base64,hashlib,json,lzma,os,pathlib,platform,signal,subprocess,sys,time
+          root=pathlib.Path.cwd();out=pathlib.Path(os.environ['RUNNER_TEMP'])/'candidate-evidence';out.mkdir()
+          package=json.loads(lzma.decompress(base64.b64decode((root/'.kageyoni/candidate.xz.b64').read_text())))
+          m=package['manifest'];assert m['repository']=='guarani-ux/10-shadows'
+          assert m['base_commit']=='ee4a16a07edee11cb810f83dded036b71b56261a'
+          patch=package['patch'].encode();assert hashlib.sha256(patch).hexdigest()==m['patch_sha256']
+          patchfile=out/'upgrade.patch';patchfile.write_bytes(patch)
+          (out/'manifest.json').write_text(json.dumps(m,indent=2))
+          env=dict(os.environ,PYTHONDONTWRITEBYTECODE='1',TEN_SHADOWS_TIMEOUT_SECONDS='30')
+          records=[]
+          def run(label,argv,cwd,limit=210,offline=False):
+              if offline:argv=['sudo','-E','unshare','-n','--',*argv]
+              begin=time.monotonic()
+              with (out/(label+'.log')).open('w') as log:
+                  p=subprocess.Popen(argv,cwd=cwd,env=env,stdout=log,stderr=subprocess.STDOUT,start_new_session=True)
+                  try:code=p.wait(timeout=limit)
+                  except subprocess.TimeoutExpired:os.killpg(p.pid,signal.SIGKILL);p.wait();code=124
+              record={'label':label,'argv':argv,'exit_code':code,'seconds':round(time.monotonic()-begin,3),'offline_network_namespace':offline};records.append(record);print(json.dumps(record),flush=True)
+              (out/'results.json').write_text(json.dumps(records,indent=2));return code
+          paths={}
+          for label in ['baseline','candidate']:
+              path=pathlib.Path(os.environ['RUNNER_TEMP'])/label;paths[label]=path
+              subprocess.run(['git','worktree','add','--detach',str(path),m['base_commit']],check=True)
+          candidate=paths['candidate']
+          for rel,info in m['files'].items():
+              p=pathlib.PurePosixPath(rel);assert not p.is_absolute() and '..' not in p.parts
+              target=candidate/rel;expected=info['before_sha256']
+              assert (not target.exists()) if expected is None else hashlib.sha256(target.read_bytes()).hexdigest()==expected,rel
+          subprocess.run(['git','apply','--check',str(patchfile)],cwd=candidate,check=True)
+          subprocess.run(['git','apply',str(patchfile)],cwd=candidate,check=True)
+          for rel,info in m['files'].items():assert hashlib.sha256((candidate/rel).read_bytes()).hexdigest()==info['after_sha256'],rel
+          run('baseline-constitutional',[sys.executable,'-m','pytest','tests/test_constitutional_foundation.py','-q'],paths['baseline'],offline=True)
+          targeted=run('candidate-constitutional',[sys.executable,'-m','pytest','tests/test_constitutional_foundation.py','tests/test_kageyoni_evidence.py','-q'],candidate,offline=True)
+          for label,path in paths.items():
+              run(label+'-python-full',[sys.executable,'-m','pytest','--timeout=15','--maxfail=15','--junitxml='+str(out/(label+'.xml'))],path,limit=240,offline=True)
+          # Rust dependencies may be fetched during compilation; test binaries run offline.
+          built=run('rust-build',['cargo','test','--workspace','--locked','--no-run'],candidate,limit=210)
+          rust=run('rust-native',['cargo','test','--workspace','--locked'],candidate,limit=120,offline=True) if built==0 else 125
+          for rel,info in m['files'].items():assert hashlib.sha256((candidate/rel).read_bytes()).hexdigest()==info['after_sha256'],rel
+          subprocess.run(['git','apply','--reverse','--check',str(patchfile)],cwd=candidate,check=True)
+          (out/'profile.json').write_text(json.dumps({'python':sys.version,'platform':platform.platform(),'scope':'native mechanical evidence qualification and regression comparisons; no model reasoning or autonomous general-domain success claimed','targeted_passed':targeted==0,'rust_passed':rust==0,'full_results':'See results.json and paired JUnit reports; a green targeted gate is not full production certification'},indent=2))
+          (out/'packages.txt').write_text(subprocess.check_output([sys.executable,'-m','pip','freeze'],text=True))
+          raise SystemExit(0 if targeted==0 and rust==0 else 1)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: kageyoni-ten-candidate-evidence
+          path: ${{ runner.temp }}/candidate-evidence/
+          retention-days: 7
+          if-no-files-found: error

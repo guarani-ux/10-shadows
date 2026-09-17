@@ -1,0 +1,55 @@
+name: Kageyoni Act I validation
+on:
+  push:
+    branches: ['kageyoni/act1-validation-20260917']
+permissions:
+  contents: read
+jobs:
+  baseline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ee4a16a07edee11cb810f83dded036b71b56261a
+          persist-credentials: false
+      - name: Capture pinned development source
+        shell: python
+        run: |
+          import hashlib,json,os,pathlib,subprocess,zipfile
+          dest=pathlib.Path(os.environ['RUNNER_TEMP'])/'kageyoni-evidence';dest.mkdir()
+          files={};excluded=[];total=0
+          with zipfile.ZipFile(dest/'pinned-source.zip','w',zipfile.ZIP_DEFLATED) as archive:
+              for name in subprocess.check_output(['git','ls-files','-z']).decode().split('\0'):
+                  if not name: continue
+                  path=pathlib.Path(name)
+                  if path.is_symlink() or any(x.startswith('.env') or x in {'.secret_key','credentials','secrets'} for x in path.parts) or path.suffix.lower() in {'.ttf','.otf','.woff','.woff2','.pem','.key'}:
+                      excluded.append(name);continue
+                  raw=path.read_bytes()
+                  try: raw.decode('utf-8')
+                  except UnicodeError: excluded.append(name);continue
+                  if len(raw)>4*1024*1024: excluded.append(name);continue
+                  total+=len(raw)
+                  if total>100*1024*1024: raise RuntimeError('source capture size exceeded; not truncated')
+                  blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
+                  expected=subprocess.check_output(['git','rev-parse','HEAD:'+name]).decode().strip()
+                  if blob!=expected: raise RuntimeError('pinned blob mismatch: '+name)
+                  files[name]={'git_blob':blob,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+                  archive.writestr('repository/'+name,raw)
+              archive.writestr('snapshot_manifest.json',json.dumps({'commit':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),'files':files,'excluded':excluded,'scope':'tracked UTF-8 source; binary, credential and oversized files excluded'},indent=2))
+          (dest/'source.sha256').write_text(hashlib.sha256((dest/'pinned-source.zip').read_bytes()).hexdigest()+'\n')
+      - name: Rust baseline without model providers
+        shell: bash
+        run: |
+          set +e
+          cargo test --workspace --locked > "$RUNNER_TEMP/kageyoni-evidence/rust-baseline.log" 2>&1
+          test_status=$?
+          printf '{"verifier_exit":%s,"candidate":"ee4a16a07edee11cb810f83dded036b71b56261a","scope":"inherited Rust tests; not a sovereign ts run or patched source qualification"}\n' "$test_status" > "$RUNNER_TEMP/kageyoni-evidence/result.json"
+          exit "$test_status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: kageyoni-ten-shadows-pinned-baseline
+          path: ${{ runner.temp }}/kageyoni-evidence/
+          retention-days: 7
+          if-no-files-found: error

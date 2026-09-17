@@ -9,47 +9,71 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        id: checkout
+        continue-on-error: true
         with:
           ref: ee4a16a07edee11cb810f83dded036b71b56261a
           persist-credentials: false
-      - name: Capture pinned development source
+      - name: Verify pinned checkout and remove transient checkout credentials
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = ee4a16a07edee11cb810f83dded036b71b56261a
+          set +e
+          git config --local --unset-all http.https://github.com/.extraheader
+          code=$?
+          set -e
+          test "$code" = 0 -o "$code" = 5
+          if git config --local --name-only --get-regexp '^http\..*\.extraheader$'; then exit 1; fi
+      - name: Capture source without treating checkout failure as success
         shell: python
+        env:
+          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
         run: |
           import hashlib,json,os,pathlib,subprocess,zipfile
           dest=pathlib.Path(os.environ['RUNNER_TEMP'])/'kageyoni-evidence';dest.mkdir()
-          files={};excluded=[];total=0
+          files={};excluded=[];gitlinks={};total=0
           with zipfile.ZipFile(dest/'pinned-source.zip','w',zipfile.ZIP_DEFLATED) as archive:
-              for name in subprocess.check_output(['git','ls-files','-z']).decode().split('\0'):
-                  if not name: continue
-                  path=pathlib.Path(name)
-                  if path.is_symlink() or any(x.startswith('.env') or x in {'.secret_key','credentials','secrets'} for x in path.parts) or path.suffix.lower() in {'.ttf','.otf','.woff','.woff2','.pem','.key'}:
+              for entry in subprocess.check_output(['git','ls-tree','-rz','HEAD']).split(b'\0'):
+                  if not entry: continue
+                  meta,name=entry.split(b'\t',1);mode,kind,expected=meta.decode().split();name=name.decode();path=pathlib.Path(name)
+                  if kind=='commit': gitlinks[name]=expected;excluded.append(name);continue
+                  if kind!='blob' or mode=='120000' or path.is_symlink() or any(x.startswith('.env') or x in {'.secret_key','credentials','secrets'} for x in path.parts) or path.suffix.lower() in {'.ttf','.otf','.woff','.woff2','.pem','.key'}:
                       excluded.append(name);continue
                   raw=path.read_bytes()
                   try: raw.decode('utf-8')
                   except UnicodeError: excluded.append(name);continue
                   if len(raw)>4*1024*1024: excluded.append(name);continue
                   total+=len(raw)
-                  if total>100*1024*1024: raise RuntimeError('source capture size exceeded; not truncated')
+                  if total>100*1024*1024: raise RuntimeError('source capture exceeds limit')
                   blob=hashlib.sha1(b'blob '+str(len(raw)).encode()+b'\0'+raw).hexdigest()
-                  expected=subprocess.check_output(['git','rev-parse','HEAD:'+name]).decode().strip()
                   if blob!=expected: raise RuntimeError('pinned blob mismatch: '+name)
-                  files[name]={'git_blob':blob,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+                  files[name]={'git_blob':blob,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'mode':mode}
                   archive.writestr('repository/'+name,raw)
-              archive.writestr('snapshot_manifest.json',json.dumps({'commit':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),'files':files,'excluded':excluded,'scope':'tracked UTF-8 source; binary, credential and oversized files excluded'},indent=2))
+              archive.writestr('snapshot_manifest.json',json.dumps({'commit':subprocess.check_output(['git','rev-parse','HEAD']).decode().strip(),'files':files,'excluded':excluded,'gitlinks':gitlinks,'checkout_outcome':os.environ['CHECKOUT_OUTCOME'],'scope':'diagnostic exact tracked UTF-8 capture; excluded gitlinks are not available dependency source; checkout error remains a qualification failure'},indent=2))
           (dest/'source.sha256').write_text(hashlib.sha256((dest/'pinned-source.zip').read_bytes()).hexdigest()+'\n')
+          (dest/'checkout.json').write_text(json.dumps({'status':os.environ['CHECKOUT_OUTCOME'],'known_error':'orphan mattpocock-skills gitlink causes checkout credential-removal submodule enumeration to fail; transient header explicitly removed without reading its value','not_repaired':True}))
       - name: Rust baseline without model providers
+        id: rust
+        continue-on-error: true
         shell: bash
         run: |
           set +e
           cargo test --workspace --locked > "$RUNNER_TEMP/kageyoni-evidence/rust-baseline.log" 2>&1
           test_status=$?
-          printf '{"verifier_exit":%s,"candidate":"ee4a16a07edee11cb810f83dded036b71b56261a","scope":"inherited Rust tests; not a sovereign ts run or patched source qualification"}\n' "$test_status" > "$RUNNER_TEMP/kageyoni-evidence/result.json"
+          printf '{"verifier_exit":%s,"candidate":"ee4a16a07edee11cb810f83dded036b71b56261a","scope":"Rust tests only, not sovereign ts run; checkout defect remains"}\n' "$test_status" > "$RUNNER_TEMP/kageyoni-evidence/result.json"
           exit "$test_status"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: kageyoni-ten-shadows-pinned-baseline
           path: ${{ runner.temp }}/kageyoni-evidence/
           retention-days: 7
           if-no-files-found: error
+      - name: Preserve actual qualification outcome
+        if: always()
+        shell: bash
+        env:
+          CHECKOUT: ${{ steps.checkout.outcome }}
+          RUST: ${{ steps.rust.outcome }}
+        run: test "$CHECKOUT" = success && test "$RUST" = success
